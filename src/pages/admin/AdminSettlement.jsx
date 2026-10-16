@@ -1,37 +1,14 @@
-// Admin settlement: preview what settlement would do (changes nothing), settle now, and the
-// "Needs review" list of bets with a leg still pending 72 hours after its game started.
+// Admin settlement: preview what settlement would do (changes nothing) and settle now.
+// The "Needs review" list lives on the Bets tab, where those bets can be regraded.
 
-import { useEffect, useMemo, useState } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from '../../firebase.js';
+import { useCallback, useState } from 'react';
 import { previewSettlement, settleNow } from '../../lib/settle.js';
 import { formatAmerican, formatCentralDateTime, formatMoney } from '../../lib/format.js';
+import MoneyConfirmModal from './MoneyConfirmModal.jsx';
 
 const STATUS_LABELS = { open: 'Stays open', won: 'Won', lost: 'Lost', push: 'Push', void: 'Void' };
 const RESULT_LABELS = { win: 'Won', loss: 'Lost', push: 'Push', void: 'Void', pending: 'Pending' };
 const RESULT_CLASS = { win: 'result-win', loss: 'result-loss', push: 'result-push', void: 'result-void', pending: 'result-pending' };
-
-function asDate(value) {
-  if (!value) return null;
-  const date = typeof value.toDate === 'function' ? value.toDate() : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-// Live list of bets settlement has flagged. Subscribes once; removed on unmount.
-function useNeedsReview() {
-  const [state, setState] = useState({ bets: [], error: '', loaded: false });
-  useEffect(() => {
-    if (!db) return undefined;
-    const q = query(collection(db, 'bets'), where('needsReview', '==', true));
-    const unsubscribe = onSnapshot(
-      q,
-      (snap) => setState({ bets: snap.docs.map((d) => ({ id: d.id, ...d.data() })), error: '', loaded: true }),
-      (err) => setState({ bets: [], error: err.message || 'Could not load the review list.', loaded: true }),
-    );
-    return unsubscribe;
-  }, []);
-  return state;
-}
 
 function PreviewLegs({ legs }) {
   return (
@@ -141,13 +118,9 @@ export default function AdminSettlement() {
   const [busy, setBusy] = useState(null); // 'preview' | 'settle' | null
   const [preview, setPreview] = useState(null);
   const [lastRun, setLastRun] = useState(null);
+  const [confirming, setConfirming] = useState(null);
+  const [confirmError, setConfirmError] = useState('');
   const [error, setError] = useState('');
-  const review = useNeedsReview();
-
-  const reviewBets = useMemo(
-    () => [...review.bets].sort((a, b) => (asDate(a.placedAt)?.getTime() ?? 0) - (asDate(b.placedAt)?.getTime() ?? 0)),
-    [review.bets],
-  );
 
   async function runPreview() {
     setBusy('preview');
@@ -161,19 +134,38 @@ export default function AdminSettlement() {
     }
   }
 
-  async function runSettle() {
-    setBusy('settle');
+  // Settle now moves money, so it first shows the preview's wallet changes and waits for Confirm.
+  async function askSettle() {
+    setBusy('settle-preview');
     setError('');
     try {
-      const result = await settleNow();
-      setLastRun({ at: new Date(), result });
-      setPreview(null); // the old preview no longer matches
+      const fresh = await previewSettlement();
+      setPreview(fresh);
+      setConfirmError('');
+      setConfirming(fresh);
     } catch (err) {
       setError(`${err.message} (${err.code})`);
     } finally {
       setBusy(null);
     }
   }
+
+  async function runSettle() {
+    setBusy('settle');
+    setConfirmError('');
+    try {
+      const result = await settleNow();
+      setLastRun({ at: new Date(), result });
+      setPreview(null); // the old preview no longer matches
+      setConfirming(null);
+    } catch (err) {
+      setConfirmError(`${err.message} (${err.code})`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const closeConfirm = useCallback(() => setConfirming(null), []);
 
   return (
     <div className="admin-settlement">
@@ -186,8 +178,8 @@ export default function AdminSettlement() {
           <button type="button" className="btn" onClick={runPreview} disabled={busy !== null}>
             {busy === 'preview' ? 'Checking ESPN…' : 'Preview settlement'}
           </button>
-          <button type="button" className="btn btn-primary" onClick={runSettle} disabled={busy !== null}>
-            {busy === 'settle' ? 'Settling…' : 'Settle now'}
+          <button type="button" className="btn btn-primary" onClick={askSettle} disabled={busy !== null}>
+            {busy === 'settle-preview' ? 'Checking ESPN…' : 'Settle now'}
           </button>
         </div>
         {error ? <p className="error-text">{error}</p> : null}
@@ -200,36 +192,26 @@ export default function AdminSettlement() {
 
       {preview ? <PreviewResult preview={preview} /> : null}
 
-      <h3 className="section-title">Needs review</h3>
-      {review.error ? <div className="card error-text">{review.error}</div> : null}
-      {review.loaded && !review.error && reviewBets.length === 0 ? (
-        <div className="card muted">Nothing to review. Bets land here when a leg is still pending 72 hours after its game started.</div>
+      {confirming ? (
+        <MoneyConfirmModal
+          title="Settle now?"
+          walletChanges={confirming.walletChanges}
+          confirmLabel={`Settle ${confirming.totals.bets} bet${confirming.totals.bets === 1 ? '' : 's'}`}
+          busy={busy === 'settle'}
+          error={confirmError}
+          onConfirm={runSettle}
+          onCancel={closeConfirm}
+        >
+          <p>
+            {confirming.totals.bets} bet{confirming.totals.bets === 1 ? '' : 's'} would settle ({confirming.totals.won} won, {confirming.totals.lost} lost,{' '}
+            {confirming.totals.push} push, {confirming.totals.void} void), paying {formatMoney(confirming.totals.payoutCents)} in total. The full list is in
+            the preview below.
+          </p>
+          <p className="muted small">If another game finishes in the next few seconds, its bets settle too.</p>
+        </MoneyConfirmModal>
       ) : null}
-      {reviewBets.map((bet) => (
-        <article key={bet.id} className="bet-card">
-          <header className="bet-card-head">
-            <strong>
-              {bet.username} · {bet.type === 'parlay' ? `Parlay · ${bet.legs.length} legs` : 'Single'} · {formatMoney(bet.stakeCents)}
-            </strong>
-            <span className="bet-status status-open">Review</span>
-          </header>
-          <ul className="bet-legs">
-            {bet.legs.map((leg) => (
-              <li key={leg.legId} className="bet-leg">
-                <div>
-                  <div>{leg.label}</div>
-                  <div className="muted small">
-                    {leg.gameLabel} · ESPN id {leg.gameId}
-                  </div>
-                </div>
-                <span className={`leg-result ${RESULT_CLASS[leg.result] ?? ''}`}>{RESULT_LABELS[leg.result] ?? 'Pending'}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="warning-text small">{bet.reviewReason}</div>
-          <div className="muted small">Force win / lose / void arrives with the Phase 8 admin tools. Bet {bet.id}</div>
-        </article>
-      ))}
+
+      <p className="muted small">Bets with a leg still pending 72 hours after its game started are listed under Admin → Bets → Needs review.</p>
     </div>
   );
 }

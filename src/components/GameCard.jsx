@@ -1,5 +1,6 @@
 // One game: status, both teams (away on top), scores when live/final, and spread / total / moneyline.
 
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PickButton from './PickButton.jsx';
 import { formatCentralClock, formatSpreadLine } from '../lib/format.js';
@@ -8,10 +9,36 @@ export function gamePath(game) {
   return `/sportsbook/${game.league}/${encodeURIComponent(game.id)}`;
 }
 
+function initials(team) {
+  if (team.abbr) return String(team.abbr).slice(0, 4).toUpperCase();
+  const words = String(team.shortName || team.name || '?').split(/\s+/).filter(Boolean);
+  return words.slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+}
+
+// Logo image, or an initials badge when there is no logo or the link is broken.
+// failedSrc remembers which link failed, so a new link gets a fresh try without any effect.
 function TeamLogo({ team }) {
   const src = team.logoDark || team.logo;
-  if (!src) return <span className="team-logo placeholder" aria-hidden="true" />;
-  return <img className="team-logo" src={src} alt="" width="28" height="28" loading="lazy" referrerPolicy="no-referrer" />;
+  const [failedSrc, setFailedSrc] = useState(null);
+  if (!src || failedSrc === src) {
+    return (
+      <span className="team-logo initials" aria-hidden="true">
+        {initials(team)}
+      </span>
+    );
+  }
+  return (
+    <img
+      className="team-logo"
+      src={src}
+      alt=""
+      width="28"
+      height="28"
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setFailedSrc(src)}
+    />
+  );
 }
 
 function StatusLine({ game }) {

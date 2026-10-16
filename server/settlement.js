@@ -1,8 +1,11 @@
 // Settles open bets. Every trigger (app open / My Bets, admin "Settle now", daily cron) calls settleOpenBets().
 //
 // Pay-once guarantee: each bet settles in its own transaction that re-reads the bet and stops unless it is
-// still "open", and the payout ledger entry payout_{betId} is created with create(), which fails if it exists.
+// still "open", and the payout ledger entry is created with create(), which fails if it already exists.
 // Running settlement many times, from several players at once, can never pay a bet twice.
+//
+// Money rule shared with admin regrades: a bet's payoutCents is what its owner has been credited for it,
+// and every change moves only (new payout − payoutCents). A bet the admin reopened has payoutCents 0 again.
 
 import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from './firebaseAdmin.js';
@@ -68,10 +71,15 @@ function payoutNote(bet, status) {
   return `${word}: ${bet.legs[0]?.label ?? 'bet'}`.slice(0, 200);
 }
 
+// Ledger id for a settlement payout: payout_{betId} the first time, payout_{betId}_v{n} if an admin
+// reopened the bet and it settles again at version n.
+export function payoutLedgerId(betId, newVersion) {
+  return newVersion <= 1 ? `payout_${betId}` : `payout_${betId}_v${newVersion}`;
+}
+
 // Settles one bet. Returns 'settled' | 'already' | 'open'.
 export async function settleBet(db, betId, resultFor, now) {
   const betRef = db.collection('bets').doc(betId);
-  const ledgerRef = db.collection('ledger').doc(`payout_${betId}`);
 
   return db.runTransaction(async (tx) => {
     // All reads first (Firestore transactions require reads before writes).
@@ -84,6 +92,10 @@ export async function settleBet(db, betId, resultFor, now) {
     const { grades, decision } = gradeBet(bet, resultFor);
     if (decision.status === 'open') return 'open';
 
+    const newVersion = (Number(bet.version) || 0) + 1;
+    const alreadyPaid = Number(bet.payoutCents) || 0;
+    const deltaCents = decision.payoutCents - alreadyPaid;
+    const ledgerRef = db.collection('ledger').doc(payoutLedgerId(betId, newVersion));
     const ledgerSnap = await tx.get(ledgerRef);
     if (ledgerSnap.exists) return 'already';
     const userRef = db.collection('users').doc(bet.uid);
@@ -101,7 +113,7 @@ export async function settleBet(db, betId, resultFor, now) {
       droppedLegs: decision.droppedLegs,
       settledAt,
       settledBy: 'auto',
-      version: (Number(bet.version) || 0) + 1,
+      version: newVersion,
       needsReview: false,
       reviewReason: null,
     });
@@ -113,13 +125,13 @@ export async function settleBet(db, betId, resultFor, now) {
       else stats.lost += 1;
       userUpdate.stats = stats;
     }
-    if (decision.payoutCents > 0) {
-      const balanceAfter = (Number(user.balanceCents) || 0) + decision.payoutCents;
+    if (deltaCents !== 0) {
+      const balanceAfter = (Number(user.balanceCents) || 0) + deltaCents;
       userUpdate.balanceCents = balanceAfter;
       tx.create(ledgerRef, {
         uid: bet.uid,
         type: 'payout',
-        amountCents: decision.payoutCents,
+        amountCents: deltaCents,
         balanceAfterCents: balanceAfter,
         betId,
         note: payoutNote(bet, decision.status),
@@ -142,9 +154,29 @@ async function flagForReview(db, betId, reason, now) {
   });
 }
 
+// Each player's wallet change if the previewed bets settled: [{ uid, username, deltaCents, bets, balanceBeforeCents, balanceAfterCents }].
+export async function walletChangesFor(db, rows) {
+  const byUid = new Map();
+  for (const row of rows) {
+    const entry = byUid.get(row.uid) ?? { uid: row.uid, username: row.username, deltaCents: 0, bets: 0 };
+    entry.deltaCents += row.deltaCents;
+    entry.bets += 1;
+    byUid.set(row.uid, entry);
+  }
+  const out = await Promise.all(
+    [...byUid.values()].map(async (entry) => {
+      const snap = await db.collection('users').doc(entry.uid).get();
+      const before = Number(snap.data()?.balanceCents) || 0;
+      return { ...entry, balanceBeforeCents: before, balanceAfterCents: before + entry.deltaCents };
+    }),
+  );
+  return out.sort((a, b) => String(a.username).localeCompare(String(b.username)));
+}
+
 function previewReport(evaluated, now) {
   const rows = evaluated.map(({ bet, grades, decision, review }) => ({
     id: bet.id,
+    uid: bet.uid,
     username: bet.username ?? bet.uid,
     type: bet.type,
     stakeCents: bet.stakeCents,
@@ -152,6 +184,7 @@ function previewReport(evaluated, now) {
     placedAt: toIso(bet.placedAt),
     status: decision.status,
     payoutCents: decision.payoutCents,
+    deltaCents: decision.status === 'open' ? 0 : decision.payoutCents - (Number(bet.payoutCents) || 0),
     settledAmerican: decision.settledAmerican,
     droppedLegs: decision.droppedLegs,
     review: review ? review.reason : null,
@@ -189,7 +222,17 @@ function previewReport(evaluated, now) {
 }
 
 // trigger: 'player' | 'admin' | 'cron'. force skips the 60-second throttle. dryRun changes nothing.
-export async function settleOpenBets({ trigger = 'player', force = false, dryRun = false, now = new Date(), fetchImpl = fetch } = {}) {
+// betFilter limits the run to some bets (e.g. those on one custom game); resultOverrides (dry runs only)
+// grades games with a result that isn't saved yet, so the admin can see a final score's effect first.
+export async function settleOpenBets({
+  trigger = 'player',
+  force = false,
+  dryRun = false,
+  now = new Date(),
+  fetchImpl = fetch,
+  betFilter = null,
+  resultOverrides = null,
+} = {}) {
   const db = adminDb();
 
   if (!dryRun) {
@@ -206,10 +249,11 @@ export async function settleOpenBets({ trigger = 'player', force = false, dryRun
   const snap = await db.collection('bets').where('status', '==', 'open').limit(MAX_OPEN_BETS).get();
   const bets = snap.docs
     .map((d) => ({ id: d.id, ...d.data() }))
-    .filter((b) => Array.isArray(b.legs) && b.legs.length > 0);
+    .filter((b) => Array.isArray(b.legs) && b.legs.length > 0)
+    .filter((b) => (betFilter ? betFilter(b) : true));
 
   const pendingLegs = bets.flatMap((b) => b.legs.filter((l) => !l.result || l.result === 'pending'));
-  const results = await loadGameResults(pendingLegs, { now, fetchImpl, db });
+  const results = await loadGameResults(pendingLegs, { now, fetchImpl, db, overrides: dryRun ? resultOverrides : null });
   const resultFor = (leg) => results.get(gameKey(leg)) ?? null;
 
   const evaluated = bets.map((bet) => {
@@ -217,7 +261,10 @@ export async function settleOpenBets({ trigger = 'player', force = false, dryRun
     return { bet, grades, decision, review: reviewInfo(bet, grades, decision, now) };
   });
 
-  if (dryRun) return previewReport(evaluated, now);
+  if (dryRun) {
+    const report = previewReport(evaluated, now);
+    return { ...report, walletChanges: await walletChangesFor(db, report.wouldSettle) };
+  }
 
   const summary = { ran: true, trigger, checked: bets.length, settled: 0, alreadySettled: 0, stillOpen: 0, needsReview: 0, flagged: 0, errors: 0 };
   // One bet at a time: bets of the same player touch the same wallet, so parallel transactions would only contend.

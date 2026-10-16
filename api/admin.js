@@ -1,10 +1,21 @@
 // POST /api/admin  { action, ...fields }
-// Public: setupStatus, bootstrap. Admin only: ping, createUser, updateUser, setDisabled, resetPassword, adjustWallet.
+// Public: setupStatus, bootstrap.
+// Admin only: ping, createUser, updateUser, setDisabled, resetPassword, adjustWallet,
+//   gradeBet, setLegResult (preview with confirm: false, apply with confirm: true + expectedVersion),
+//   createCustomGame, updateCustomGame, finalizeCustomGame, cancelCustomGame (preview / confirm), deleteCustomGame.
 
 import { HttpError, readJsonBody, withHandler } from '../server/http.js';
 import { requireAdmin } from '../server/auth.js';
 import { bootstrapAdmin, getSetupStatus } from '../server/admin/bootstrap.js';
 import { adjustWallet, createUser, resetPassword, setDisabled, updateUser } from '../server/admin/users.js';
+import { gradeBet, setLegResult } from '../server/admin/bets.js';
+import {
+  cancelCustomGame,
+  createCustomGame,
+  deleteCustomGame,
+  finalizeCustomGame,
+  updateCustomGame,
+} from '../server/admin/customGames.js';
 
 const ADMIN_ACTIONS = {
   ping: async (_body, caller) => ({ ok: true, admin: true, username: caller.user.username }),
@@ -13,6 +24,13 @@ const ADMIN_ACTIONS = {
   setDisabled,
   resetPassword,
   adjustWallet,
+  gradeBet,
+  setLegResult,
+  createCustomGame,
+  updateCustomGame,
+  finalizeCustomGame,
+  cancelCustomGame,
+  deleteCustomGame,
 };
 
 export default withHandler(['POST'], async (req) => {

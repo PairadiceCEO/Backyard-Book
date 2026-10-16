@@ -24,14 +24,19 @@ function startMs(leg) {
 }
 
 // legs: every pending leg that needs a result. Returns Map(gameKey → result).
-export async function loadGameResults(legs, { now = new Date(), fetchImpl = fetch, db = adminDb() } = {}) {
+// overrides: optional Map(gameKey → result) used instead of looking those games up (admin previews).
+export async function loadGameResults(legs, { now = new Date(), fetchImpl = fetch, db = adminDb(), overrides = null } = {}) {
   const games = new Map();
+  const results = new Map();
   for (const leg of legs) {
     const key = gameKey(leg);
+    if (overrides?.has(key)) {
+      results.set(key, overrides.get(key));
+      continue;
+    }
     if (!games.has(key)) games.set(key, { league: leg.league, gameId: String(leg.gameId), start: startMs(leg) });
   }
 
-  const results = new Map();
   const scoreboards = new Map(); // `${league}|${yyyymmdd}` → Promise<Map(eventId → raw event) | null>
 
   const scoreboard = (league, ymd) => {

@@ -71,6 +71,17 @@ export async function getOrRefresh(key, ttlMs, builder, { now = Date.now } = {})
   }
 }
 
+// Drops a cached value so the next read rebuilds it (used after the admin changes a custom game).
+// Other function instances may keep their memory copy until it expires (at most the TTL, 30 s for boards).
+export async function invalidateCache(key) {
+  memory.delete(key);
+  try {
+    await adminDb().collection('cache').doc(key).delete();
+  } catch (err) {
+    console.error(`cache invalidate ${key} failed:`, err.message);
+  }
+}
+
 // Test helper: forget this instance's memory copies.
 export function clearMemoryCache() {
   memory.clear();

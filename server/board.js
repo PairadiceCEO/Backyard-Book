@@ -77,18 +77,25 @@ function customTeam(team, score) {
   };
 }
 
+// A blank line (null / '') means the market isn't offered; Number(null) would wrongly be 0.
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function customMarkets(odds) {
   const markets = emptyMarkets();
   const ref = { provider: 'Custom' };
   markets.moneyline.home = makeQuote(odds?.moneyline?.home, { source: 'custom', ref });
   markets.moneyline.away = makeQuote(odds?.moneyline?.away, { source: 'custom', ref });
-  const homeLine = Number(odds?.spread?.homeLine);
-  if (Number.isFinite(homeLine)) {
+  const homeLine = numberOrNull(odds?.spread?.homeLine);
+  if (homeLine !== null) {
     markets.spread.home = makeQuote(odds.spread.home, { line: homeLine, source: 'custom', ref });
     markets.spread.away = makeQuote(odds.spread.away, { line: -homeLine, source: 'custom', ref });
   }
-  const totalLine = Number(odds?.total?.line);
-  if (Number.isFinite(totalLine) && totalLine > 0) {
+  const totalLine = numberOrNull(odds?.total?.line);
+  if (totalLine !== null && totalLine > 0) {
     markets.total.over = makeQuote(odds.total.over, { line: totalLine, source: 'custom', ref });
     markets.total.under = makeQuote(odds.total.under, { line: totalLine, source: 'custom', ref });
   }

@@ -1142,3 +1142,188 @@ details.card > summary {
   cursor: pointer;
   font-weight: 700;
 }
+
+/* Initials badge when a team has no logo */
+.team-logo.initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+}
+
+/* Admin tools: custom games, bets, confirmations */
+
+.field select {
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.fieldset {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.7rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.fieldset legend {
+  padding: 0 0.3rem;
+  font-weight: 700;
+}
+
+.two-col,
+.three-col {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.three-col {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.two-col .field input,
+.three-col .field input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 560px) {
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+  .three-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .three-col > span:empty {
+    display: none;
+  }
+}
+
+.admin-custom-games,
+.admin-bets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.custom-game-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.custom-game {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.custom-game-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.score-entry {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  align-items: end;
+}
+
+.score-entry .button-row {
+  grid-column: 1 / -1;
+}
+
+.score-entry .field input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: flex-end;
+}
+
+.admin-leg {
+  align-items: flex-start;
+}
+
+.admin-leg-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+}
+
+.leg-override {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.2rem 0.3rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.btn.small-btn {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.small-heading {
+  font-size: 0.9rem;
+  margin: 0 0 0.3rem;
+}
+
+.wallet-changes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.wallet-change {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.1rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+}
+
+.wallet-change > :last-child {
+  grid-column: 1 / -1;
+}
+
+.regrade-table {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.8rem;
+}

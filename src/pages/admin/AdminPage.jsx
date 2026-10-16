@@ -1,15 +1,20 @@
-// Admin home: Players, Shop purchases, Settlement (preview, settle now, needs review) and a server access check.
+// Admin home: Players, Bets (regrades, needs review), Custom games, Settlement (preview, settle now),
+// Shop purchases and a server access check.
 
 import { useState } from 'react';
 import { adminAction } from '../../lib/api.js';
 import AdminUsers from './AdminUsers.jsx';
 import AdminShopHistory from './AdminShopHistory.jsx';
 import AdminSettlement from './AdminSettlement.jsx';
+import AdminBets from './AdminBets.jsx';
+import AdminCustomGames from './AdminCustomGames.jsx';
 
 const SECTIONS = [
   { id: 'players', label: 'Players' },
-  { id: 'shop', label: 'Shop purchases' },
+  { id: 'bets', label: 'Bets' },
+  { id: 'custom', label: 'Custom games' },
   { id: 'settlement', label: 'Settlement' },
+  { id: 'shop', label: 'Shop purchases' },
   { id: 'system', label: 'System' },
 ];
 
@@ -34,7 +39,7 @@ function SystemPanel() {
 
   return (
     <div className="card">
-      <p className="muted">Force-grading bets and custom games arrive in Phase 8. Settlement is under the Settlement tab.</p>
+      <p className="muted">Regrades are under Bets, house games under Custom games, and Settle now / Preview under Settlement.</p>
       <button type="button" className="btn btn-primary" onClick={checkAccess} disabled={checking}>
         {checking ? 'Checking…' : 'Check admin access'}
       </button>
@@ -65,6 +70,8 @@ export default function AdminPage() {
         ))}
       </div>
       {section === 'players' ? <AdminUsers /> : null}
+      {section === 'bets' ? <AdminBets /> : null}
+      {section === 'custom' ? <AdminCustomGames /> : null}
       {section === 'shop' ? <AdminShopHistory /> : null}
       {section === 'settlement' ? <AdminSettlement /> : null}
       {section === 'system' ? <SystemPanel /> : null}

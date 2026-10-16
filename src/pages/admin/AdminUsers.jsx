@@ -1,11 +1,12 @@
 // Admin player management: live list, create form, and one inline editor at a time.
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../../firebase.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { adminAction } from '../../lib/api.js';
 import { formatMoney, formatWinRate, parseDollarsToCents } from '../../lib/format.js';
+import MoneyConfirmModal from './MoneyConfirmModal.jsx';
 import {
   DISPLAY_NAME_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
@@ -206,24 +207,36 @@ function AdjustWalletForm({ player, onDone, onCancel }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [pendingCents, setPendingCents] = useState(null); // amount waiting for confirmation
 
-  async function handleSubmit(event) {
+  // Step 1: check the amount and show the wallet change for confirmation.
+  function handleSubmit(event) {
     event.preventDefault();
     const deltaCents = parseDollarsToCents(amount, { allowNegative: true });
     if (deltaCents === null || deltaCents === 0) {
       setError('Enter an amount like 50 to add or -20 to remove.');
       return;
     }
+    setError('');
+    setPendingCents(deltaCents);
+  }
+
+  // Step 2: apply it.
+  async function apply() {
     setSaving(true);
     setError('');
     try {
-      const result = await adminAction('adjustWallet', { uid: player.id, deltaCents, note: note.trim() });
+      const result = await adminAction('adjustWallet', { uid: player.id, deltaCents: pendingCents, note: note.trim() });
+      setPendingCents(null);
       onDone(`${player.username}'s wallet is now ${formatMoney(result.balanceCents)}.`);
     } catch (err) {
       setError(err.message);
       setSaving(false);
     }
   }
+
+  const closeConfirm = useCallback(() => setPendingCents(null), []);
+  const before = Number(player.balanceCents) || 0;
 
   return (
     <form className="editor" onSubmit={handleSubmit} noValidate>
@@ -242,15 +255,29 @@ function AdjustWalletForm({ player, onDone, onCancel }) {
         <span>Note (optional)</span>
         <input type="text" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} disabled={saving} />
       </label>
-      {error ? <p className="error-text">{error}</p> : null}
+      {error && pendingCents === null ? <p className="error-text">{error}</p> : null}
       <div className="row-actions">
         <button type="submit" className="btn btn-primary small" disabled={saving}>
-          {saving ? 'Saving…' : 'Apply'}
+          Review
         </button>
         <button type="button" className="btn small" onClick={onCancel} disabled={saving}>
           Cancel
         </button>
       </div>
+      {pendingCents !== null ? (
+        <MoneyConfirmModal
+          title="Adjust wallet?"
+          walletChanges={[{ uid: player.id, username: player.username, deltaCents: pendingCents, balanceBeforeCents: before, balanceAfterCents: before + pendingCents }]}
+          confirmLabel="Apply"
+          danger={pendingCents < 0}
+          busy={saving}
+          error={error}
+          onConfirm={apply}
+          onCancel={closeConfirm}
+        >
+          <p>{note.trim() ? `Note: ${note.trim()}` : 'No note.'}</p>
+        </MoneyConfirmModal>
+      ) : null}
     </form>
   );
 }

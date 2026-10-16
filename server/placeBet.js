@@ -224,10 +224,21 @@ export async function placeBets(caller, body, { now = new Date(), fetchImpl = fe
   const userRef = db.collection('users').doc(caller.uid);
   const betRefs = ids.map((id) => db.collection('bets').doc(id));
 
+  // Custom games count the bets placed on them (Delete is only allowed at 0).
+  const customBetCounts = new Map(); // customGames doc id → number of new bets on it
+  for (const bet of bets) {
+    const docIds = new Set(bet.legs.filter((l) => String(l.gameId).startsWith('custom:')).map((l) => String(l.gameId).slice(7)));
+    for (const docId of docIds) customBetCounts.set(docId, (customBetCounts.get(docId) ?? 0) + 1);
+  }
+  const customRefs = [...customBetCounts.keys()].map((docId) => db.collection('customGames').doc(docId));
+
   const outcome = await db.runTransaction(async (tx) => {
-    const [userSnap, firstBetSnap] = await Promise.all([tx.get(userRef), tx.get(betRefs[0])]);
+    const [userSnap, firstBetSnap, ...customSnaps] = await Promise.all([tx.get(userRef), tx.get(betRefs[0]), ...customRefs.map((r) => tx.get(r))]);
     if (firstBetSnap.exists) return { duplicate: true };
     if (!userSnap.exists) throw new HttpError(403, 'NO_PROFILE', 'No player profile exists for this login.');
+    if (customSnaps.some((s) => !s.exists)) {
+      throw new HttpError(409, 'MARKET_CLOSED', 'A custom game on this slip was just removed.', { closedLegs: [], lineChanges: [] });
+    }
 
     const balance = Number(userSnap.data().balanceCents) || 0;
     if (total > balance) {
@@ -250,6 +261,10 @@ export async function placeBets(caller, body, { now = new Date(), fetchImpl = fe
       });
     });
     tx.update(userRef, { balanceCents: running });
+    customRefs.forEach((ref, i) => {
+      const count = Number(customSnaps[i].data().betCount) || 0;
+      tx.update(ref, { betCount: count + customBetCounts.get(ref.id ?? ref.path.split('/').pop()) });
+    });
     return { duplicate: false, balanceCents: running };
   });
 
