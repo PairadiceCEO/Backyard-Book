@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import { adminAction } from '../../lib/api.js';
 import AdminUsers from './AdminUsers.jsx';
+import AdminShopHistory from './AdminShopHistory.jsx';
 
 const SECTIONS = [
   { id: 'players', label: 'Players' },
+  { id: 'shop', label: 'Shop purchases' },
   { id: 'system', label: 'System' },
 ];
 
@@ -60,7 +62,9 @@ export default function AdminPage() {
           </button>
         ))}
       </div>
-      {section === 'players' ? <AdminUsers /> : <SystemPanel />}
+      {section === 'players' ? <AdminUsers /> : null}
+      {section === 'shop' ? <AdminShopHistory /> : null}
+      {section === 'system' ? <SystemPanel /> : null}
     </section>
   );
 }

@@ -39,6 +39,7 @@ export default withHandler(['GET'], async (req) => {
     fetchedAt: new Date(result.fetchedAtMs).toISOString(),
     stale: result.stale === true,
     partial: result.value.partial === true,
+    kalshiStatus: result.value.kalshiStatus || 'ok',
     games: result.value.games,
   };
 });

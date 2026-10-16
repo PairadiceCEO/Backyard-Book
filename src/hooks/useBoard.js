@@ -51,6 +51,7 @@ export function useBoard(league) {
     fetchedAt: data ? data.fetchedAt : null,
     stale: data ? data.stale === true : false,
     partial: data ? data.partial === true : false,
+    kalshiStatus: data ? data.kalshiStatus || 'ok' : 'ok',
     error: isCurrent ? result.error : '',
     loading: !isCurrent || (!result.data && !result.error),
   };

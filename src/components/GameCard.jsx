@@ -58,8 +58,22 @@ function TeamRow({ team, side, game, showScore }) {
   );
 }
 
+const SOURCE_LABELS = { espn: 'DraftKings', kalshi: 'Kalshi', custom: 'House', sharpapi: 'SharpAPI' };
+
+// Which providers priced this game, e.g. "DraftKings + Kalshi".
+function oddsSourceLabel(game) {
+  const found = new Set();
+  for (const sides of Object.values(game.markets)) {
+    for (const quote of Object.values(sides)) {
+      if (quote) found.add(quote.source === 'espn' ? quote.ref?.provider || 'DraftKings' : SOURCE_LABELS[quote.source] || quote.source);
+    }
+  }
+  return [...found].join(' + ');
+}
+
 export default function GameCard({ game }) {
   const showScore = game.state !== 'pre';
+  const sourceLabel = oddsSourceLabel(game);
   return (
     <article className={`game-card state-${game.state}`}>
       <header className="game-header">
@@ -72,9 +86,14 @@ export default function GameCard({ game }) {
       </header>
       <TeamRow team={game.away} side="away" game={game} showScore={showScore} />
       <TeamRow team={game.home} side="home" game={game} showScore={showScore} />
-      {game.oddsNote || game.source === 'custom' ? (
+      {game.oddsNote || sourceLabel || game.source === 'custom' ? (
         <footer className="game-footer muted small">
           {game.oddsNote ? <span>{game.oddsNote}</span> : null}
+          {!game.oddsNote && sourceLabel ? (
+            <span>
+              {game.state === 'in' ? 'Live odds' : 'Odds'}: {sourceLabel}
+            </span>
+          ) : null}
           {game.source === 'custom' ? <span className="badge">custom</span> : null}
         </footer>
       ) : null}

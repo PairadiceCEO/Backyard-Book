@@ -7,6 +7,7 @@ export const LEAGUE_CONFIG = {
     espnPath: 'baseball/mlb',
     schedule: 'daily', // one ?dates=YYYYMMDD call per day
     espnParams: {},
+    kalshi: { game: 'KXMLBGAME', spread: 'KXMLBSPREAD', total: 'KXMLBTOTAL' },
   },
   nfl: {
     id: 'nfl',
@@ -14,6 +15,7 @@ export const LEAGUE_CONFIG = {
     espnPath: 'football/nfl',
     schedule: 'week', // ESPN's default scoreboard is the current week
     espnParams: {},
+    kalshi: { game: 'KXNFLGAME', spread: 'KXNFLSPREAD', total: 'KXNFLTOTAL' },
   },
   nhl: {
     id: 'nhl',
@@ -21,6 +23,7 @@ export const LEAGUE_CONFIG = {
     espnPath: 'hockey/nhl',
     schedule: 'daily',
     espnParams: {},
+    kalshi: { game: 'KXNHLGAME', spread: 'KXNHLSPREAD', total: 'KXNHLTOTAL' },
   },
   ncaaf: {
     id: 'ncaaf',
@@ -28,6 +31,7 @@ export const LEAGUE_CONFIG = {
     espnPath: 'football/college-football',
     schedule: 'week',
     espnParams: { groups: '80', limit: '300' }, // FBS only
+    kalshi: { game: 'KXNCAAFGAME', spread: 'KXNCAAFSPREAD', total: 'KXNCAAFTOTAL' },
   },
   nba: {
     id: 'nba',
@@ -35,6 +39,7 @@ export const LEAGUE_CONFIG = {
     espnPath: 'basketball/nba',
     schedule: 'daily',
     espnParams: {},
+    kalshi: { game: 'KXNBAGAME', spread: 'KXNBASPREAD', total: 'KXNBATOTAL' },
   },
 };
 

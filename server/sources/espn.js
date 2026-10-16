@@ -108,6 +108,7 @@ function normalizeTeam(competitor, state) {
     id: team.id ? String(team.id) : null,
     name: team.displayName || team.name || 'TBD',
     shortName: team.shortDisplayName || team.displayName || team.name || 'TBD',
+    nickname: team.name || null,
     location: team.location || null,
     abbr: team.abbreviation || null,
     logo: team.logo || null,
@@ -143,7 +144,7 @@ export function normalizeEspnEvent(event, leagueId) {
       oddsNote = 'Odds unavailable';
     }
   } else if (state === 'in') {
-    oddsNote = 'Live prices unavailable';
+    oddsNote = 'Live prices unavailable'; // board.js replaces this when Kalshi has live prices
   }
 
   return {

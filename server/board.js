@@ -1,9 +1,49 @@
-// Builds one league's board: ESPN games + the admin's custom games, sorted by start time.
+// Builds one league's board: ESPN games priced from ESPN and Kalshi, plus the admin's custom games,
+// sorted by start time.
+//
+// Price order per market:
+//   pre-game → ESPN line, else Kalshi main strike (SharpAPI joins in Phase 9)
+//   live     → Kalshi only (never ESPN's stale pre-game line)
+//   final    → none
 
 import { adminDb } from './firebaseAdmin.js';
 import { getLeague } from './leagues.js';
 import { emptyMarkets, fetchLeagueGames } from './sources/espn.js';
+import { attachKalshiToGames, fetchLeagueKalshi } from './sources/kalshi.js';
 import { makeQuote } from '../shared/oddsMath.js';
+
+const MARKET_KEYS = ['moneyline', 'spread', 'total'];
+
+function marketHasQuote(sides) {
+  return Object.values(sides).some((q) => q !== null);
+}
+
+function anyQuote(markets) {
+  return MARKET_KEYS.some((key) => marketHasQuote(markets[key]));
+}
+
+// Applies the price order to one ESPN game. kalshiMarkets may be undefined.
+export function mergeGameMarkets(game, kalshiMarkets) {
+  if (game.source !== 'espn') return game;
+  if (game.state === 'post' || game.canceled) {
+    return { ...game, markets: emptyMarkets(), oddsNote: null };
+  }
+
+  const markets = emptyMarkets();
+  if (game.state === 'pre') {
+    for (const key of MARKET_KEYS) {
+      if (marketHasQuote(game.markets[key])) markets[key] = game.markets[key];
+      else if (kalshiMarkets && marketHasQuote(kalshiMarkets[key])) markets[key] = kalshiMarkets[key];
+    }
+  } else if (kalshiMarkets) {
+    for (const key of MARKET_KEYS) markets[key] = kalshiMarkets[key];
+  }
+
+  let oddsNote = null;
+  if (!anyQuote(markets)) oddsNote = game.state === 'in' ? 'Live prices unavailable' : 'Odds unavailable';
+
+  return { ...game, markets, oddsNote };
+}
 
 const CUSTOM_FINAL_VISIBLE_MS = 24 * 60 * 60 * 1000; // finished custom games stay on the board for a day
 
@@ -117,16 +157,31 @@ export async function buildBoard(leagueId, { now = new Date(), fetchImpl = fetch
   const league = getLeague(leagueId);
   if (!league) throw new Error(`Unknown league ${leagueId}`);
 
-  const [espn, custom] = await Promise.all([
+  const [espn, custom, kalshi] = await Promise.all([
     fetchLeagueGames(league, { now, fetchImpl }),
     loadCustomGames(leagueId, now).catch((err) => {
       console.error(`custom games for ${leagueId} failed:`, err.message);
       return [];
     }),
+    fetchLeagueKalshi(league, { now, fetchImpl }).catch((err) => {
+      console.error(`Kalshi for ${leagueId} failed:`, err.message);
+      return { gameEvents: [], spreadEvents: [], totalEvents: [], status: 'failed' };
+    }),
   ]);
 
+  const kalshiByGame = attachKalshiToGames({
+    league: leagueId,
+    games: espn.games,
+    gameEvents: kalshi.gameEvents,
+    spreadEvents: kalshi.spreadEvents,
+    totalEvents: kalshi.totalEvents,
+  });
+
+  const espnGames = espn.games.map((game) => mergeGameMarkets(game, kalshiByGame.get(game.id)));
+
   return {
-    games: sortGames([...espn.games, ...custom]),
+    games: sortGames([...espnGames, ...custom]),
     partial: espn.partial,
+    kalshiStatus: kalshi.status,
   };
 }

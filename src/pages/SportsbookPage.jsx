@@ -42,7 +42,7 @@ function groupByDay(games) {
 
 export default function SportsbookPage() {
   const [league, setLeague] = useState(readSavedLeague);
-  const { games, fetchedAt, stale, partial, error, loading } = useBoard(league);
+  const { games, fetchedAt, stale, partial, kalshiStatus, error, loading } = useBoard(league);
 
   const groups = useMemo(() => (games ? groupByDay(games) : []), [games]);
   const leagueLabel = LEAGUES.find((l) => l.id === league)?.label ?? '';
@@ -64,6 +64,9 @@ export default function SportsbookPage() {
         <UpdatedAgo timestamp={fetchedAt} />
         {stale ? <span className="warning-text small">ESPN didn't answer; showing the last saved board.</span> : null}
         {partial && !stale ? <span className="warning-text small">Some days couldn't be loaded; retrying.</span> : null}
+        {kalshiStatus === 'failed' ? (
+          <span className="warning-text small">Kalshi isn't answering, so live games have no prices right now.</span>
+        ) : null}
       </div>
 
       {loading ? <div className="card muted">Loading {leagueLabel} games…</div> : null}

@@ -87,3 +87,20 @@ export function formatCentralDay(value) {
   if (Number.isNaN(date.getTime())) return '';
   return dayFormatter.format(date);
 }
+
+const dateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: DISPLAY_TIME_ZONE,
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZoneName: 'short',
+});
+
+// "Oct 16, 2026, 3:05 PM CDT"
+export function formatCentralDateTime(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return dateTimeFormatter.format(date);
+}

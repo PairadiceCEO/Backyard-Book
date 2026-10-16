@@ -669,3 +669,62 @@ h3 {
     font-size: 0.72rem;
   }
 }
+
+/* Phase 5: admin shop purchases */
+
+.shop-summary {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.shop-summary .btn {
+  margin-left: auto;
+}
+
+.summary-number {
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  background: none;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+
+.history-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.chevron {
+  color: var(--text-muted);
+  width: 1rem;
+}
+
+.history-totals {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.history-table {
+  margin-top: 0.3rem;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
