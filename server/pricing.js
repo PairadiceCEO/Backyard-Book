@@ -17,6 +17,7 @@ import {
   attachKalshiToGames,
   fetchLeagueKalshi,
   fetchMarket,
+  mappedEventTicker,
   marketMatchesLeg,
   quoteFromMarket,
 } from './sources/kalshi.js';
@@ -121,7 +122,13 @@ export async function priceLeg(leg, ctx) {
     if (!marketMatchesLeg(boardGame?.kalshi, leg, leg.kalshiTicker, leg.kalshiSide)) {
       return closed('This line is not offered for this game.');
     }
-    const quote = quoteFromMarket(await ctx.market(leg.kalshiTicker), leg.kalshiSide, marketType);
+    const market = await ctx.market(leg.kalshiTicker);
+    // Belt and braces: the fresh market must report the same event the board mapped to this game.
+    const expectedEvent = mappedEventTicker(boardGame.kalshi, marketType);
+    if (market?.event_ticker && market.event_ticker !== expectedEvent) {
+      return closed('This line is not offered for this game.');
+    }
+    const quote = quoteFromMarket(market, leg.kalshiSide, marketType);
     if (!quote) return closed('This line is no longer posted.');
     return compare(leg, quote, fresh);
   }

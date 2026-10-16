@@ -280,53 +280,126 @@ export function attachKalshiToGames(params) {
 }
 
 // Matches every fetched event to an ESPN game. Returns Map(gameId → { game, sideByCode, gameEvent, spreadEvent, totalEvent }).
+//
+// Each event is matched on its own (never by sharing a ticker suffix with another event):
+//   1. Events with no active market (finished games still listed) are skipped, so they can't win a match.
+//   2. Each event picks the ESPN game whose teams fit and whose date is closest (exact date beats the
+//      ±1-day time-zone fallback; for MLB the ticker's start time breaks ties, e.g. doubleheaders).
+//   3. Each game keeps, per kind (winner / spread / total), only its closest event, and all kinds must
+//      be from the same game slot (date + start time) as the closest one, so a game can never mix days.
 export function matchKalshiEntries({ league, games, gameEvents, spreadEvents, totalEvents }) {
   const espnGames = games.filter((g) => g.source === 'espn');
-  const bySuffix = new Map(); // ticker suffix → { game, sideByCode, gameEvent, spreadEvent, totalEvent }
+  const lists = { game: gameEvents ?? [], spread: spreadEvents ?? [], total: totalEvents ?? [] };
 
-  const register = (event, kind) => {
-    const suffix = event.parsed.suffix;
-    let entry = bySuffix.get(suffix);
-    if (!entry) {
+  // 1–2. Every live event picks one game.
+  const picks = new Map(); // gameId → { game, candidates: [{ kind, event, sides, sideOf, distance }] }
+  const orphans = []; // spread events listing one team only: they join their winner event's game below
+  for (const kind of KINDS) {
+    for (const event of lists[kind]) {
+      if (!event?.parsed || !hasActiveMarket(event)) continue;
       const sides = eventSides(event, kind);
-      if (!sides) return;
-      const match = matchTeamsToGame(sides, event.parsed.dateKey, espnGames, league);
-      if (!match) return; // not an FBS / board game (e.g. FCS), or names didn't line up
-      const sideByCode = {};
-      sides.forEach((s, i) => {
-        if (s.code) sideByCode[s.code] = match.sideOf[i];
-      });
-      entry = { game: match.game, sideByCode, gameEvent: null, spreadEvent: null, totalEvent: null };
-      bySuffix.set(suffix, entry);
-    } else if (kind !== 'total') {
-      // Learn any team codes this event uses that the first event didn't.
-      const sides = eventSides(event, kind) ?? [];
-      for (const s of sides) {
-        if (s.code && !entry.sideByCode[s.code]) {
-          const home = scoreSide(s, entry.game.home, league);
-          const away = scoreSide(s, entry.game.away, league);
-          if (home !== away) entry.sideByCode[s.code] = home > away ? 'home' : 'away';
-        }
+      if (!sides) {
+        if (kind === 'spread') orphans.push(event);
+        continue;
       }
+      const match = matchTeamsToGame(sides, event.parsed, espnGames, league);
+      if (!match) continue; // not a board game (e.g. FCS), names didn't line up, or ambiguous
+      let bucket = picks.get(match.game.id);
+      if (!bucket) {
+        bucket = { game: match.game, candidates: [] };
+        picks.set(match.game.id, bucket);
+      }
+      bucket.candidates.push({ kind, event, sides, sideOf: match.sideOf, distance: match.distance });
     }
-    entry[`${kind}Event`] = event;
-  };
-
-  // Winner events first: their two clean team labels give the most reliable match.
-  gameEvents.forEach((e) => register(e, 'game'));
-  spreadEvents.forEach((e) => register(e, 'spread'));
-  totalEvents.forEach((e) => register(e, 'total'));
-
-  const result = new Map();
-  for (const entry of bySuffix.values()) {
-    if (result.has(entry.game.id)) continue; // two events for one game: keep the first
-    result.set(entry.game.id, entry);
   }
+
+  // 3. Per game: the closest event sets the slot; each kind keeps its closest event in that slot.
+  const result = new Map();
+  for (const [gameId, { game, candidates }] of picks) {
+    const anchor = closestCandidate(candidates);
+    const entry = { game, sideByCode: {}, gameEvent: null, spreadEvent: null, totalEvent: null };
+
+    for (const kind of KINDS) {
+      const chosen = closestCandidate(
+        candidates.filter((c) => c.kind === kind && sameSlot(c.event.parsed, anchor.event.parsed)),
+        anchor.event.parsed.suffix,
+      );
+      if (!chosen) continue;
+      // Totals don't need team codes; winner and spread codes must agree on who is home and away.
+      if (kind !== 'total' && !learnCodes(entry.sideByCode, chosen)) continue;
+      entry[`${kind}Event`] = chosen.event;
+    }
+
+    if (entry.gameEvent || entry.spreadEvent || entry.totalEvent) result.set(gameId, entry);
+  }
+
+  // One-team spread events: attach to the game whose winner event has the same ticker suffix (same game slot).
+  for (const event of orphans) {
+    for (const entry of result.values()) {
+      if (entry.spreadEvent || !entry.gameEvent || entry.gameEvent.parsed?.suffix !== event.parsed.suffix) continue;
+      const sides = oneTeamSpreadSides(event);
+      const learned = { ...entry.sideByCode };
+      let ok = sides.length > 0;
+      for (const s of sides) {
+        if (learned[s.code]) continue;
+        const home = scoreTeam(s.label, s.code, entry.game.home, league);
+        const away = scoreTeam(s.label, s.code, entry.game.away, league);
+        if (home === away) ok = false;
+        else learned[s.code] = home > away ? 'home' : 'away';
+      }
+      if (!ok) break;
+      entry.sideByCode = learned;
+      entry.spreadEvent = event;
+      break;
+    }
+  }
+
   return result;
 }
 
-function scoreSide(side, team, league) {
-  return scoreTeam(side.label, side.code, team, league);
+const KINDS = ['game', 'spread', 'total'];
+
+function hasActiveMarket(event) {
+  return (event.markets ?? []).some(isActive);
+}
+
+// Same game slot: same ticker date and, when both tickers carry one, the same start time.
+function sameSlot(a, b) {
+  if (a.dateKey !== b.dateKey) return false;
+  return !a.hhmm || !b.hhmm || a.hhmm === b.hhmm;
+}
+
+// Smallest distance wins; on a tie, prefer the earlier kind (winner first) and then a matching ticker suffix.
+function closestCandidate(candidates, preferSuffix = null) {
+  let best = null;
+  for (const c of candidates) {
+    if (!best || c.distance < best.distance) best = c;
+    else if (c.distance === best.distance && preferSuffix && c.event.parsed.suffix === preferSuffix && best.event.parsed.suffix !== preferSuffix) best = c;
+  }
+  return best;
+}
+
+// Adds an event's team codes to sideByCode. Returns false (and changes nothing) if a code would flip sides.
+function learnCodes(sideByCode, candidate) {
+  const additions = {};
+  for (let i = 0; i < candidate.sides.length; i += 1) {
+    const code = candidate.sides[i].code;
+    if (!code) continue;
+    const side = candidate.sideOf[i];
+    if (sideByCode[code] && sideByCode[code] !== side) return false;
+    additions[code] = side;
+  }
+  Object.assign(sideByCode, additions);
+  return true;
+}
+
+function oneTeamSpreadSides(event) {
+  const byCode = new Map();
+  for (const m of event.markets ?? []) {
+    const code = marketCode(m, event.event_ticker);
+    if (code && !byCode.has(code)) byCode.set(code, { label: spreadLabel(m), code });
+  }
+  return [...byCode.values()];
 }
 
 // ---------- Alternate lines ----------
@@ -420,10 +493,20 @@ export function buildLadders(compact, sideByCode) {
   return ladders;
 }
 
+// The Kalshi event a game's mapping uses for one market type (full ticker, date included).
+export function mappedEventTicker(mapping, marketType) {
+  if (!mapping) return null;
+  if (marketType === 'moneyline') return mapping.gameEvent ?? null;
+  if (marketType === 'spread') return mapping.spreadEvent ?? null;
+  if (marketType === 'total') return mapping.totalEvent ?? null;
+  return null;
+}
+
 // Confirms a submitted Kalshi ticker/side belongs to this game, market type and selection.
+// The mapped event ticker includes the game's date, so a ticker from another day's game never passes.
 export function marketMatchesLeg(mapping, { marketType, selection }, ticker, side) {
   if (!mapping || typeof ticker !== 'string' || (side !== 'yes' && side !== 'no')) return false;
-  const eventTicker = marketType === 'moneyline' ? mapping.gameEvent : marketType === 'spread' ? mapping.spreadEvent : mapping.totalEvent;
+  const eventTicker = mappedEventTicker(mapping, marketType);
   if (!eventTicker || !ticker.startsWith(`${eventTicker}-`)) return false;
   if (marketType === 'total') return (side === 'yes') === (selection === 'over');
 

@@ -35,6 +35,13 @@ export async function getGameDetail(leagueId, gameId, { fetchImpl = fetch, now =
       });
       compact = result.value;
     }
+    // Only show alternates from the exact events this game is mapped to (a cached copy may predate the mapping).
+    if (compact) {
+      compact = {
+        s: compact.s && compact.s.e === game.kalshi.spreadEvent ? compact.s : null,
+        t: compact.t && compact.t.e === game.kalshi.totalEvent ? compact.t : null,
+      };
+    }
     ladders = buildLadders(compact, game.kalshi.sideByCode);
   }
 
