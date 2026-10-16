@@ -1,9 +1,17 @@
 import { useMemo } from 'react';
 import BetCard from '../components/BetCard.jsx';
 import { useMyBets } from '../hooks/useMyBets.js';
+import { usePolling } from '../hooks/usePolling.js';
+import { requestSettlement } from '../lib/settle.js';
+
+const SETTLE_CHECK_MS = 60 * 1000;
 
 export default function MyBetsPage() {
   const { bets, error, loading } = useMyBets();
+
+  // On load and every minute while this page is visible, ask the server to settle finished games.
+  // Results arrive through the live bets listener; requestSettlement is a stable module function.
+  usePolling(requestSettlement, SETTLE_CHECK_MS, 'my-bets');
 
   const { active, finished } = useMemo(
     () => ({
@@ -41,7 +49,7 @@ export default function MyBetsPage() {
       <h2 className="section-title">Finished</h2>
       {!loading && finished.length === 0 ? (
         <div className="card empty-state">
-          <p className="muted">No finished bets yet. Bets settle automatically once games are final (Phase 7).</p>
+          <p className="muted">No finished bets yet. Bets settle automatically once ESPN marks their games final.</p>
         </div>
       ) : null}
       {finished.map((bet) => (

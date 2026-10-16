@@ -52,3 +52,13 @@ Open `https://<your-site>.vercel.app/setup`, enter the setup secret, a username 
 ## Updating to a new phase
 
 Unzip the new phase, upload everything inside the `backyard-book` folder to GitHub the same way (files with the same path are replaced), commit, and Vercel redeploys on its own. If a phase lists a deleted file, delete it on GitHub (**⋯ → Delete file**).
+
+## Settlement (Phase 7)
+
+Bets settle by ESPN game id once ESPN marks the game final (custom games once the admin enters the final score). It runs:
+
+- when a player opens the app or has My Bets open (at most once a minute across everyone),
+- from **Admin → Settlement → Settle now**,
+- once a day at 11:00 UTC (6 AM CDT / 5 AM CST) from the Vercel cron in `vercel.json`. Vercel sends `CRON_SECRET` with that call, so the variable must be set (step 4) — check under **Settings → Cron Jobs** that `/api/settle` is listed.
+
+**Admin → Settlement → Preview settlement** shows what a run would do right now without changing anything. Bets with a leg still pending 72 hours after its game started appear under **Needs review**.

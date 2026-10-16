@@ -25,6 +25,24 @@ export async function fetchEspnScoreboard(path, params = {}, fetchImpl = fetch) 
   return response.json();
 }
 
+// One game by id (settlement fallback when a game is missing from its date's scoreboard).
+// Returns a scoreboard-shaped event { id, date, status, competitions } or null.
+export async function fetchEspnSummaryEvent(path, eventId, fetchImpl = fetch) {
+  const url = new URL(`${ESPN_BASE}/${path}/summary`);
+  url.searchParams.set('event', String(eventId));
+  const response = await fetchImpl(url.toString(), {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`ESPN ${path} summary answered ${response.status}`);
+  const data = await response.json();
+  const competition = data?.header?.competitions?.[0];
+  if (!competition) return null;
+  const id = String(data.header.id ?? competition.id ?? '');
+  if (id !== String(eventId)) return null; // only ever the exact event asked for
+  return { id, date: competition.date, status: competition.status, competitions: [competition] };
+}
+
 export function emptyMarkets() {
   return {
     moneyline: { home: null, away: null },

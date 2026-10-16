@@ -1,13 +1,15 @@
-// Admin home: Players (Phase 3) and a server access check.
+// Admin home: Players, Shop purchases, Settlement (preview, settle now, needs review) and a server access check.
 
 import { useState } from 'react';
 import { adminAction } from '../../lib/api.js';
 import AdminUsers from './AdminUsers.jsx';
 import AdminShopHistory from './AdminShopHistory.jsx';
+import AdminSettlement from './AdminSettlement.jsx';
 
 const SECTIONS = [
   { id: 'players', label: 'Players' },
   { id: 'shop', label: 'Shop purchases' },
+  { id: 'settlement', label: 'Settlement' },
   { id: 'system', label: 'System' },
 ];
 
@@ -32,7 +34,7 @@ function SystemPanel() {
 
   return (
     <div className="card">
-      <p className="muted">Bet grading, custom games and "Settle now" arrive in Phase 8.</p>
+      <p className="muted">Force-grading bets and custom games arrive in Phase 8. Settlement is under the Settlement tab.</p>
       <button type="button" className="btn btn-primary" onClick={checkAccess} disabled={checking}>
         {checking ? 'Checking…' : 'Check admin access'}
       </button>
@@ -64,6 +66,7 @@ export default function AdminPage() {
       </div>
       {section === 'players' ? <AdminUsers /> : null}
       {section === 'shop' ? <AdminShopHistory /> : null}
+      {section === 'settlement' ? <AdminSettlement /> : null}
       {section === 'system' ? <SystemPanel /> : null}
     </section>
   );

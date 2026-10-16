@@ -1,11 +1,18 @@
+import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import NavBar from './NavBar.jsx';
 import BetSlip from './BetSlip.jsx';
 import { BetSlipProvider } from '../context/BetSlipContext.jsx';
+import { requestSettlement } from '../lib/settle.js';
 
 export default function AppLayout() {
   const location = useLocation();
   const onSportsbook = location.pathname.startsWith('/sportsbook');
+
+  // App open: settle any finished games once. Empty deps → runs once per sign-in; sets no state.
+  useEffect(() => {
+    requestSettlement();
+  }, []);
 
   return (
     <BetSlipProvider>

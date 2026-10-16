@@ -1101,3 +1101,44 @@ h3 {
     grid-template-columns: 1fr;
   }
 }
+
+/* Settlement: leg results, final scores, admin preview */
+
+.leg-result.result-push,
+.leg-result.result-void,
+.leg-result.result-pending {
+  color: var(--text-muted);
+}
+
+.leg-score {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.bet-status.status-push,
+.bet-status.status-void {
+  color: var(--text);
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.admin-settlement,
+.settle-preview,
+.settle-open-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.settle-open-list {
+  margin-top: 0.6rem;
+}
+
+details.card > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
