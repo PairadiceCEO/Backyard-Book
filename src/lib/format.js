@@ -46,3 +46,44 @@ export function formatCentralTime(value) {
   if (Number.isNaN(date.getTime())) return '';
   return centralFormatter.format(date);
 }
+
+// "+150", "-110"
+export function formatAmerican(american) {
+  if (!Number.isFinite(american)) return '';
+  return american > 0 ? `+${american}` : String(american);
+}
+
+// Spread line from the team's point of view: "+2.5", "-2.5", "PK"
+export function formatSpreadLine(line) {
+  if (!Number.isFinite(line)) return '';
+  if (line === 0) return 'PK';
+  return line > 0 ? `+${line}` : String(line);
+}
+
+const clockFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: DISPLAY_TIME_ZONE,
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZoneName: 'short',
+});
+
+// "2:30 PM CDT"
+export function formatCentralClock(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return clockFormatter.format(date);
+}
+
+const dayFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: DISPLAY_TIME_ZONE,
+  weekday: 'long',
+  month: 'short',
+  day: 'numeric',
+});
+
+// "Saturday, Oct 17"
+export function formatCentralDay(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return dayFormatter.format(date);
+}
