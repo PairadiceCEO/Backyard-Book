@@ -68,14 +68,25 @@ function inWindow(dateKey, now) {
   return day >= today - WINDOW_PAST_DAYS && day <= today + WINDOW_FUTURE_DAYS;
 }
 
-// Pages through open events for one series (Kalshi returns old events first) and keeps current ones.
+// Fetches open events for one series and keeps current ones.
+// min_close_ts makes Kalshi skip events whose markets have all closed. Game markets close about
+// two days after the game, so this drops the old backlog while keeping live and upcoming games;
+// in practice one page is enough. The cursor loop and date window stay as a safety net.
 export async function fetchSeriesEvents(seriesTicker, { now = new Date(), fetchImpl = fetch } = {}) {
   const kept = [];
+  const minCloseTs = Math.floor(now.getTime() / 1000);
   let cursor = '';
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const data = await kalshiGet(
       '/events',
-      { series_ticker: seriesTicker, status: 'open', with_nested_markets: 'true', limit: PAGE_LIMIT, cursor },
+      {
+        series_ticker: seriesTicker,
+        status: 'open',
+        with_nested_markets: 'true',
+        min_close_ts: minCloseTs,
+        limit: PAGE_LIMIT,
+        cursor,
+      },
       fetchImpl,
     );
     for (const event of data.events ?? []) {
