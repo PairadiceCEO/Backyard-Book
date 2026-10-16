@@ -728,3 +728,304 @@ h3 {
   background: var(--surface-2);
   border-radius: 8px;
 }
+
+/* Phase 6: bet slip, confirmation, My Bets */
+
+.app-shell.has-slip .app-main {
+  padding-bottom: 5rem;
+}
+
+.bet-slip {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(560px, 100%);
+  z-index: 20;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+}
+
+.slip-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: 12px 12px 0 0;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.slip-bar .badge {
+  background: var(--surface);
+}
+
+.slip-body {
+  padding: 0.8rem 1rem 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.slip-modes {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.slip-modes .sub-tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.slip-legs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.slip-leg {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.slip-leg.flagged {
+  border-color: var(--gold);
+}
+
+.slip-leg-top {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.slip-leg-label {
+  font-weight: 700;
+}
+
+.slip-leg-odds {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.2rem;
+}
+
+.slip-flag {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  color: var(--gold);
+  font-size: 0.85rem;
+}
+
+.stake-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stake-field input {
+  width: 6.5rem;
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.parlay-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.slip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.slip-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.slip-actions .btn-primary {
+  flex: 1;
+}
+
+.test-switch {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal {
+  width: min(520px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.confirm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.confirm-bet {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.confirm-bet-head,
+.confirm-leg,
+.confirm-money,
+.confirm-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.confirm-footer {
+  flex-wrap: wrap;
+}
+
+.confirm-odds {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+
+.old-price {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  font-size: 0.85rem;
+}
+
+.bet-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bet-card-head,
+.bet-card-foot,
+.bet-leg {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bet-legs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.bet-leg-right {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.bet-status {
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.bet-status.status-open {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.bet-status.status-won,
+.leg-result.result-win {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.bet-status.status-lost,
+.leg-result.result-loss {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.leg-result {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}

@@ -1,7 +1,25 @@
 // One game: status, both teams (away on top), scores when live/final, and spread / total / moneyline.
 
 import OddsButton from './OddsButton.jsx';
+import { useBetSlip } from '../context/BetSlipContext.jsx';
+import { makePick } from '../lib/betSlipReducer.js';
 import { formatCentralClock, formatSpreadLine } from '../lib/format.js';
+
+// One selectable price. A missing quote renders as "—" and can't be picked.
+function PickButton({ game, marketType, selection, quote, lineLabel, ariaLabel }) {
+  const slip = useBetSlip();
+  if (!quote) return <OddsButton quote={null} ariaLabel={ariaLabel} />;
+  const pick = makePick(game, marketType, selection, quote);
+  return (
+    <OddsButton
+      quote={quote}
+      lineLabel={lineLabel}
+      ariaLabel={ariaLabel}
+      selected={slip.isSelected(pick.legId)}
+      onSelect={() => slip.toggle(pick)}
+    />
+  );
+}
 
 function TeamLogo({ team }) {
   const src = team.logoDark || team.logo;
@@ -43,17 +61,23 @@ function TeamRow({ team, side, game, showScore }) {
         <span className={won ? 'team-name winner' : 'team-name'}>{team.shortName}</span>
       </div>
       <span className="team-score">{showScore && team.score !== null ? team.score : ''}</span>
-      <OddsButton
+      <PickButton
+        game={game}
+        marketType="spread"
+        selection={side}
         quote={spread}
         lineLabel={spread ? formatSpreadLine(spread.line) : ''}
         ariaLabel={`${team.shortName} spread`}
       />
-      <OddsButton
+      <PickButton
+        game={game}
+        marketType="total"
+        selection={isAway ? 'over' : 'under'}
         quote={total}
         lineLabel={total ? `${isAway ? 'O' : 'U'} ${total.line}` : ''}
         ariaLabel={`${isAway ? 'Over' : 'Under'} total`}
       />
-      <OddsButton quote={moneyline} ariaLabel={`${team.shortName} moneyline`} />
+      <PickButton game={game} marketType="moneyline" selection={side} quote={moneyline} ariaLabel={`${team.shortName} moneyline`} />
     </div>
   );
 }

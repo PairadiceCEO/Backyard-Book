@@ -138,6 +138,22 @@ function kalshiQuote(market, side, line) {
   });
 }
 
+// Fresh quote for a stored leg (ticker + side), as placed at bet time. Line comes from the market itself:
+// spread YES = favorite −strike, spread NO = underdog +strike; total = strike; moneyline = none.
+export function quoteFromMarket(market, side, marketType) {
+  if (!market) return null;
+  const strike = num(market.floor_strike);
+  let line = null;
+  if (marketType === 'spread') {
+    if (strike === null) return null;
+    line = side === 'yes' ? -strike : strike;
+  } else if (marketType === 'total') {
+    if (strike === null) return null;
+    line = strike;
+  }
+  return kalshiQuote(market, side, line);
+}
+
 // Team code at the end of a market ticker: "KXNFLSPREAD-26OCT18HOUJAC-JAC3" → "JAC"
 function marketCode(market, eventTicker) {
   const tail = String(market.ticker ?? '').slice(String(eventTicker).length + 1);
