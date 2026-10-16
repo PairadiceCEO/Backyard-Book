@@ -7,6 +7,7 @@ import AppLayout from './components/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import SetupPage from './pages/SetupPage.jsx';
 import SportsbookPage from './pages/SportsbookPage.jsx';
+import GameDetailPage from './pages/GameDetailPage.jsx';
 import MyBetsPage from './pages/MyBetsPage.jsx';
 import LeaderboardPage from './pages/LeaderboardPage.jsx';
 import ShopPage from './pages/ShopPage.jsx';
@@ -33,6 +34,7 @@ export default function App() {
         }
       >
         <Route path="/sportsbook" element={<SportsbookPage />} />
+        <Route path="/sportsbook/:league/:gameId" element={<GameDetailPage />} />
         <Route path="/my-bets" element={<MyBetsPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/shop" element={<ShopPage />} />

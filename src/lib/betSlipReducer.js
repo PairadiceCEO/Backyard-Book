@@ -1,7 +1,13 @@
 // Pure bet slip state. Every change goes through this reducer, so it is easy to test and
 // can never loop: actions only run from clicks and server responses.
 
-import { MAX_LEGS, MIN_PARLAY_LEGS, conflictKey, pickLabel } from '../../shared/betRules.js';
+import { MAX_LEGS, MIN_PARLAY_LEGS, conflictKey, makeLegId, pickLabel } from '../../shared/betRules.js';
+
+// Exact Kalshi market behind a quote (main or alternate line), if any.
+function kalshiRef(quote) {
+  if (quote?.source !== 'kalshi' || !quote.ref?.ticker) return null;
+  return { ticker: quote.ref.ticker, side: quote.ref.side };
+}
 
 export const initialSlipState = {
   legs: [],
@@ -13,7 +19,8 @@ export const initialSlipState = {
 // Builds a pick from a board game and one of its quotes.
 export function makePick(game, marketType, selection, quote) {
   return {
-    legId: `${game.league}:${game.id}:${marketType}:${selection}`,
+    legId: makeLegId({ league: game.league, gameId: game.id, marketType, selection, line: quote.line, source: quote.source }),
+    kalshi: kalshiRef(quote),
     league: game.league,
     gameId: game.id,
     marketType,
@@ -32,6 +39,8 @@ export function makePick(game, marketType, selection, quote) {
 function applyQuote(leg, quote) {
   return {
     ...leg,
+    legId: makeLegId({ league: leg.league, gameId: leg.gameId, marketType: leg.marketType, selection: leg.selection, line: quote.line, source: quote.source }),
+    kalshi: kalshiRef(quote),
     line: quote.line,
     american: quote.american,
     decimal: quote.decimal,

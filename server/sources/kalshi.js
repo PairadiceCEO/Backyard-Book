@@ -271,7 +271,16 @@ function eventSides(event, kind) {
 }
 
 // Matches every fetched event to an ESPN game and returns Map(gameId → Kalshi markets).
-export function attachKalshiToGames({ league, games, gameEvents, spreadEvents, totalEvents }) {
+export function attachKalshiToGames(params) {
+  const result = new Map();
+  for (const [gameId, entry] of matchKalshiEntries(params)) {
+    result.set(gameId, buildKalshiMarkets(entry));
+  }
+  return result;
+}
+
+// Matches every fetched event to an ESPN game. Returns Map(gameId → { game, sideByCode, gameEvent, spreadEvent, totalEvent }).
+export function matchKalshiEntries({ league, games, gameEvents, spreadEvents, totalEvents }) {
   const espnGames = games.filter((g) => g.source === 'espn');
   const bySuffix = new Map(); // ticker suffix → { game, sideByCode, gameEvent, spreadEvent, totalEvent }
 
@@ -311,13 +320,125 @@ export function attachKalshiToGames({ league, games, gameEvents, spreadEvents, t
   const result = new Map();
   for (const entry of bySuffix.values()) {
     if (result.has(entry.game.id)) continue; // two events for one game: keep the first
-    result.set(entry.game.id, buildKalshiMarkets(entry));
+    result.set(entry.game.id, entry);
   }
   return result;
 }
 
 function scoreSide(side, team, league) {
   return scoreTeam(side.label, side.code, team, league);
+}
+
+// ---------- Alternate lines ----------
+
+// Small per-game mapping kept on the board game: which Kalshi events belong to it and which team each code is.
+// Used at bet time to confirm a submitted ticker really belongs to this game and side.
+export function kalshiMapping(entry) {
+  return {
+    gameEvent: entry.gameEvent?.event_ticker ?? null,
+    spreadEvent: entry.spreadEvent?.event_ticker ?? null,
+    totalEvent: entry.totalEvent?.event_ticker ?? null,
+    sideByCode: { ...entry.sideByCode },
+  };
+}
+
+// Compact copy of one event's active markets: [tickerSuffix, strike, yesAsk, yesBid, noAsk, noBid].
+function compactEvent(event) {
+  if (!event) return null;
+  const rows = [];
+  for (const m of event.markets ?? []) {
+    if (!isActive(m)) continue;
+    const strike = num(m.floor_strike);
+    if (strike === null || strike <= 0) continue;
+    const suffix = String(m.ticker ?? '').slice(String(event.event_ticker).length + 1);
+    if (!suffix) continue;
+    rows.push([suffix, strike, num(m.yes_ask_dollars), num(m.yes_bid_dollars), num(m.no_ask_dollars), num(m.no_bid_dollars)]);
+  }
+  return { e: event.event_ticker, m: rows };
+}
+
+// Compact alternate-line data for one game (spread + total events). Kept in the board cache, never sent with the board.
+export function compactAlternates(entry) {
+  const s = compactEvent(entry.spreadEvent);
+  const t = compactEvent(entry.totalEvent);
+  if (!s && !t) return null;
+  return { s, t };
+}
+
+// Same shape from full events fetched one game at a time (fallback when the board copy was dropped for size).
+export function compactFromEvents(spreadEvent, totalEvent) {
+  return { s: compactEvent(spreadEvent), t: compactEvent(totalEvent) };
+}
+
+function expandRow(eventTicker, row) {
+  const [suffix, strike, yesAsk, yesBid, noAsk, noBid] = row;
+  return {
+    ticker: `${eventTicker}-${suffix}`,
+    status: 'active',
+    floor_strike: strike,
+    yes_ask_dollars: yesAsk,
+    yes_bid_dollars: yesBid,
+    no_ask_dollars: noAsk,
+    no_bid_dollars: noBid,
+    suffix,
+  };
+}
+
+// Every posted, tradable spread and total line for a game. Never computes a line Kalshi didn't post.
+// Spreads: team X at −N = YES on "X wins by over N"; X's opponent at +N = NO on that same market.
+// Totals: over = YES on "Over N", under = NO.
+export function buildLadders(compact, sideByCode) {
+  const ladders = { spreads: { home: [], away: [] }, totals: [] };
+  if (!compact) return ladders;
+
+  if (compact.s) {
+    for (const row of compact.s.m) {
+      const market = expandRow(compact.s.e, row);
+      const side = sideByCode?.[market.suffix.replace(/\d+$/, '')];
+      if (side !== 'home' && side !== 'away') continue;
+      const other = side === 'home' ? 'away' : 'home';
+      const fav = quoteFromMarket(market, 'yes', 'spread');
+      const dog = quoteFromMarket(market, 'no', 'spread');
+      if (fav) ladders.spreads[side].push(fav);
+      if (dog) ladders.spreads[other].push(dog);
+    }
+    for (const key of ['home', 'away']) ladders.spreads[key].sort((a, b) => a.line - b.line);
+  }
+
+  if (compact.t) {
+    const byLine = new Map();
+    for (const row of compact.t.m) {
+      const market = expandRow(compact.t.e, row);
+      const over = quoteFromMarket(market, 'yes', 'total');
+      const under = quoteFromMarket(market, 'no', 'total');
+      if (!over && !under) continue;
+      byLine.set(market.floor_strike, { line: market.floor_strike, over, under });
+    }
+    ladders.totals = [...byLine.values()].sort((a, b) => a.line - b.line);
+  }
+
+  return ladders;
+}
+
+// Confirms a submitted Kalshi ticker/side belongs to this game, market type and selection.
+export function marketMatchesLeg(mapping, { marketType, selection }, ticker, side) {
+  if (!mapping || typeof ticker !== 'string' || (side !== 'yes' && side !== 'no')) return false;
+  const eventTicker = marketType === 'moneyline' ? mapping.gameEvent : marketType === 'spread' ? mapping.spreadEvent : mapping.totalEvent;
+  if (!eventTicker || !ticker.startsWith(`${eventTicker}-`)) return false;
+  if (marketType === 'total') return (side === 'yes') === (selection === 'over');
+
+  const code = ticker.slice(eventTicker.length + 1).replace(/\d+$/, '');
+  const teamSide = mapping.sideByCode?.[code];
+  if (teamSide !== 'home' && teamSide !== 'away') return false;
+  // YES backs the market's team; NO backs its opponent.
+  return side === 'yes' ? teamSide === selection : teamSide !== selection;
+}
+
+export async function fetchEvent(eventTicker, fetchImpl = fetch) {
+  const data = await kalshiGet(`/events/${encodeURIComponent(eventTicker)}`, { with_nested_markets: 'true' }, fetchImpl);
+  const event = data.event ?? null;
+  if (!event) return null;
+  return { ...event, markets: event.markets ?? data.markets ?? [] };
 }
 
 // Fetches all three series for a league. Each series fails independently.

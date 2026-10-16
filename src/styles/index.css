@@ -1029,3 +1029,75 @@ h3 {
   font-size: 0.72rem;
   text-transform: uppercase;
 }
+
+/* Game detail page + alternate lines */
+
+.game-card.clickable {
+  cursor: pointer;
+}
+
+.game-card.clickable:hover,
+.game-card.clickable:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.more-lines {
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.detail-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ladder-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.ladder-team {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+}
+
+.ladder-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 0.4rem;
+}
+
+.totals-ladder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.totals-row {
+  display: grid;
+  grid-template-columns: 4rem 1fr 1fr;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.totals-head {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+}
+
+.totals-line {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 520px) {
+  .ladder-grid {
+    grid-template-columns: 1fr;
+  }
+}

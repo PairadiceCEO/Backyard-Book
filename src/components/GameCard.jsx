@@ -1,24 +1,11 @@
 // One game: status, both teams (away on top), scores when live/final, and spread / total / moneyline.
 
-import OddsButton from './OddsButton.jsx';
-import { useBetSlip } from '../context/BetSlipContext.jsx';
-import { makePick } from '../lib/betSlipReducer.js';
+import { useNavigate } from 'react-router-dom';
+import PickButton from './PickButton.jsx';
 import { formatCentralClock, formatSpreadLine } from '../lib/format.js';
 
-// One selectable price. A missing quote renders as "—" and can't be picked.
-function PickButton({ game, marketType, selection, quote, lineLabel, ariaLabel }) {
-  const slip = useBetSlip();
-  if (!quote) return <OddsButton quote={null} ariaLabel={ariaLabel} />;
-  const pick = makePick(game, marketType, selection, quote);
-  return (
-    <OddsButton
-      quote={quote}
-      lineLabel={lineLabel}
-      ariaLabel={ariaLabel}
-      selected={slip.isSelected(pick.legId)}
-      onSelect={() => slip.toggle(pick)}
-    />
-  );
+export function gamePath(game) {
+  return `/sportsbook/${game.league}/${encodeURIComponent(game.id)}`;
 }
 
 function TeamLogo({ team }) {
@@ -95,11 +82,37 @@ function oddsSourceLabel(game) {
   return [...found].join(' + ');
 }
 
-export default function GameCard({ game }) {
+// clickable: tapping the card (anywhere except a price) opens the game page.
+export default function GameCard({ game, clickable = true }) {
+  const navigate = useNavigate();
   const showScore = game.state !== 'pre';
   const sourceLabel = oddsSourceLabel(game);
+
+  function open(event) {
+    if (event.target.closest('button, a, input, label')) return; // price taps go to the slip
+    navigate(gamePath(game));
+  }
+
+  function openWithKey(event) {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      navigate(gamePath(game));
+    }
+  }
+
+  const interactive = clickable
+    ? {
+        onClick: open,
+        onKeyDown: openWithKey,
+        role: 'link',
+        tabIndex: 0,
+        'aria-label': `${game.away.shortName} at ${game.home.shortName}: all lines`,
+      }
+    : {};
+
   return (
-    <article className={`game-card state-${game.state}`}>
+    <article className={`game-card state-${game.state}${clickable ? ' clickable' : ''}`} {...interactive}>
       <header className="game-header">
         <StatusLine game={game} />
         <div className="market-labels" aria-hidden="true">
@@ -110,7 +123,7 @@ export default function GameCard({ game }) {
       </header>
       <TeamRow team={game.away} side="away" game={game} showScore={showScore} />
       <TeamRow team={game.home} side="home" game={game} showScore={showScore} />
-      {game.oddsNote || sourceLabel || game.source === 'custom' ? (
+      {game.oddsNote || sourceLabel || game.source === 'custom' || clickable ? (
         <footer className="game-footer muted small">
           {game.oddsNote ? <span>{game.oddsNote}</span> : null}
           {!game.oddsNote && sourceLabel ? (
@@ -119,6 +132,7 @@ export default function GameCard({ game }) {
             </span>
           ) : null}
           {game.source === 'custom' ? <span className="badge">custom</span> : null}
+          {clickable ? <span className="more-lines">All lines ›</span> : null}
         </footer>
       ) : null}
     </article>

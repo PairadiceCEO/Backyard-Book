@@ -23,8 +23,25 @@ export function conflictKey(leg) {
   return `${leg.gameId}|${leg.marketType}`;
 }
 
-export function makeLegId({ league, gameId, marketType, selection }) {
-  return `${league}:${gameId}:${marketType}:${selection}`;
+// Unique id for one priced pick. Spread/total ids include the line and source, so the main line and
+// each alternate line (or the same number from a different source) are separate picks.
+export function makeLegId({ league, gameId, marketType, selection, line = null, source = '' }) {
+  const base = `${league}:${gameId}:${marketType}:${selection}`;
+  if (marketType === 'moneyline') return source ? `${base}:${source}` : base;
+  return `${base}:${line}${source ? `:${source}` : ''}`;
+}
+
+export const PARLAY_ML_SPREAD_MESSAGE = "A parlay can't include a moneyline and a spread from the same game.";
+
+// Parlay-only rule: no moneyline + spread from the same game (either team). ML + total and spread + total are fine.
+export function hasMoneylineSpreadConflict(legs) {
+  const byGame = new Map();
+  for (const leg of legs) {
+    const types = byGame.get(leg.gameId) ?? new Set();
+    types.add(leg.marketType);
+    byGame.set(leg.gameId, types);
+  }
+  return [...byGame.values()].some((types) => types.has('moneyline') && types.has('spread'));
 }
 
 export function combinedDecimal(decimals) {
@@ -65,6 +82,10 @@ export function slipProblems(slip, { balanceCents = Infinity } = {}) {
       break;
     }
     seen.add(key);
+  }
+
+  if (slip?.mode === 'parlay' && hasMoneylineSpreadConflict(legs)) {
+    problems.push(PARLAY_ML_SPREAD_MESSAGE);
   }
 
   let total = 0;

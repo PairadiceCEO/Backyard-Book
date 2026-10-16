@@ -81,6 +81,9 @@ export default function BetSlip() {
         clientRequestId: makeRequestId(),
         stakeCents: mode === 'parlay' ? parlayStakeCents : undefined,
         legs: parsedLegs.map((l) => ({
+          legId: l.legId,
+          kalshiTicker: l.kalshi?.ticker,
+          kalshiSide: l.kalshi?.side,
           league: l.league,
           gameId: l.gameId,
           marketType: l.marketType,

@@ -13,7 +13,13 @@ import { getLeague } from './leagues.js';
 import { getOrRefresh } from './cache.js';
 import { buildBoard, normalizeCustomGame } from './board.js';
 import { fetchLeagueGames } from './sources/espn.js';
-import { attachKalshiToGames, fetchLeagueKalshi, fetchMarket, quoteFromMarket } from './sources/kalshi.js';
+import {
+  attachKalshiToGames,
+  fetchLeagueKalshi,
+  fetchMarket,
+  marketMatchesLeg,
+  quoteFromMarket,
+} from './sources/kalshi.js';
 
 const BOARD_TTL_MS = 30 * 1000;
 
@@ -108,6 +114,17 @@ export async function priceLeg(leg, ctx) {
   const board = await ctx.board(league);
   const boardGame = board?.games?.find((g) => g.id === String(gameId)) ?? null;
   const boardQuote = boardGame?.markets?.[marketType]?.[selection] ?? null;
+
+  // Exact Kalshi market chosen by the player (main or alternate line). The server confirms the
+  // ticker belongs to this game and side, then prices that market fresh.
+  if (leg.kalshiTicker) {
+    if (!marketMatchesLeg(boardGame?.kalshi, leg, leg.kalshiTicker, leg.kalshiSide)) {
+      return closed('This line is not offered for this game.');
+    }
+    const quote = quoteFromMarket(await ctx.market(leg.kalshiTicker), leg.kalshiSide, marketType);
+    if (!quote) return closed('This line is no longer posted.');
+    return compare(leg, quote, fresh);
+  }
 
   if (fresh.state === 'pre') {
     const espnQuote = fresh.markets[marketType]?.[selection] ?? null;

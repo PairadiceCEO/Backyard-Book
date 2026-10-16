@@ -9,7 +9,17 @@
 import { adminDb } from './firebaseAdmin.js';
 import { getLeague } from './leagues.js';
 import { emptyMarkets, fetchLeagueGames } from './sources/espn.js';
-import { attachKalshiToGames, fetchLeagueKalshi } from './sources/kalshi.js';
+import {
+  buildKalshiMarkets,
+  compactAlternates,
+  fetchLeagueKalshi,
+  kalshiMapping,
+  matchKalshiEntries,
+} from './sources/kalshi.js';
+
+// The board cache document must stay well under Firestore's 1 MiB limit. If the alternate-line
+// copy would push it past this, it is left out and the game page fetches per game instead.
+export const MAX_BOARD_DOC_BYTES = 800 * 1024;
 import { makeQuote } from '../shared/oddsMath.js';
 
 const MARKET_KEYS = ['moneyline', 'spread', 'total'];
@@ -169,7 +179,7 @@ export async function buildBoard(leagueId, { now = new Date(), fetchImpl = fetch
     }),
   ]);
 
-  const kalshiByGame = attachKalshiToGames({
+  const entries = matchKalshiEntries({
     league: leagueId,
     games: espn.games,
     gameEvents: kalshi.gameEvents,
@@ -177,11 +187,30 @@ export async function buildBoard(leagueId, { now = new Date(), fetchImpl = fetch
     totalEvents: kalshi.totalEvents,
   });
 
-  const espnGames = espn.games.map((game) => mergeGameMarkets(game, kalshiByGame.get(game.id)));
+  const alts = {};
+  const espnGames = espn.games.map((game) => {
+    const entry = entries.get(game.id);
+    const merged = mergeGameMarkets(game, entry ? buildKalshiMarkets(entry) : undefined);
+    if (!entry) return { ...merged, kalshi: null };
+    const compact = compactAlternates(entry);
+    if (compact) alts[game.id] = compact;
+    return { ...merged, kalshi: kalshiMapping(entry) };
+  });
 
-  return {
+  const board = {
     games: sortGames([...espnGames, ...custom]),
     partial: espn.partial,
     kalshiStatus: kalshi.status,
+    alts,
+    altsDropped: false,
   };
+
+  // Size guard: drop the alternate-line copy rather than risk a Firestore write failure.
+  if (Buffer.byteLength(JSON.stringify(board)) > MAX_BOARD_DOC_BYTES) {
+    console.error(`board ${leagueId}: alternates left out of the cache (too large); game pages will fetch per game`);
+    board.alts = {};
+    board.altsDropped = true;
+  }
+
+  return board;
 }

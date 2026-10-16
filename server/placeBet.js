@@ -20,6 +20,8 @@ import {
 } from '../shared/betRules.js';
 import { roundDecimal } from '../shared/oddsMath.js';
 
+const KALSHI_TICKER_PATTERN = /^[A-Z0-9][A-Z0-9._-]{3,100}$/;
+
 function bad(message, extra) {
   return new HttpError(400, 'BAD_SLIP', message, extra);
 }
@@ -44,6 +46,22 @@ function parseRequest(body) {
     const quotedAmerican = Number(leg.quotedAmerican);
     if (!Number.isInteger(quotedAmerican)) throw bad(`Pick ${i + 1}: missing price.`);
     const stakeCents = leg.stakeCents === undefined ? undefined : Number(leg.stakeCents);
+
+    // Exact Kalshi market (main or alternate line), validated against the game at pricing time.
+    let kalshiTicker = null;
+    let kalshiSide = null;
+    if (leg.kalshiTicker !== undefined && leg.kalshiTicker !== null && leg.kalshiTicker !== '') {
+      if (typeof leg.kalshiTicker !== 'string' || !KALSHI_TICKER_PATTERN.test(leg.kalshiTicker)) {
+        throw bad(`Pick ${i + 1}: invalid Kalshi market.`);
+      }
+      if (leg.kalshiSide !== 'yes' && leg.kalshiSide !== 'no') throw bad(`Pick ${i + 1}: invalid Kalshi side.`);
+      kalshiTicker = leg.kalshiTicker;
+      kalshiSide = leg.kalshiSide;
+    }
+
+    // The slip's own id for this pick is echoed back in LINE_CHANGED / MARKET_CLOSED answers.
+    const clientLegId = typeof leg.legId === 'string' && leg.legId.length <= 200 ? leg.legId : null;
+
     return {
       league,
       gameId,
@@ -52,7 +70,9 @@ function parseRequest(body) {
       line: leg.marketType === 'moneyline' ? null : line,
       quotedAmerican,
       stakeCents,
-      legId: makeLegId({ league, gameId, marketType: leg.marketType, selection: leg.selection }),
+      kalshiTicker,
+      kalshiSide,
+      legId: clientLegId ?? makeLegId({ league, gameId, marketType: leg.marketType, selection: leg.selection, line }),
     };
   });
 
@@ -82,7 +102,14 @@ async function loadExisting(db, ids, uid) {
 function storedLeg(request, priced) {
   const { quote, game } = priced;
   return {
-    legId: request.legId,
+    legId: makeLegId({
+      league: request.league,
+      gameId: request.gameId,
+      marketType: request.marketType,
+      selection: request.selection,
+      line: request.marketType === 'moneyline' ? null : quote.line,
+      source: quote.source,
+    }),
     league: request.league,
     gameId: request.gameId,
     gameLabel: `${game.away.shortName} @ ${game.home.shortName}`,
