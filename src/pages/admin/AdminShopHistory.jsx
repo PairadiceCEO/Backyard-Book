@@ -6,6 +6,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../firebase.js';
 import { formatCentralDateTime, formatMoney } from '../../lib/format.js';
 import { groupShopPurchases } from '../../lib/shopHistory.js';
+import { EmptyState, ErrorState, LoadingState } from '../../components/StatusViews.jsx';
 
 export default function AdminShopHistory() {
   const [reloadKey, setReloadKey] = useState(0);
@@ -68,12 +69,11 @@ export default function AdminShopHistory() {
         </button>
       </div>
 
-      {data.status === 'error' ? <p className="error-text">{data.error}</p> : null}
+      {data.status === 'loading' && summary.players.length === 0 ? <LoadingState label="Loading purchases…" rows={2} /> : null}
+      {data.status === 'error' ? <ErrorState title="Couldn't load purchases" message={data.error} onRetry={() => setReloadKey((k) => k + 1)} /> : null}
 
-      {data.status !== 'loading' && summary.players.length === 0 && data.status !== 'error' ? (
-        <div className="card empty-state">
-          <p className="muted">No shop purchases yet.</p>
-        </div>
+      {data.status === 'ready' && summary.players.length === 0 ? (
+        <EmptyState icon="🛒" title="No shop purchases yet">Purchases appear here when players add money from the Shop.</EmptyState>
       ) : null}
 
       {summary.players.length > 0 ? (

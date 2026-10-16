@@ -1,4 +1,4 @@
-// Matches outside events (Kalshi, later SharpAPI) to ESPN games by date + team names,
+// Matches Kalshi events to ESPN games by date + team names,
 // with team codes as a tie-breaker. Never relies on which team is listed first.
 
 import { TEAM_ALIASES } from './teamAliases.js';

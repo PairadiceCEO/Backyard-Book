@@ -39,7 +39,6 @@ Vercel project → **Settings → Environment Variables**. Add each name from `.
 | `FIREBASE_PRIVATE_KEY` | the whole `private_key`, BEGIN line through END line (`\n` or real line breaks both work) |
 | `SETUP_SECRET` | a long random phrase you invent |
 | `CRON_SECRET` | another long random phrase |
-| `SHARPAPI_ENABLED` | `false` |
 
 ### 5. Redeploy
 
@@ -68,3 +67,9 @@ Bets settle by ESPN game id once ESPN marks the game final (custom games once th
 - **Admin → Custom games**: create a house game (league tab, teams, optional logo, start date/time in Central Time, any of moneyline / spread / total; blank markets aren't offered). Edit anything until it's final — a later start reopens betting, an earlier one closes it at once; placed bets keep their odds. **Final score** and **Cancel game** show every wallet change first, then settle the game's bets immediately. **Delete** only appears for games nobody bet on.
 - **Admin → Bets**: every bet, filter by player and status. **Force win / Force lose / Void bet** on open or settled bets, or **Set leg…** to fix one leg and recompute the bet with the normal rules. Every regrade previews the wallet change and the player's W–L record before you confirm; only the difference from any earlier payout moves, with an `admin_regrade` ledger entry. **Needs review** lists open bets with a leg pending 72+ hours.
 - **Admin → Settlement**: Preview settlement, and Settle now (confirms the wallet changes first).
+
+## Phones and the home screen (Phase 9)
+
+- On phones the tabs move to a bottom bar and the bet slip is a drawer above it (tap the green bar to open it).
+- **iPhone (Safari):** Share → **Add to Home Screen**. **Android (Chrome):** ⋮ menu → **Add to Home screen** / **Install app**. It opens full-screen as "Backyard Book" with its own icon.
+- Checking the daily settlement cron: Vercel project → **Settings → Cron Jobs** lists `/api/settle` at `0 11 * * *` (6 AM CDT / 5 AM CST); **Run** triggers it now, and **Logs** (filter by `/api/settle`) shows each run's result.

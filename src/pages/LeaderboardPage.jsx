@@ -1,6 +1,7 @@
 // Every active player's wallet and win rate, sorted by wallet. Reads Firestore live.
 
 import { useEffect, useState } from 'react';
+import { EmptyState, ErrorState, LoadingState } from '../components/StatusViews.jsx';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -11,7 +12,9 @@ export default function LeaderboardPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0); // bumped by Try again to re-subscribe after an error
 
+  // Live listener; subscribes once (and again on retry), removed on unmount.
   useEffect(() => {
     if (!db) return undefined;
     const q = query(collection(db, 'users'), orderBy('balanceCents', 'desc'));
@@ -31,16 +34,25 @@ export default function LeaderboardPage() {
       },
     );
     return unsubscribe;
-  }, []);
+  }, [attempt]);
+
+  function retry() {
+    setError('');
+    setLoading(true);
+    setAttempt((n) => n + 1);
+  }
 
   const myUid = authUser ? authUser.uid : null;
 
   return (
     <section className="page">
       <h2 className="section-title">Leaderboard</h2>
-      {loading ? <div className="card muted">Loading…</div> : null}
-      {error ? <div className="card error-text">{error}</div> : null}
-      {!loading && !error ? (
+      {loading ? <LoadingState label="Loading the leaderboard…" rows={3} /> : null}
+      {!loading && error ? <ErrorState title="Couldn't load the leaderboard" message={error} onRetry={retry} /> : null}
+      {!loading && !error && rows.length === 0 ? (
+        <EmptyState icon="🏆" title="No players yet">The admin adds players from the Admin page.</EmptyState>
+      ) : null}
+      {!loading && !error && rows.length > 0 ? (
         <div className="card table-card">
           <table className="table">
             <thead>

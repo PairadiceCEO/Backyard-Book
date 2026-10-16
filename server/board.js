@@ -2,7 +2,7 @@
 // sorted by start time.
 //
 // Price order per market:
-//   pre-game → ESPN line, else Kalshi main strike (SharpAPI joins in Phase 9)
+//   pre-game → ESPN line, else Kalshi main strike
 //   live     → Kalshi only (never ESPN's stale pre-game line)
 //   final    → none
 

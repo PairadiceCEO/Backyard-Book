@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import LeagueTabs from '../components/LeagueTabs.jsx';
 import GameCard from '../components/GameCard.jsx';
 import UpdatedAgo from '../components/UpdatedAgo.jsx';
+import { EmptyState, ErrorState, LoadingState } from '../components/StatusViews.jsx';
 import { useBoard } from '../hooks/useBoard.js';
 import { formatCentralDay } from '../lib/format.js';
 import { LEAGUES } from '../../shared/constants.js';
@@ -42,7 +43,7 @@ function groupByDay(games) {
 
 export default function SportsbookPage() {
   const [league, setLeague] = useState(readSavedLeague);
-  const { games, fetchedAt, stale, partial, kalshiStatus, error, loading } = useBoard(league);
+  const { games, fetchedAt, stale, partial, kalshiStatus, error, loading, retry } = useBoard(league);
 
   const groups = useMemo(() => (games ? groupByDay(games) : []), [games]);
   const leagueLabel = LEAGUES.find((l) => l.id === league)?.label ?? '';
@@ -69,15 +70,23 @@ export default function SportsbookPage() {
         ) : null}
       </div>
 
-      {loading ? <div className="card muted">Loading {leagueLabel} games…</div> : null}
+      {loading ? <LoadingState label={`Loading ${leagueLabel} games…`} rows={3} /> : null}
 
-      {!loading && error && !games ? <div className="card error-text">{error}</div> : null}
-      {!loading && error && games ? <p className="warning-text small">Refresh failed: {error}</p> : null}
+      {!loading && error && !games ? <ErrorState title={`Couldn't load ${leagueLabel} games`} message={error} onRetry={retry} /> : null}
+      {!loading && error && games ? (
+        <p className="warning-text small">
+          Couldn't refresh; showing the last prices.{' '}
+          <button type="button" className="btn btn-ghost small" onClick={retry}>
+            Try again
+          </button>
+        </p>
+      ) : null}
 
       {!loading && games && games.length === 0 ? (
-        <div className="card empty-state">
-          <p className="muted">No {leagueLabel} games scheduled in this window.</p>
-        </div>
+        <EmptyState icon="📅" title={`No ${leagueLabel} games right now`}>
+          Nothing is scheduled from yesterday through the next couple of days. Try another league above — the board refreshes
+          on its own.
+        </EmptyState>
       ) : null}
 
       {groups.map((group) => (

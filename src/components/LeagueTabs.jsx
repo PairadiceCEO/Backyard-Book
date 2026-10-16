@@ -2,7 +2,7 @@ import { LEAGUES } from '../../shared/constants.js';
 
 export default function LeagueTabs({ value, onChange }) {
   return (
-    <div className="sub-tabs" role="tablist" aria-label="Leagues">
+    <div className="sub-tabs league-tabs" role="tablist" aria-label="Leagues">
       {LEAGUES.map((league) => (
         <button
           key={league.id}

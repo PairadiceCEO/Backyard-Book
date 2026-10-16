@@ -8,6 +8,7 @@ import { db } from '../../firebase.js';
 import { adminAction } from '../../lib/api.js';
 import { formatAmerican, formatCentralDateTime, formatMoney } from '../../lib/format.js';
 import MoneyConfirmModal from './MoneyConfirmModal.jsx';
+import { EmptyState, ErrorState, LoadingState } from '../../components/StatusViews.jsx';
 
 const MAX_BETS = 500;
 const PAGE = 50;
@@ -34,9 +35,10 @@ function needsReview(bet, nowMs) {
   });
 }
 
-// Live list of the newest bets from every player. Subscribes once; removed on unmount.
+// Live list of the newest bets from every player. Subscribes once (again on retry); removed on unmount.
 function useAllBets() {
   const [state, setState] = useState({ bets: [], error: '', loaded: false });
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!db) return undefined;
     const q = query(collection(db, 'bets'), orderBy('placedAt', 'desc'), limit(MAX_BETS));
@@ -46,8 +48,12 @@ function useAllBets() {
       (err) => setState({ bets: [], error: err.message || 'Could not load bets.', loaded: true }),
     );
     return unsubscribe;
+  }, [attempt]);
+  const retry = useCallback(() => {
+    setState({ bets: [], error: '', loaded: false });
+    setAttempt((n) => n + 1);
   }, []);
-  return state;
+  return { ...state, retry };
 }
 
 function useNowMs() {
@@ -145,7 +151,7 @@ function AdminBetCard({ bet, flagged, busy, onAction }) {
 }
 
 export default function AdminBets() {
-  const { bets, error, loaded } = useAllBets();
+  const { bets, error, loaded, retry } = useAllBets();
   const nowMs = useNowMs();
   const [player, setPlayer] = useState('all');
   const [status, setStatus] = useState('all');
@@ -203,12 +209,8 @@ export default function AdminBets() {
     <div className="admin-bets">
       {actionError ? <div className="card error-text">{actionError}</div> : null}
       {notice ? <div className="card success-text small">{notice}</div> : null}
-      {error ? (
-        <div className="card error-text">
-          {error}
-          {error.toLowerCase().includes('index') ? <p className="muted small">Open the link in the error once to create the index, then wait a minute.</p> : null}
-        </div>
-      ) : null}
+      {error ? <ErrorState title="Couldn't load bets" message={error} onRetry={retry} /> : null}
+      {!loaded ? <LoadingState label="Loading bets…" rows={3} /> : null}
 
       <h3 className="section-title">Needs review ({review.length})</h3>
       {loaded && review.length === 0 ? <div className="card muted small">Nothing to review. Open bets land here when a leg is still pending 72 hours after its game started.</div> : null}
@@ -258,7 +260,11 @@ export default function AdminBets() {
         </span>
       </div>
 
-      {!loaded ? <div className="card muted">Loading…</div> : null}
+      {loaded && !error && filtered.length === 0 ? (
+        <EmptyState title={bets.length === 0 ? 'No bets yet' : 'No bets match these filters'}>
+          {bets.length === 0 ? 'Bets appear here as soon as anyone places one.' : 'Try another player or status.'}
+        </EmptyState>
+      ) : null}
       {filtered.slice(0, shown).map((bet) => (
         <AdminBetCard key={bet.id} bet={bet} flagged={needsReview(bet, nowMs)} busy={busy} onAction={onAction} />
       ))}

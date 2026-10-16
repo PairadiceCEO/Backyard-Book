@@ -9,6 +9,7 @@ import { LEAGUES } from '../../../shared/constants.js';
 import { centralWallParts } from '../../../shared/time.js';
 import { formatAmerican, formatCentralDateTime, formatMoney, formatSpreadLine } from '../../lib/format.js';
 import MoneyConfirmModal from './MoneyConfirmModal.jsx';
+import { ErrorState, LoadingState } from '../../components/StatusViews.jsx';
 
 const LEAGUE_LABELS = Object.fromEntries(LEAGUES.map((l) => [l.id, l.label]));
 const RESULT_LABELS = { win: 'Won', loss: 'Lost', push: 'Push', void: 'Void', pending: 'Pending' };
@@ -24,9 +25,10 @@ function toMs(value) {
 const priceText = (v) => (v === null || v === undefined ? '' : v > 0 ? `+${v}` : String(v));
 const lineText = (v) => (v === null || v === undefined ? '' : String(v));
 
-// Live list of every custom game. Subscribes once; removed on unmount.
+// Live list of every custom game. Subscribes once (again on retry); removed on unmount.
 function useCustomGames() {
   const [state, setState] = useState({ games: [], error: '', loaded: false });
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!db) return undefined;
     const unsubscribe = onSnapshot(
@@ -40,8 +42,12 @@ function useCustomGames() {
       (err) => setState({ games: [], error: err.message || 'Could not load custom games.', loaded: true }),
     );
     return unsubscribe;
+  }, [attempt]);
+  const retry = useCallback(() => {
+    setState({ games: [], error: '', loaded: false });
+    setAttempt((n) => n + 1);
   }, []);
-  return state;
+  return { ...state, retry };
 }
 
 // Current time, refreshed every 15 s so games move from Upcoming to Closed on their own.
@@ -200,20 +206,28 @@ function CustomGameForm({ initial, gameId, betCount, onSaved, onCancel }) {
       <fieldset className="form-grid fieldset">
         <legend>Odds — leave a market blank to not offer it</legend>
         <p className="muted small">American odds like -110 or +150. {gameId ? 'New odds only apply to new bets; placed bets keep their odds.' : ''}</p>
-        <div className="three-col">
-          <Field label="Away moneyline">{input('mlAway', { inputMode: 'numeric' })}</Field>
-          <Field label="Home moneyline">{input('mlHome', { inputMode: 'numeric' })}</Field>
-          <span />
-          <Field label="Home spread line" hint="e.g. -3.5 (away gets +3.5)">
-            {input('spreadLine', { inputMode: 'decimal' })}
-          </Field>
-          <Field label="Away spread price">{input('spreadAway', { inputMode: 'numeric' })}</Field>
-          <Field label="Home spread price">{input('spreadHome', { inputMode: 'numeric' })}</Field>
-          <Field label="Total line" hint="e.g. 44.5">
-            {input('totalLine', { inputMode: 'decimal' })}
-          </Field>
-          <Field label="Over price">{input('over', { inputMode: 'numeric' })}</Field>
-          <Field label="Under price">{input('under', { inputMode: 'numeric' })}</Field>
+        <div className="odds-group">
+          <span className="odds-group-title">Moneyline</span>
+          <div className="odds-row two">
+            <Field label="Away">{input('mlAway', { inputMode: 'numeric' })}</Field>
+            <Field label="Home">{input('mlHome', { inputMode: 'numeric' })}</Field>
+          </div>
+        </div>
+        <div className="odds-group">
+          <span className="odds-group-title">Spread — home line, e.g. -3.5 (away gets +3.5)</span>
+          <div className="odds-row">
+            <Field label="Home line">{input('spreadLine', { inputMode: 'decimal' })}</Field>
+            <Field label="Away price">{input('spreadAway', { inputMode: 'numeric' })}</Field>
+            <Field label="Home price">{input('spreadHome', { inputMode: 'numeric' })}</Field>
+          </div>
+        </div>
+        <div className="odds-group">
+          <span className="odds-group-title">Total — e.g. 44.5</span>
+          <div className="odds-row">
+            <Field label="Line">{input('totalLine', { inputMode: 'decimal' })}</Field>
+            <Field label="Over">{input('over', { inputMode: 'numeric' })}</Field>
+            <Field label="Under">{input('under', { inputMode: 'numeric' })}</Field>
+          </div>
         </div>
       </fieldset>
 
@@ -437,7 +451,7 @@ function GameRow({ game, group, onEdit, onNotice }) {
 }
 
 export default function AdminCustomGames() {
-  const { games, error, loaded } = useCustomGames();
+  const { games, error, loaded, retry } = useCustomGames();
   const nowMs = useNowMs();
   const [editor, setEditor] = useState(null); // null | { key, game | null }
   const [notice, setNotice] = useState('');
@@ -516,9 +530,9 @@ export default function AdminCustomGames() {
         />
       ) : null}
 
-      {error ? <div className="card error-text">{error}</div> : null}
-      {!loaded ? <div className="card muted">Loading…</div> : null}
-      {loaded ? (
+      {error ? <ErrorState title="Couldn't load custom games" message={error} onRetry={retry} /> : null}
+      {!loaded ? <LoadingState label="Loading custom games…" rows={2} /> : null}
+      {loaded && !error ? (
         <>
           {section('Upcoming', groups.upcoming, 'upcoming', 'No upcoming custom games.')}
           {section('Closed — started, no final score', groups.closed, 'closed', 'None waiting for a score.')}

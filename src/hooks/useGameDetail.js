@@ -54,5 +54,6 @@ export function useGameDetail(league, gameId) {
     error: isCurrent ? result.error : '',
     notFound: isCurrent ? result.notFound : false,
     loading: !isCurrent || (!result.data && !result.error),
+    retry: load,
   };
 }

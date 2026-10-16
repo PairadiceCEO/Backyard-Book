@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import GameCard from '../components/GameCard.jsx';
 import PickButton from '../components/PickButton.jsx';
 import UpdatedAgo from '../components/UpdatedAgo.jsx';
+import { EmptyState, ErrorState, LoadingState } from '../components/StatusViews.jsx';
 import { useGameDetail } from '../hooks/useGameDetail.js';
 import { formatSpreadLine } from '../lib/format.js';
 
@@ -60,7 +61,7 @@ function TotalsLadder({ game, rows }) {
 
 export default function GameDetailPage() {
   const { league, gameId } = useParams();
-  const { game, ladders, fetchedAt, stale, kalshiStatus, error, notFound, loading } = useGameDetail(league, gameId);
+  const { game, ladders, fetchedAt, stale, kalshiStatus, error, notFound, loading, retry } = useGameDetail(league, gameId);
 
   const finished = game && (game.state === 'post' || game.canceled);
   const hasSpreads = ladders && (ladders.spreads.home.length > 0 || ladders.spreads.away.length > 0);
@@ -77,16 +78,21 @@ export default function GameDetailPage() {
       {stale ? <p className="warning-text small">ESPN didn't answer; showing the last saved data.</p> : null}
       {kalshiStatus === 'failed' ? <p className="warning-text small">Kalshi isn't answering, so alternate lines may be missing.</p> : null}
 
-      {loading ? <div className="card muted">Loading game…</div> : null}
+      {loading ? <LoadingState label="Loading game…" rows={4} /> : null}
       {!loading && notFound ? (
-        <div className="card empty-state">
-          <p className="muted">This game is no longer on the board.</p>
-          <Link to="/sportsbook" className="btn btn-primary">
-            Back to board
-          </Link>
-        </div>
+        <EmptyState
+          icon="🏁"
+          title="This game is no longer on the board"
+          action={
+            <Link to="/sportsbook" className="btn btn-primary">
+              Back to board
+            </Link>
+          }
+        >
+          Finished games drop off after a while. Your bets on it are in My Bets.
+        </EmptyState>
       ) : null}
-      {!loading && error && !notFound && !game ? <div className="card error-text">{error}</div> : null}
+      {!loading && error && !notFound && !game ? <ErrorState title="Couldn't load this game" message={error} onRetry={retry} /> : null}
 
       {game ? (
         <>

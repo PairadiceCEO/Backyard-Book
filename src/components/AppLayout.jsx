@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import NavBar from './NavBar.jsx';
 import BetSlip from './BetSlip.jsx';
+import { ErrorBoundary, OfflineBanner } from './StatusViews.jsx';
 import { BetSlipProvider } from '../context/BetSlipContext.jsx';
 import { requestSettlement } from '../lib/settle.js';
 
@@ -18,8 +19,11 @@ export default function AppLayout() {
     <BetSlipProvider>
       <div className={onSportsbook ? 'app-shell has-slip' : 'app-shell'}>
         <NavBar />
+        <OfflineBanner />
         <main className="app-main">
-          <Outlet />
+          <ErrorBoundary resetKey={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
         {onSportsbook ? <BetSlip /> : null}
       </div>

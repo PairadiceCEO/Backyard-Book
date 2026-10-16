@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import FullPageMessage from './FullPageMessage.jsx';
+import { friendlyError } from './StatusViews.jsx';
 
 export default function RequireAuth({ children }) {
   const { authReady, authUser, profileLoaded, profile, profileError, signOut } = useAuth();
@@ -26,8 +27,18 @@ export default function RequireAuth({ children }) {
 
   if (profileError) {
     return (
-      <FullPageMessage title="Couldn't load your account" actions={signOutButton}>
-        {profileError}
+      <FullPageMessage
+        title="Couldn't load your account"
+        actions={
+          <>
+            <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
+              Try again
+            </button>
+            {signOutButton}
+          </>
+        }
+      >
+        {friendlyError(profileError)}
       </FullPageMessage>
     );
   }

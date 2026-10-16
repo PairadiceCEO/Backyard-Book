@@ -55,7 +55,7 @@ export default function AdminPage() {
   return (
     <section className="page">
       <h2 className="section-title">Admin</h2>
-      <div className="sub-tabs" role="tablist" aria-label="Admin sections">
+      <div className="sub-tabs wrap" role="tablist" aria-label="Admin sections">
         {SECTIONS.map((s) => (
           <button
             key={s.id}

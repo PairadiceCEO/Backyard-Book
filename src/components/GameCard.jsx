@@ -96,7 +96,7 @@ function TeamRow({ team, side, game, showScore }) {
   );
 }
 
-const SOURCE_LABELS = { espn: 'DraftKings', kalshi: 'Kalshi', custom: 'House', sharpapi: 'SharpAPI' };
+const SOURCE_LABELS = { espn: 'DraftKings', kalshi: 'Kalshi', custom: 'House' };
 
 // Which providers priced this game, e.g. "DraftKings + Kalshi".
 function oddsSourceLabel(game) {

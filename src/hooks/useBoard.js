@@ -54,5 +54,6 @@ export function useBoard(league) {
     kalshiStatus: data ? data.kalshiStatus || 'ok' : 'ok',
     error: isCurrent ? result.error : '',
     loading: !isCurrent || (!result.data && !result.error),
+    retry: load,
   };
 }

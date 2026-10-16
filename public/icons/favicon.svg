@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#1f2b36"/><stop offset="1" stop-color="#0f1419"/></radialGradient>
+    <linearGradient id="chip" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#38d07f"/><stop offset="1" stop-color="#22a35d"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="256" cy="269.5168" r="225.28" fill="#000" opacity="0.28"/>
+  <circle cx="256" cy="256" r="225.28" fill="url(#chip)"/>
+  <rect x="226.71359999999999" y="30.72" width="58.5728" height="45.056000000000004" rx="9.0112" fill="#e8edf2" transform="rotate(0 256 256)"/><rect x="226.71359999999999" y="30.72" width="58.5728" height="45.056000000000004" rx="9.0112" fill="#e8edf2" transform="rotate(45 256 256)"/><rect x="226.71359999999999" y="30.72" width="58.5728" height="45.056000000000004" rx="9.0112" fill="#e8edf2" transform="rotate(90 256 256)"/><rect x="226.71359999999999" y="30.72" width="58.5728" height="45.056000000000004" rx="9.0112" fill="#e8edf2" transform="rotate(135 256 256)"/><rect x="226.71359999999999" y="30.72" width="58.5728" height="45.056000000000004" rx="9.0112" fill="#e8edf2" transform="rotate(180 256 256)"/><rect x="226.71359999999999" y="30.72" width="58.5728" height="45.056000000000004" rx="9.0112" fill="#e8edf2" transform="rotate(225 256 256)"/><rect x="226.71359999999999" y="30.72" width="58.5728" height="45.056000000000004" rx="9.0112" fill="#e8edf2" transform="rotate(270 256 256)"/><rect x="226.71359999999999" y="30.72" width="58.5728" height="45.056000000000004" rx="9.0112" fill="#e8edf2" transform="rotate(315 256 256)"/>
+  <circle cx="256" cy="256" r="157.696" fill="#0f1419"/>
+  <circle cx="256" cy="256" r="157.696" fill="none" stroke="#f5c451" stroke-width="10.137599999999999" stroke-dasharray="20.275199999999998 16.896"/>
+  <text x="256" y="301.056" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-weight="800" font-size="139.6736" letter-spacing="-4.5056" fill="#e8edf2">BB</text>
+</svg>

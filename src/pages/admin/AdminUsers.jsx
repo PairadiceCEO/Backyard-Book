@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { adminAction } from '../../lib/api.js';
 import { formatMoney, formatWinRate, parseDollarsToCents } from '../../lib/format.js';
 import MoneyConfirmModal from './MoneyConfirmModal.jsx';
+import { ErrorState, LoadingState } from '../../components/StatusViews.jsx';
 import {
   DISPLAY_NAME_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
@@ -340,8 +341,9 @@ export default function AdminUsers() {
   const [togglingUid, setTogglingUid] = useState(null);
   const [notice, setNotice] = useState('');
   const [actionError, setActionError] = useState('');
+  const [attempt, setAttempt] = useState(0); // bumped by Try again to re-subscribe after an error
 
-  // Live player list; subscribes once and unsubscribes on unmount.
+  // Live player list; subscribes once (and again on retry) and unsubscribes on unmount.
   useEffect(() => {
     if (!db) return undefined;
     const q = query(collection(db, 'users'), orderBy('username'));
@@ -358,7 +360,13 @@ export default function AdminUsers() {
       },
     );
     return unsubscribe;
-  }, []);
+  }, [attempt]);
+
+  function retryList() {
+    setListError('');
+    setLoading(true);
+    setAttempt((n) => n + 1);
+  }
 
   function handleDone(text) {
     setEditing(null);
@@ -399,8 +407,8 @@ export default function AdminUsers() {
 
       <div className="card">
         <h3>Players</h3>
-        {loading ? <p className="muted">Loading…</p> : null}
-        {listError ? <p className="error-text">{listError}</p> : null}
+        {loading ? <LoadingState label="Loading players…" rows={2} /> : null}
+        {!loading && listError ? <ErrorState title="Couldn't load players" message={listError} onRetry={retryList} /> : null}
         {!loading && !listError ? (
           <ul className="player-list">
             {players.map((player) => (

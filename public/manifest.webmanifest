@@ -1,0 +1,17 @@
+{
+  "name": "Backyard Book",
+  "short_name": "Backyard Book",
+  "description": "Play-money sportsbook for friends.",
+  "id": "/",
+  "start_url": "/sportsbook",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1419",
+  "theme_color": "#182029",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -96,7 +96,7 @@ export default function LoginPage() {
         </button>
 
         <p className="muted small center">
-          First time setting up the site? <Link to="/setup">Go to setup</Link>
+          First time setting up the site? <Link className="login-link" to="/setup">Go to setup</Link>
         </p>
       </form>
     </div>

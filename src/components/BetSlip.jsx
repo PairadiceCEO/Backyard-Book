@@ -1,7 +1,8 @@
-// Bet slip: a bar at the bottom of the Sportsbook that opens into a panel.
+// Bet slip: a bar with the pick count slides up from the bottom of the Sportsbook when picks are added;
+// tapping it opens a drawer (backdrop, page scroll locked, Place button pinned to the bottom).
 // Singles (each pick has its own stake) or a parlay (one stake). Server answers decide the final price.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useBetSlip } from '../context/BetSlipContext.jsx';
 import { apiRequest, makeRequestId } from '../lib/api.js';
@@ -111,22 +112,47 @@ export default function BetSlip() {
   }
 
   const closeConfirmation = useCallback(() => setConfirmation(null), []);
+  const isOpen = open && legs.length > 0;
+
+  // While the drawer is open: Escape closes it and the page behind it doesn't scroll.
+  // Depends only on isOpen; the cleanup always undoes the lock.
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    document.body.classList.add('no-scroll');
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.classList.remove('no-scroll');
+    };
+  }, [isOpen]);
 
   if (legs.length === 0 && !confirmation) return null;
 
   return (
     <>
+      {isOpen ? <div className="slip-backdrop" role="presentation" onClick={() => setOpen(false)} /> : null}
       {legs.length > 0 ? (
-        <aside className={open ? 'bet-slip open' : 'bet-slip'} aria-label="Bet slip">
-          <button type="button" className="slip-bar" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-            <span>
-              Bet slip · {legs.length} pick{legs.length === 1 ? '' : 's'}
+        <aside className={isOpen ? 'bet-slip open' : 'bet-slip'} aria-label="Bet slip">
+          <button type="button" className="slip-bar" onClick={() => setOpen((v) => !v)} aria-expanded={isOpen}>
+            <span className="slip-bar-title">
+              <span className="slip-count" key={legs.length} aria-label={`${legs.length} pick${legs.length === 1 ? '' : 's'}`}>
+                {legs.length}
+              </span>
+              Bet slip
               {flagged.length > 0 ? <span className="badge badge-danger">needs review</span> : null}
             </span>
-            <span>{total > 0 ? formatMoney(total) : ''} {open ? '▾' : '▴'}</span>
+            <span className="slip-bar-right">
+              {total > 0 ? formatMoney(total) : isOpen ? '' : 'Tap to review'}
+              <span className="slip-chevron" aria-hidden="true">
+                {isOpen ? '▾' : '▴'}
+              </span>
+            </span>
           </button>
 
-          {open ? (
+          {isOpen ? (
             <div className="slip-body">
               <div className="slip-modes" role="tablist" aria-label="Bet type">
                 <button
@@ -160,7 +186,15 @@ export default function BetSlip() {
                         <div className="muted small">{leg.gameLabel}</div>
                       </div>
                       <div className="slip-leg-odds">{formatAmerican(leg.american)}</div>
-                      <button type="button" className="icon-button" aria-label={`Remove ${leg.label}`} onClick={() => slip.remove(leg.legId)}>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={`Remove ${leg.label}`}
+                        onClick={() => {
+                          if (legs.length === 1) setOpen(false); // last pick: the drawer goes away with it
+                          slip.remove(leg.legId);
+                        }}
+                      >
                         ×
                       </button>
                     </div>
@@ -262,7 +296,15 @@ export default function BetSlip() {
               ) : null}
 
               <div className="slip-actions">
-                <button type="button" className="btn small" onClick={() => slip.clear()} disabled={submitting}>
+                <button
+                  type="button"
+                  className="btn small"
+                  onClick={() => {
+                    slip.clear();
+                    setOpen(false);
+                  }}
+                  disabled={submitting}
+                >
                   Clear
                 </button>
                 <button type="button" className="btn btn-primary" onClick={submit} disabled={!canSubmit}>
