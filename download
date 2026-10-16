@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.vercel/
+
+# Local environment files and secrets: never upload these
+.env
+.env.*
+!.env.example
+*service-account*.json
+*firebase-adminsdk*.json
+
+# OS clutter
+.DS_Store
+Thumbs.db
