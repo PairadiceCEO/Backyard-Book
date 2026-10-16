@@ -21,6 +21,12 @@ export const LEAGUES = [
 
 export const SHOP_AMOUNTS_DOLLARS = [5, 25, 50, 100];
 
+// Largest single admin wallet change or starting balance: $1,000,000.
+export const MAX_WALLET_CHANGE_CENTS = 100_000_000;
+
+// Optional id the browser sends so a double-click can't apply the same request twice.
+export const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
+
 export const DISPLAY_TIME_ZONE = 'America/Chicago';
 
 export function normalizeUsername(raw) {

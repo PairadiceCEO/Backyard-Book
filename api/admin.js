@@ -1,9 +1,19 @@
 // POST /api/admin  { action, ...fields }
-// Phase 2 actions: setupStatus and bootstrap (no login needed), ping (admin only).
+// Public: setupStatus, bootstrap. Admin only: ping, createUser, updateUser, setDisabled, resetPassword, adjustWallet.
 
 import { HttpError, readJsonBody, withHandler } from '../server/http.js';
 import { requireAdmin } from '../server/auth.js';
 import { bootstrapAdmin, getSetupStatus } from '../server/admin/bootstrap.js';
+import { adjustWallet, createUser, resetPassword, setDisabled, updateUser } from '../server/admin/users.js';
+
+const ADMIN_ACTIONS = {
+  ping: async (_body, caller) => ({ ok: true, admin: true, username: caller.user.username }),
+  createUser,
+  updateUser,
+  setDisabled,
+  resetPassword,
+  adjustWallet,
+};
 
 export default withHandler(['POST'], async (req) => {
   const body = readJsonBody(req);
@@ -16,9 +26,9 @@ export default withHandler(['POST'], async (req) => {
   // Everything below requires a signed-in admin.
   const caller = await requireAdmin(req);
 
-  if (action === 'ping') {
-    return { ok: true, admin: true, username: caller.user.username };
+  const run = Object.prototype.hasOwnProperty.call(ADMIN_ACTIONS, action) ? ADMIN_ACTIONS[action] : null;
+  if (!run) {
+    throw new HttpError(400, 'UNKNOWN_ACTION', action ? `Unknown admin action: ${action}` : 'Missing "action".');
   }
-
-  throw new HttpError(400, 'UNKNOWN_ACTION', action ? `Unknown admin action: ${action}` : 'Missing "action".');
+  return run(body, caller);
 });

@@ -9,6 +9,18 @@ export function formatMoney(cents) {
   return moneyFormatter.format(value / 100);
 }
 
+// Turns what someone typed ("25", "$1,250.50", "-10") into whole cents, or null if it isn't a valid amount.
+export function parseDollarsToCents(input, { allowNegative = false } = {}) {
+  const cleaned = String(input ?? '').replace(/[$,\s]/g, '');
+  const pattern = allowNegative ? /^-?\d+(\.\d{1,2})?$/ : /^\d+(\.\d{1,2})?$/;
+  if (!pattern.test(cleaned)) return null;
+  const negative = cleaned.startsWith('-');
+  const [whole, fraction = ''] = cleaned.replace('-', '').split('.');
+  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  if (!Number.isSafeInteger(cents)) return null;
+  return negative ? -cents : cents;
+}
+
 // Win rate = won ÷ (won + lost). Pushes and voids never count. No decided bets shows "—".
 export function formatWinRate(stats) {
   const won = Number(stats?.won) || 0;
