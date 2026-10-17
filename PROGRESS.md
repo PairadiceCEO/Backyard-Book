@@ -47,14 +47,14 @@ Spec summary:
 - [x] A1 Server multi-seat: tableRunner `mySeats` + `requireSeat(ctx, body)`; tables.js sit (multi for
       bj/baccarat, one for craps with message) / leave(seat | all) / heartbeat; blackjack + baccarat use
       the seat; ledger ids with seat
-- [ ] A2 Shared dice rules: limits, hard ways, Come, Come Odds, Don't Pass Odds; crapsTable uses them
+- [x] A2 Shared dice rules: limits, hard ways, Come, Come Odds, Don't Pass Odds; crapsTable uses them
 - [ ] A3 Tests (casino2/3/4 updated + new casino5 for multi-seat and craps)
 - [ ] A4 Phones: Blackjack/Baccarat seat panels (tabs per my seat, own chips, insurance, moves, leave),
       leave-all on page exit, Craps felt (Come, Come bets on numbers, Hard ways, DP Odds, $60 meter)
 - [ ] A5 Full suite, build, lint, interact/dealcheck, phone check, merge, report
 
 ## Next
-A2 (A1 done: server multi-seat; new multi-seat tests still to write in A3).
+A3: write test/casino/casino5.test.mjs (multi-seat Blackjack/Baccarat, one seat at Craps, leave one/all, hard ways, Come, Come Odds off on come-out, Don't Pass Odds, every limit, shooter never blocked).
 
 ## Open questions
 - Waiting for Will to approve the B/C plan.
