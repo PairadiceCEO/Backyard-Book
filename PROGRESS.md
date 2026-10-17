@@ -29,10 +29,17 @@ Spec (Will, 2026-10-17):
 - [x] 1 `shared/casino/timing.js` (1000 / 1500 / 700 ms blackjack; 1000 / 1500 / 700 ms baccarat)
 - [x] 2 Tests: casino2 coup timing + full round deadline; casino3 3-seat deal timing and a new five-seat
       test (seat with no bet skipped, insurance deadline, double, split 1.5 s, hole → draw 1.5 s, results)
-- [ ] 3 Full suite, build, phone check 320/375/414, merge wip → main, report
+- [x] 3 Browser check `tools/phone-check/dealcheck.mjs` (real page, sampled between card times): BJ 10
+      opening cards 1 s apart, seat totals 1 → 2 → 3 → 5 with no-bet seat 4 skipped, hole card face down,
+      "Dealing…" + no clock until the cards are down, mid-deal joiner; Baccarat P, B, P, B 1 s apart and
+      third cards at +1.5 s. All pass.
+- [x] 3b Fix found by that check: `src/hooks/useCasinoTable.js` useTimedReveal clamped elapsed at 0, so a
+      phone whose clock read before the deal time started the whole sequence early. Now counts from the
+      deal time (early wait capped at 2 s).
+- [ ] 4 Full suite, lint, build, interact.mjs, phone check 320/375/414, merge wip → main, report
 
 ## Next
-Step 3.
+Step 4.
 
 ## Open questions
 None.
