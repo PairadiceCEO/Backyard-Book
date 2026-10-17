@@ -6,6 +6,7 @@ import { adminDb } from '../firebaseAdmin.js';
 import { HttpError } from '../http.js';
 import { randomInt as defaultRandomInt } from './rng.js';
 import { applyCasinoEntries } from './money.js';
+import { checkProfile } from '../auth.js';
 import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
 import { isValidCasinoBet } from '../../shared/casino/constants.js';
 import { STOPS_PER_REEL, lineSymbols, lineWin } from '../../shared/casino/slotMachine.js';
@@ -32,16 +33,20 @@ function resultFrom(spin, balanceCents, duplicate) {
   };
 }
 
-export async function spinSlots(caller, body, { now = new Date(), randomInt = defaultRandomInt } = {}) {
+const noTiming = { time: (_n, fn) => fn(), add() {}, attempt() {} };
+
+export async function spinSlots(caller, body, { now = new Date(), randomInt = defaultRandomInt, timing = noTiming } = {}) {
   const { betCents, requestId } = parseSpin(body);
   const db = adminDb();
   const userRef = db.collection('users').doc(caller.uid);
   const betRef = db.collection('ledger').doc(`cbet_${caller.uid}_${requestId}`);
 
-  return db.runTransaction(async (tx) => {
-    const [userSnap, betSnap] = await Promise.all([tx.get(userRef), tx.get(betRef)]);
-    if (!userSnap.exists) throw new HttpError(403, 'NO_PROFILE', 'No player profile exists for this login.');
-    const balanceCents = Number(userSnap.data().balanceCents) || 0;
+  let fnDoneAt = 0;
+  const result = await db.runTransaction(async (tx) => {
+    timing.attempt();
+    // The profile (wallet, disabled) and the retry check in one round trip.
+    const [userSnap, betSnap] = await timing.time('read', () => tx.getAll(userRef, betRef), '2 docs');
+    const balanceCents = Number(checkProfile(userSnap).balanceCents) || 0;
 
     // Same request again (double tap, retry): show the spin that already happened.
     if (betSnap.exists) {
@@ -82,6 +87,9 @@ export async function spinSlots(caller, body, { now = new Date(), randomInt = de
     }
 
     const after = applyCasinoEntries(tx, db, { uid: caller.uid, balanceCents, entries, now });
+    fnDoneAt = performance.now();
     return resultFrom(spin, after, false);
   });
+  if (fnDoneAt) timing.add('commit', performance.now() - fnDoneAt);
+  return result;
 }

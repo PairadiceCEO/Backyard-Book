@@ -238,6 +238,9 @@ export function makeDiceEngine(variantId) {
 
   async function doRoll(ctx) {
     const { state } = ctx;
+    // Everyone the roll may pay, and everyone the sweep checks afterwards: one round trip.
+    const uids = state.seats.filter(Boolean).map((seat) => seat.uid);
+    await ctx.prefetch({ wallets: uids, presence: uids });
     const dice = [ctx.randomInt(6) + 1, ctx.randomInt(6) + 1];
     const total = dice[0] + dice[1];
     const pointBefore = state.point;
@@ -284,6 +287,7 @@ export function makeDiceEngine(variantId) {
   // After each roll: free seats that left or went quiet once nothing they have must play out.
   async function sweepSeats(ctx) {
     const { state } = ctx;
+    await ctx.prefetchPresence(state.seats.filter(Boolean).map((seat) => seat.uid)); // one round trip
     for (let i = 0; i < CASINO_SEATS; i += 1) {
       const seat = state.seats[i];
       if (!seat) continue;

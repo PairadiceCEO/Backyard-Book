@@ -178,6 +178,8 @@ async function closeBetting(ctx) {
     return;
   }
 
+  const uids = state.seats.filter(Boolean).map((seat) => seat.uid);
+  await ctx.prefetch({ wallets: uids, presence: uids }); // payouts + the next round's seat check
   const shoe = await ctx.shoe();
   const reshuffled = reshuffleIfDue(shoe, { decks: BACCARAT_DECKS, reshuffleAt: BACCARAT_RESHUFFLE_AT, minCards: 6 });
   const coup = playCoup(() => drawCard(shoe, ctx.randomInt));
@@ -244,6 +246,8 @@ async function afterSeatsChanged(ctx) {
 
 export const baccaratEngine = {
   id: 'baccarat',
+  // Actions that can close betting and deal (the shoe is read with the table, in one round trip).
+  preloadShoe: (action) => action === 'confirm' || action === 'leave',
   decks: BACCARAT_DECKS,
   createTable,
   newSeat,

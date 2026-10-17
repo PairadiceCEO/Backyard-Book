@@ -304,6 +304,8 @@ async function advance(ctx) {
 
 async function dealerTurn(ctx) {
   const { state } = ctx;
+  const uids = state.seats.filter(Boolean).map((seat) => seat.uid);
+  await ctx.prefetch({ wallets: uids, presence: uids }); // payouts in one round trip
   await revealHole(ctx);
   const live = [];
   for (const i of playerSeats(state)) {
@@ -526,6 +528,8 @@ async function afterSeatsChanged(ctx) {
 
 export const blackjackEngine = {
   id: 'blackjack',
+  // Actions that can deal, draw or turn the hole card (the shoe is read with the table).
+  preloadShoe: (action) => ['bet', 'confirm', 'insurance', 'hit', 'stand', 'double', 'split', 'leave'].includes(action),
   decks: BLACKJACK_DECKS,
   createTable,
   newSeat,

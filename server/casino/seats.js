@@ -13,6 +13,7 @@ export async function seatIsStale(ctx, seat) {
 // hook first). Only called when nothing is in play for them (the start of a round, or an idle table), so no bet is ever stranded.
 export async function freeGoneSeats(ctx, engine) {
   const freed = [];
+  await ctx.prefetchPresence(ctx.state.seats.filter(Boolean).map((seat) => seat.uid)); // one round trip
   for (let i = 0; i < CASINO_SEATS; i += 1) {
     const seat = ctx.state.seats[i];
     if (!seat || engine.seatInPlay(ctx.state, i)) continue;

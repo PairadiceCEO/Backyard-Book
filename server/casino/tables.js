@@ -17,6 +17,7 @@ import { blackjackEngine } from './blackjackTable.js';
 import { craplessEngine, crapsEngine } from './crapsTable.js';
 import { freeGoneSeats, seatIsStale } from './seats.js';
 import { CASINO_SEATS, casinoGame } from '../../shared/casino/constants.js';
+import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
 
 const ENGINES = {
   baccarat: baccaratEngine,
@@ -51,6 +52,7 @@ async function sit(ctx, body, engine) {
   }
 
   const seats = ctx.state.seats;
+  if (seats.every(Boolean) || (wanted !== null && seats[wanted])) await ctx.prefetchPresence(seats.filter(Boolean).map((s) => s.uid));
   const canTake = async (i) => {
     const seat = seats[i];
     if (!seat) return true;
@@ -117,7 +119,7 @@ async function tick(ctx, _body, engine) {
 
 const SHARED_ACTIONS = { sit, leave, heartbeat, tick };
 
-export async function handleTableAction(caller, body, { now = Date.now(), randomInt = defaultRandomInt } = {}) {
+export async function handleTableAction(caller, body, { now = Date.now(), randomInt = defaultRandomInt, timing } = {}) {
   const gameId = String(body.game ?? '');
   const engine = tableEngine(gameId);
   const action = String(body.action ?? '');
@@ -127,7 +129,14 @@ export async function handleTableAction(caller, body, { now = Date.now(), random
   else if (Object.prototype.hasOwnProperty.call(engine.actions, action)) handler = engine.actions[action];
   if (!handler) throw new HttpError(400, 'UNKNOWN_ACTION', `${casinoGame(gameId)?.name ?? gameId} has no "${action}".`);
 
-  return runTableAction({ game: gameId, engine, caller, now, randomInt }, async (ctx) => {
+  // Read up front what this action will need: the shoe when it may deal, the bet's ledger entry
+  // when it carries a request id (the retry check).
+  const preload = {
+    shoe: Boolean(engine.preloadShoe?.(action)),
+    ledgerIds: typeof body.requestId === 'string' && REQUEST_ID_PATTERN.test(body.requestId) ? [`cbet_${caller.uid}_${body.requestId}`] : [],
+  };
+
+  return runTableAction({ game: gameId, engine, caller, now, randomInt, timing, preload }, async (ctx) => {
     if (handler !== sit && handler !== tick && handler !== heartbeat && handler !== leave) requireSeat(ctx);
     return handler(ctx, body, engine);
   });

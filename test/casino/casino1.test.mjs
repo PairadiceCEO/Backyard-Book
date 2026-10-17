@@ -31,6 +31,7 @@ const fakeDb = {
       const ops = [];
       const tx = {
         get: async (r) => { reads.set(r.path, versions.get(r.path) ?? 0); await tick(); return snap(r.path); },
+        getAll: async (...rs) => { for (const r of rs) reads.set(r.path, versions.get(r.path) ?? 0); await tick(); return rs.map((r) => snap(r.path)); },
         create: (r, d) => ops.push(['create', r.path, d]),
         update: (r, d) => ops.push(['update', r.path, d]),
         set: (r, d) => ops.push(['set', r.path, d]),
