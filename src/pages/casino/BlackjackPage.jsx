@@ -328,7 +328,7 @@ export default function BlackjackPage() {
   // ---- cards dealt in the latest write turn over at the server's times ----
   // (gaps from shared/casino/timing.js; t is each card's offset from lastDeal.at)
   const lastDeal = table?.lastDeal ?? null;
-  const dealList = lastDeal?.cards ?? [];
+  const dealList = useMemo(() => lastDeal?.cards ?? [], [lastDeal]);
   const shown = useTimedReveal(lastDeal?.at ?? null, dealList.map((c, k) => (Number.isFinite(c.t) ? c.t : k * BLACKJACK_INITIAL_GAP_MS)));
   const revealing = dealList.length > 0 && shown < dealList.length;
   // For each hand, how many of its cards are face up right now.

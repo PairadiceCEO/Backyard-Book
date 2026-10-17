@@ -194,17 +194,22 @@ const LEAVE_DELAY_MS = 400;
 const pendingLeaves = new Map(); // game → timer
 
 export function useLeaveOnExit(game, seated) {
-  const seatedRef = useRef(seated);
-  seatedRef.current = seated;
+  // The table this page was seated at, remembered past the render that switches games (Craps ↔
+  // Crapless share a page), so the cleanup below still knows to leave the old one.
+  const seatedAt = useRef(null);
+  useEffect(() => {
+    if (seated) seatedAt.current = game;
+  }, [game, seated]);
   useEffect(() => {
     if (!game) return undefined;
     clearTimeout(pendingLeaves.get(game));
     pendingLeaves.delete(game);
     return () => {
-      if (!seatedRef.current) return;
+      if (seatedAt.current !== game) return;
+      seatedAt.current = null;
       const timer = setTimeout(() => {
         pendingLeaves.delete(game);
-        tableAction(game, 'leave', {}).catch(() => {});
+        tableAction(game, 'leave', { all: true }).catch(() => {});
       }, LEAVE_DELAY_MS);
       pendingLeaves.set(game, timer);
     };
