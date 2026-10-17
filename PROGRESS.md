@@ -11,7 +11,7 @@ merged to main on its own: **A** casino changes (build now) · **B** Battles · 
 B/C plan was sent to Will 2026-10-17 for approval — **do not code B before he approves it** (copy of the
 plan below under "B/C plan (sent)").
 
-## Current phase: A — casino seats, leaving, craps
+## Phase A — casino seats, leaving, craps — COMPLETE (2026-10-17), merged to main, ready for Will to test
 
 Spec summary:
 1. Blackjack + Baccarat: a player may sit in any number of open seats (up to 5). Each seat plays exactly
@@ -57,14 +57,12 @@ Spec summary:
       Come bets on numbers + Odds, Hard ways, DP Odds, $60 meter). Harness: two-seat + craps scenarios,
       interact.mjs "leaving the page sends one leave-all; opening it never does". dice.js "no numbers"
       test fixed (dollarsText moved to constants.js).
-- [ ] A5 Full suite, build, lint, interact/dealcheck, phone check, merge, report
+- [x] A5 Full suite (26 + 87 + 21 + scratchpad sportsbook suites), lint, build, interact.mjs (incl. leave-all),
+      dealcheck.mjs, phone check 66 screens × 320/375/414 clean; merged wip → main (0.8.0)
 
 ## Next
-(2026-10-17 18:30) Session restarted mid-A4. Recovered: wip reset to d23b6b9 (A1–A3) + the uncommitted A4 files
-(useCasinoTable.js useLeaveOnExit/usePendingTotal/useSeatFocus, TableSeats.jsx, BlackjackPage.jsx seat panels).
-A duplicate server rewrite from the restart is kept only on local branch backup-this-session-99828c6 (unused).
-A4 remaining: check BlackjackPage builds + CSS for seat panels/tabs, then BaccaratPage, then CrapsPage.
-A4: phones. BlackjackPage + BaccaratPage seat panels (one panel per my seat, kept mounted, tabs to switch, auto-switch to the seat whose turn it is / needs insurance), TableSeats canSit for multi-seat, leave-all on page unmount (delayed + cancel on remount), CrapsPage new spots (Come, Come bets on numbers + their Odds, Hard ways, Don't Pass Odds, $60 meter).
+Phase B (Battles) — BLOCKED until Will approves the B/C plan below (sent 2026-10-17). When he does: start
+from a fresh `wip` off main, follow the plan, then Phase C (Challenges + section 6 admin odds edits).
 
 ## Open questions
 - Waiting for Will to approve the B/C plan.
