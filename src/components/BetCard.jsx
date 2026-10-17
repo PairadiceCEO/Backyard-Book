@@ -1,9 +1,10 @@
 // One bet in My Bets: type, legs with odds, stake, potential or actual payout, result.
 // Finished bets show each leg's result and its game's final score, and what was paid.
+// Open bets show the server's cash out estimate (cashout prop) with a "Cash out $X" button.
 
 import { formatAmerican, formatCentralDateTime, formatMoney } from '../lib/format.js';
 
-const STATUS_LABELS = { open: 'Open', won: 'Won', lost: 'Lost', push: 'Push', void: 'Void' };
+const STATUS_LABELS = { open: 'Open', won: 'Won', lost: 'Lost', push: 'Push', void: 'Void', cashed_out: 'Cashed out' };
 const RESULT_LABELS = { win: 'Won', loss: 'Lost', push: 'Push', void: 'Void' };
 
 function asDate(value) {
@@ -28,11 +29,28 @@ function paidNote(bet) {
   return '';
 }
 
-export default function BetCard({ bet }) {
+function CashoutRow({ bet, cashout, onCashOut }) {
+  if (!onCashOut) return null;
+  if (!cashout) return <div className="cashout-row muted small">Checking cash out…</div>;
+  if (!cashout.available) {
+    return <div className="cashout-row muted small">{cashout.reason || 'Cash out unavailable right now'}</div>;
+  }
+  return (
+    <div className="cashout-row">
+      <span className="muted small">{cashout.mode === 'live' ? 'Live cash out value' : 'Cash out before the game'}</span>
+      <button type="button" className="btn btn-primary btn-cashout" onClick={() => onCashOut(bet, cashout.valueCents)}>
+        Cash out {formatMoney(cashout.valueCents)}
+      </button>
+    </div>
+  );
+}
+
+export default function BetCard({ bet, cashout = null, onCashOut = null }) {
   const isOpen = bet.status === 'open';
+  const isCashedOut = bet.status === 'cashed_out';
   const placed = asDate(bet.placedAt);
-  const settled = asDate(bet.settledAt);
-  const note = isOpen ? '' : paidNote(bet);
+  const settled = asDate(bet.cashedOutAt ?? bet.settledAt);
+  const note = isOpen || isCashedOut ? '' : paidNote(bet);
 
   return (
     <article className={`bet-card status-${bet.status}`}>
@@ -51,7 +69,7 @@ export default function BetCard({ bet }) {
             </div>
             <div className="bet-leg-right">
               <span>{formatAmerican(leg.americanOdds)}</span>
-              <LegResult leg={leg} finished={!isOpen} />
+              <LegResult leg={leg} finished={!isOpen && !isCashedOut} />
             </div>
           </li>
         ))}
@@ -66,17 +84,22 @@ export default function BetCard({ bet }) {
           <span>
             To win <strong>{formatMoney(bet.potentialPayoutCents)}</strong>
           </span>
+        ) : isCashedOut ? (
+          <span>
+            Cashed out <strong>{formatMoney(bet.cashoutCents ?? bet.payoutCents)}</strong>
+          </span>
         ) : (
           <span>
             Paid <strong>{formatMoney(bet.payoutCents)}</strong>
           </span>
         )}
       </footer>
+      {isOpen ? <CashoutRow bet={bet} cashout={cashout} onCashOut={onCashOut} /> : null}
       {note ? <div className="muted small">{note}</div> : null}
       {isOpen && bet.needsReview ? <div className="warning-text small">Waiting on the admin to check this result.</div> : null}
       <div className="muted small">
         Placed {placed ? formatCentralDateTime(placed) : ''}
-        {settled ? ` · Settled ${formatCentralDateTime(settled)}` : ''}
+        {settled ? ` · ${isCashedOut ? 'Cashed out' : 'Settled'} ${formatCentralDateTime(settled)}` : ''}
       </div>
     </article>
   );

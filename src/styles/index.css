@@ -1136,6 +1136,39 @@ h3 {
   color: var(--text);
 }
 
+/* Cash out */
+.bet-status.status-cashed_out {
+  color: var(--gold);
+  border-color: var(--gold);
+  white-space: nowrap;
+}
+
+.cashout-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+}
+
+.btn-cashout {
+  min-height: 44px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.cashout-amount {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.cashout-amount strong {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
 .button-row {
   display: flex;
   flex-wrap: wrap;

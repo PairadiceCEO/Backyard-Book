@@ -1,14 +1,16 @@
 {
   "name": "backyard-book",
   "private": true,
-  "version": "0.6.1",
+  "version": "0.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test test/*.test.js",
-    "test:casino": "node --experimental-test-module-mocks --test test/casino/*.test.mjs"
+    "test:casino": "node --experimental-test-module-mocks --test test/casino/*.test.mjs",
+    "test:cashout": "node --experimental-test-module-mocks --test test/cashout/*.test.mjs",
+    "test:all": "npm test && npm run test:casino && npm run test:cashout"
   },
   "dependencies": {
     "firebase": "^10.14.1",

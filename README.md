@@ -68,6 +68,16 @@ Bets settle by ESPN game id once ESPN marks the game final (custom games once th
 - **Admin → Bets**: every bet, filter by player and status. **Force win / Force lose / Void bet** on open or settled bets, or **Set leg…** to fix one leg and recompute the bet with the normal rules. Every regrade previews the wallet change and the player's W–L record before you confirm; only the difference from any earlier payout moves, with an `admin_regrade` ledger entry. **Needs review** lists open bets with a leg pending 72+ hours.
 - **Admin → Settlement**: Preview settlement, and Settle now (confirms the wallet changes first).
 
+## Cash out
+
+Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
+
+- **Before any game in the bet starts:** stake × 0.90.
+- **Once a game has started:** potential payout × the Kalshi bid for every undecided leg × 0.90 (legs already won count as 1; pushed/voided legs drop out of the payout). DraftKings lines use the Kalshi market at the same line; with no exact match or no bid, it shows "Cash out unavailable right now".
+- No cash out once a leg has lost, when every game is final (settlement pays it), or once a custom game in the bet has started.
+
+**Cash out $X** → confirm. The server re-prices with fresh ESPN and Kalshi data; if the value moved it shows the new amount to confirm again, and it never pays a different amount silently. A cashed-out bet moves to Finished as **Cashed out $X**, counts as neither won nor lost, writes a `cashout` ledger entry (once per bet), and is final: settlement skips it and **Admin → Bets** shows it (Status filter **Cashed out**) without regrade buttons.
+
 ## Phones and the home screen (Phase 9)
 
 - On phones the tabs move to a bottom bar and the bet slip is a drawer above it (tap the green bar to open it).

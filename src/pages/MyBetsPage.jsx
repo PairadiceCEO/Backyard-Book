@@ -1,15 +1,21 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import BetCard from '../components/BetCard.jsx';
+import CashoutConfirmModal from '../components/CashoutConfirmModal.jsx';
 import { EmptyState, ErrorState, LoadingState } from '../components/StatusViews.jsx';
+import { useWalletDisplay } from '../context/WalletDisplayContext.jsx';
+import { useCashoutQuotes } from '../hooks/useCashoutQuotes.js';
 import { useMyBets } from '../hooks/useMyBets.js';
 import { usePolling } from '../hooks/usePolling.js';
+import { apiRequest } from '../lib/api.js';
+import { formatMoney } from '../lib/format.js';
 import { requestSettlement } from '../lib/settle.js';
 
 const SETTLE_CHECK_MS = 60 * 1000;
 
 export default function MyBetsPage() {
   const { bets, error, loading, retry } = useMyBets();
+  const { reportBalance } = useWalletDisplay();
 
   // On load and every minute while this page is visible, ask the server to settle finished games.
   // Results arrive through the live bets listener; requestSettlement is a stable module function.
@@ -22,6 +28,44 @@ export default function MyBetsPage() {
     }),
     [bets],
   );
+
+  // Cash out: estimates for every open bet, then confirm → server re-prices → pay (or CASHOUT_CHANGED).
+  const activeIds = useMemo(() => active.map((b) => b.id), [active]);
+  const { quotes, setQuote, refresh: refreshQuotes } = useCashoutQuotes(activeIds);
+  const [cashout, setCashout] = useState(null); // { bet, valueCents, previousCents, busy, error, unavailable }
+  const [cashedNote, setCashedNote] = useState('');
+
+  const startCashout = useCallback((bet, valueCents) => {
+    setCashedNote('');
+    setCashout({ bet, valueCents, previousCents: null, busy: false, error: '', unavailable: '' });
+  }, []);
+
+  const closeCashout = useCallback(() => setCashout(null), []);
+
+  const confirmCashout = useCallback(async () => {
+    if (!cashout || cashout.busy) return;
+    const { bet, valueCents } = cashout;
+    setCashout((c) => (c ? { ...c, busy: true, error: '' } : c));
+    try {
+      const result = await apiRequest('/api/bets', { method: 'POST', body: { action: 'cashout', betId: bet.id, expectedCents: valueCents } });
+      reportBalance(result.balanceCents);
+      setCashout(null);
+      setCashedNote(`Cashed out ${formatMoney(result.cashoutCents)} · new balance ${formatMoney(result.balanceCents)}`);
+    } catch (err) {
+      if (err.code === 'CASHOUT_CHANGED' && Number.isInteger(err.details?.valueCents)) {
+        const next = err.details.valueCents;
+        setQuote(bet.id, { available: true, valueCents: next, mode: quotes[bet.id]?.mode ?? 'live' });
+        setCashout((c) => (c ? { ...c, busy: false, previousCents: valueCents, valueCents: next } : c));
+      } else if (err.code === 'CASHOUT_UNAVAILABLE') {
+        const reason = err.details?.reason || err.message || 'Cash out unavailable right now';
+        setQuote(bet.id, { available: false, valueCents: null, reason });
+        setCashout((c) => (c ? { ...c, busy: false, unavailable: reason } : c));
+        refreshQuotes();
+      } else {
+        setCashout((c) => (c ? { ...c, busy: false, error: err.message || 'Cash out failed. Try again.' } : c));
+      }
+    }
+  }, [cashout, quotes, reportBalance, setQuote, refreshQuotes]);
 
   if (loading) {
     return (
@@ -66,8 +110,13 @@ export default function MyBetsPage() {
       {active.length === 0 ? (
         <EmptyState title="No active bets">Everything you've bet on has finished. Pick a price on the Sportsbook to start a slip.</EmptyState>
       ) : null}
+      {cashedNote ? (
+        <p className="success-text small" role="status">
+          {cashedNote}
+        </p>
+      ) : null}
       {active.map((bet) => (
-        <BetCard key={bet.id} bet={bet} />
+        <BetCard key={bet.id} bet={bet} cashout={quotes[bet.id] ?? null} onCashOut={startCashout} />
       ))}
 
       <h2 className="section-title">Finished ({finished.length})</h2>
@@ -77,6 +126,19 @@ export default function MyBetsPage() {
       {finished.map((bet) => (
         <BetCard key={bet.id} bet={bet} />
       ))}
+
+      {cashout ? (
+        <CashoutConfirmModal
+          bet={cashout.bet}
+          valueCents={cashout.valueCents}
+          previousCents={cashout.previousCents}
+          busy={cashout.busy}
+          error={cashout.error}
+          unavailable={cashout.unavailable}
+          onConfirm={confirmCashout}
+          onClose={closeCashout}
+        />
+      ) : null}
     </section>
   );
 }

@@ -86,6 +86,8 @@ export async function settleBet(db, betId, resultFor, now) {
     const betSnap = await tx.get(betRef);
     if (!betSnap.exists) return 'already';
     const bet = betSnap.data();
+    // Only open bets settle: a bet already settled, voided or cashed out ('cashed_out') is never touched,
+    // and because this re-read happens inside the transaction, a cash out that commits first wins the race.
     if (bet.status !== 'open') return 'already';
 
     // Grade from the bet as it is now, not as it was when this run listed it.

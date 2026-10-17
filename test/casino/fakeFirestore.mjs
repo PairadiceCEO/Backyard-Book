@@ -48,6 +48,15 @@ export function makeFakeDb() {
   const db = {
     collection: (name) => collectionRef(name),
     doc: (path) => docRef(path),
+    // Outside a transaction: one round trip for any number of docs.
+    async getAll(...refs) {
+      await network();
+      await pause();
+      return refs.map((r) => {
+        bump('reads', r.path);
+        return snap(r.path);
+      });
+    },
     async runTransaction(fn) {
       for (let attempt = 0; attempt < 30; attempt += 1) {
         const reads = new Map();
