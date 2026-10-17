@@ -37,18 +37,26 @@ Spec: Will's message of 2026-10-17 (cash out for sportsbook bets). Summary of th
 - A cashout value under 1 cent is "unavailable".
 
 ### Plan / checklist
-- [ ] 1 `server/cashout.js`: pure `computeCashout(bet, legStates)` + `quoteCashout(bet, ctx)` (game
-      states from ESPN/custom, Kalshi bids, DraftKings-line matching) + `cashOutBet(caller, body)` tx
-- [ ] 2 `api/bets.js`: `action: 'cashoutQuote' { betIds }` and `action: 'cashout' { betId, expectedCents }`
-      (no new Vercel function); settlement explicit skip; admin regrade refuses cashed-out bets
-- [ ] 3 Tests `test/cashout.test.mjs` (server, in-memory Firestore + fake Kalshi/ESPN) — every case in
-      the spec's list
+- [x] 1 `server/cashout.js`: pure `computeCashout(bet, legStates)`, `findKalshiMatch` (DraftKings line →
+      Kalshi strike), `liveValueCents` (exact BigInt), `quoteCashout(bet, ctx)`, `createCashoutContext`
+      (fresh=false: board game states + 15 s Kalshi cache; fresh=true: fresh ESPN + Kalshi), `quoteBets`,
+      `cashOutBet` (pre-checks → fresh quote → CASHOUT_CHANGED → transaction with getAll(bet,user,ledger))
+- [x] 2 `api/bets.js` routes `action` (`place` default, `cashoutQuote`, `cashout`); `server/settlement.js`
+      guard comment (already skipped non-open); `server/admin/bets.js` `refuseCashedOut` (409 CASHED_OUT in
+      preview and confirm)
+- [x] 3 `test/cashout/cashout.test.mjs` (21 tests, `npm run test:cashout`; `npm run test:all` runs all
+      three suites). Mutation-checked: removing the tx status+version guards, the duplicate check, the
+      CASHOUT_CHANGED check, freshness, the spread side rule, won=1, bid-vs-ask, or the settlement guard
+      each fails a test. `test/casino/fakeFirestore.mjs` gained a non-transaction `db.getAll`.
 - [ ] 4 Phones: My Bets estimate + Cash out button + confirm dialog (CASHOUT_CHANGED re-confirm);
       BetCard "Cashed out"; Admin Bets filter + no regrade buttons; Shop purchases unchanged
 - [ ] 5 Full suite, build, phone check 320/375/414, merge wip → main, report with live test steps
 
 ## Next
-Step 1.
+Step 4 (UI). Files: `src/lib/api.js` (add cashoutQuote/cashOut calls), `src/pages/MyBetsPage.jsx` (poll
+quotes every 30 s while visible for Active bets; pass quote to cards; confirm dialog), `src/components/BetCard.jsx`
+("Cashed out" label, "Cash out $X" button / "Cash out unavailable right now"), `src/pages/admin/AdminBets.jsx`
+(STATUSES + filter + no regrade buttons for cashed_out).
 
 ## Open questions
 None yet.

@@ -1,5 +1,6 @@
 // Admin regrades: force a whole bet to win / lose / void, or override one leg's result and recompute the
-// bet from all its legs with the normal rules. Works on open and already-settled bets.
+// bet from all its legs with the normal rules. Works on open and already-settled bets, never on a bet
+// the player cashed out (final).
 //
 // Every call first runs with confirm: false and returns a preview (status, payout and wallet change, record
 // before → after). The confirm call carries the previewed bet version; if the bet changed in between it is
@@ -18,7 +19,14 @@ import { decimalToAmerican, roundDecimal } from '../../shared/oddsMath.js';
 const OUTCOMES = new Set(['win', 'lose', 'void']);
 const LEG_RESULTS = new Set(['win', 'loss', 'push', 'void']);
 const COUNTED = { won: 'won', lost: 'lost' };
-const STATUS_WORDS = { open: 'Open', won: 'Won', lost: 'Lost', push: 'Push', void: 'Void' };
+const STATUS_WORDS = { open: 'Open', won: 'Won', lost: 'Lost', push: 'Push', void: 'Void', cashed_out: 'Cashed out' };
+
+// A cashed-out bet is final: the player was paid its cash out value, so no regrade applies.
+function refuseCashedOut(bet) {
+  if (bet.status === 'cashed_out') {
+    throw new HttpError(409, 'CASHED_OUT', 'This bet was cashed out by the player. Cashed-out bets are final and cannot be regraded.');
+  }
+}
 const LEG_WORDS = { win: 'Won', loss: 'Lost', push: 'Push', void: 'Void', pending: 'Pending' };
 
 function betIdFrom(body) {
@@ -118,6 +126,7 @@ async function regrade(body, caller, makePlan) {
     const betSnap = await betRef.get();
     if (!betSnap.exists) throw new HttpError(404, 'BET_NOT_FOUND', 'That bet does not exist.');
     const bet = betSnap.data();
+    refuseCashedOut(bet);
     const userSnap = await db.collection('users').doc(bet.uid).get();
     if (!userSnap.exists) throw new HttpError(404, 'USER_NOT_FOUND', "The bet's player no longer exists.");
     return { preview: true, ...summarize(betId, bet, userSnap.data(), makePlan(bet)) };
@@ -132,6 +141,7 @@ async function regrade(body, caller, makePlan) {
     const betSnap = await tx.get(betRef);
     if (!betSnap.exists) throw new HttpError(404, 'BET_NOT_FOUND', 'That bet does not exist.');
     const bet = betSnap.data();
+    refuseCashedOut(bet);
     if ((Number(bet.version) || 0) !== body.expectedVersion) {
       throw new HttpError(409, 'BET_CHANGED', 'This bet changed since you previewed it (it may have just settled). Review it again.');
     }
