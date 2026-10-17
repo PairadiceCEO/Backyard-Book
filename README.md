@@ -80,3 +80,11 @@ Bets settle by ESPN game id once ESPN marks the game final (custom games once th
 - **Casino** tab → lobby with the 7s slot (open) and the four table games (opening in later casino phases).
 - Every spin is one `/api/casino` call: the server debits the bet, picks the three reel stops with `crypto.randomInt`, and credits any win in one transaction, with `casino_bet` / `casino_payout` ledger entries. A retried spin (same request id) replays the same result and is charged once.
 - The slot's return to player is exactly 29,493 / 32,768 = 90.0055%; `npm test` checks it by enumerating every stop combination.
+
+## Casino phase 2: live tables + Baccarat
+
+- No console step: the rules from casino phase 1 already cover the tables (`casinoTables/{game}` readable by signed-in players; `private/shoe` and `presence/{uid}` denied to every client).
+- **Tables:** each table is one public doc, `casinoTables/{game}`, that every phone listens to. Sit / leave / heartbeat / tick and the game's own actions all go through `/api/casino`, one Firestore transaction each. The table doc is created the first time someone sits.
+- **Timers:** a timed phase stores a `deadline` in server milliseconds. Phones count down against the server clock (from `serverNow` in every reply) and send `tick` 0–0.8 s after zero; the server applies the default only once its own clock has passed the deadline, so five phones ticking together apply it once.
+- **Seats:** a seated phone sends a heartbeat every 20 s while visible (skipped if it made any casino call in the last 20 s); presence is written at most every 30 s. A seat with no heartbeat for 60 s is freed when the next round opens (or by a heartbeat on an idle table), never while its bets are in play. Leaving with bets on the table marks the seat "leaving"; the bets play out first.
+- **Baccarat:** 8 decks (416 cards), reshuffled before a hand once 354 have been dealt. Betting has no timer until the first bet, then 15 s, or closes as soon as every seated player confirms. Player 1:1, Banker 0.95:1, Tie 8:1; a Tie pushes Player and Banker. Standard drawing rules (`bankerDraws` in `shared/casino/baccarat.js`); `npm test` checks the tableau and the exact 8-deck odds. The shoe lives only in `casinoTables/baccarat/private/shoe`; the public doc shows face-up cards and a count.

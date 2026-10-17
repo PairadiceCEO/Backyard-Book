@@ -1,13 +1,19 @@
-// /casino/:game for the table games. Until a table's phase ships, it shows when it opens.
+// /casino/:game for the table games: the open ones render their table; the rest say when they open.
 
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../../components/StatusViews.jsx';
 import { casinoGame } from '../../../shared/casino/constants.js';
+import BaccaratPage from './BaccaratPage.jsx';
+
+const TABLES = { baccarat: BaccaratPage };
 
 export default function CasinoTablePage() {
   const { game: gameId } = useParams();
   const game = casinoGame(gameId);
   if (!game || game.kind !== 'table') return <Navigate to="/casino" replace />;
+
+  const Table = !game.opensIn ? TABLES[game.id] : null;
+  if (Table) return <Table />;
 
   return (
     <section className="page">
@@ -20,7 +26,7 @@ export default function CasinoTablePage() {
           </Link>
         }
       >
-        {game.blurb}. The table opens with 5 seats in a later casino update; the 7s slot is open now.
+        {game.blurb}. The table opens with 5 seats in a later casino update; Baccarat and the 7s slot are open now.
       </EmptyState>
     </section>
   );

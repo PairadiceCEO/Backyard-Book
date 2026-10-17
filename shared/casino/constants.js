@@ -4,11 +4,13 @@ export const CASINO_MIN_BET_DOLLARS = 1;
 export const CASINO_MAX_BET_DOLLARS = 10;
 export const CASINO_SEATS = 5;
 
-// Timers (used from the table phases on).
-export const TURN_SECONDS = 15;
-export const RESULTS_SECONDS = 5;
-export const HEARTBEAT_SECONDS = 20;
-export const SEAT_TIMEOUT_SECONDS = 60;
+// Table timers. Deadlines are server milliseconds; phones count down against the server's clock.
+export const TURN_SECONDS = 15; // betting closes this long after the first bet; turn timers
+export const RESULTS_SECONDS = 5; // results stay up this long (after the last card turns over)
+export const HEARTBEAT_SECONDS = 20; // a seated phone says "still here" this often while visible
+export const PRESENCE_WRITE_SECONDS = 30; // the server writes presence at most this often per player
+export const SEAT_TIMEOUT_SECONDS = 60; // no heartbeat for this long → the seat frees at round end
+export const TICK_JITTER_MS = 800; // phones wait 0–800 ms after zero before sending tick
 
 export const CASINO_LEDGER_TYPES = ['casino_bet', 'casino_payout', 'casino_refund'];
 
@@ -16,7 +18,7 @@ export const CASINO_LEDGER_TYPES = ['casino_bet', 'casino_payout', 'casino_refun
 export const CASINO_GAMES = [
   { id: 'slots', name: '7s Slots', kind: 'slots', blurb: 'Three reels, one payline, Red 7s pay 300×.', opensIn: null },
   { id: 'blackjack', name: 'Blackjack', kind: 'table', blurb: '6 decks · dealer hits soft 17 · blackjack pays 3:2', opensIn: 3 },
-  { id: 'baccarat', name: 'Baccarat', kind: 'table', blurb: 'Player · Banker · Tie · 8 decks', opensIn: 2 },
+  { id: 'baccarat', name: 'Baccarat', kind: 'table', blurb: 'Player 1:1 · Banker 0.95:1 · Tie 8:1 · 8 decks', opensIn: null },
   { id: 'craps', name: 'Craps', kind: 'table', blurb: 'Pass · Don’t Pass · Odds · Place · Field', opensIn: 4 },
   { id: 'crapless', name: 'Crapless Craps', kind: 'table', blurb: 'Every number but 7 is a point', opensIn: 4 },
 ];

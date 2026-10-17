@@ -1,5 +1,5 @@
 // POST /api/casino  { action, game?, … }
-// Every casino action: slot spins now; table actions (sit, bet, hit, roll, tick, …) in later casino phases.
+// Every casino action: slot spins, and table actions (sit, leave, heartbeat, tick, bet, confirm, …).
 // Signed-in, non-disabled players only. Replies always include serverNow.
 
 import { readJsonBody, withHandler } from '../server/http.js';
