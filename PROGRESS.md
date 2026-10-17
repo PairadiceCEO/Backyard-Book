@@ -57,6 +57,10 @@ Spec summary:
 - [ ] A5 Full suite, build, lint, interact/dealcheck, phone check, merge, report
 
 ## Next
+(2026-10-17 18:30) Session restarted mid-A4. Recovered: wip reset to d23b6b9 (A1–A3) + the uncommitted A4 files
+(useCasinoTable.js useLeaveOnExit/usePendingTotal/useSeatFocus, TableSeats.jsx, BlackjackPage.jsx seat panels).
+A duplicate server rewrite from the restart is kept only on local branch backup-this-session-99828c6 (unused).
+A4 remaining: check BlackjackPage builds + CSS for seat panels/tabs, then BaccaratPage, then CrapsPage.
 A4: phones. BlackjackPage + BaccaratPage seat panels (one panel per my seat, kept mounted, tabs to switch, auto-switch to the seat whose turn it is / needs insurance), TableSeats canSit for multi-seat, leave-all on page unmount (delayed + cancel on remount), CrapsPage new spots (Come, Come bets on numbers + their Odds, Hard ways, Don't Pass Odds, $60 meter).
 
 ## Open questions
