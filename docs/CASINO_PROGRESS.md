@@ -63,3 +63,11 @@ Baccarat deal timing, 5 Craps Odds up to 2× Pass. Merge to main when all tests 
 Benchmark (test/casino/bench.mjs, in-memory Firestore with a modeled delay per round trip; round-trip
 counts are exact, milliseconds are the model): before 4–9 round trips per call (heartbeat 4, bet 6,
 dealer turn 5–8, craps roll 6–9); after 2 (one batched read + commit), 3 when a step pays other players.
+
+## Card dealing speed (2026-10-17) — complete
+- Blackjack: one card at a time, seat 1 → 5 (no-bet seats skipped), dealer, twice; opening cards 1 s apart,
+  every later card 1.5 s (hits, doubles, split cards, hole-card reveal, dealer draws).
+- Baccarat: Player, Banker, Player, Banker 1 s apart; 1.5 s before each third card.
+- All timing values in `shared/casino/timing.js`; deadlines start after each step's cards finish.
+- useTimedReveal now counts from the server deal time even when a phone's clock reads slightly early.
+- On-screen check: `tools/phone-check/dealcheck.mjs`.

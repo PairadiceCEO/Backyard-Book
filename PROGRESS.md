@@ -5,7 +5,7 @@ file, continue from "Next". `main` = finished, tested phases only (Vercel deploy
 progress is pushed to `wip` after every commit. Casino history: `docs/CASINO_PROGRESS.md`.
 Previous phase: Sportsbook CASH OUT — complete, merged 2026-10-17 (see git history / README "Cash out").
 
-## Current phase: CARD DEALING SPEED (Blackjack + Baccarat), started 2026-10-17
+## Current phase: CARD DEALING SPEED (Blackjack + Baccarat) — COMPLETE (2026-10-17), merged to main, ready for Will to test
 
 Spec (Will, 2026-10-17):
 - Blackjack: one card at a time, seat 1 → 5, dealer, then the second card in the same order; seats
@@ -36,10 +36,11 @@ Spec (Will, 2026-10-17):
 - [x] 3b Fix found by that check: `src/hooks/useCasinoTable.js` useTimedReveal clamped elapsed at 0, so a
       phone whose clock read before the deal time started the whole sequence early. Now counts from the
       deal time (early wait capped at 2 s).
-- [ ] 4 Full suite, lint, build, interact.mjs, phone check 320/375/414, merge wip → main, report
+- [x] 4 Full suite (26 + 71 + 21 + scratchpad sportsbook suites), lint, build, interact.mjs, dealcheck.mjs,
+      phone check 60 screens × 320/375/414 clean; docs/CASINO_PROGRESS.md + README; version 0.7.1; merged
 
 ## Next
-Step 4.
+Nothing pending. Wait for Will's test results / next task. Start the next phase on a fresh `wip` from main.
 
 ## Open questions
 None.
