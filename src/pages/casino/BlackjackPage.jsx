@@ -121,7 +121,7 @@ export default function BlackjackPage() {
   }, []);
 
   // ---- cards dealt in the latest write turn over at the server's times ----
-  // (opening cards 0.5 s apart, later cards 1 s apart; t is each card's offset from lastDeal.at)
+  // (gaps from shared/casino/timing.js; t is each card's offset from lastDeal.at)
   const lastDeal = table?.lastDeal ?? null;
   const dealList = lastDeal?.cards ?? [];
   const shown = useTimedReveal(lastDeal?.at ?? null, dealList.map((c, k) => (Number.isFinite(c.t) ? c.t : k * BLACKJACK_INITIAL_GAP_MS)));
