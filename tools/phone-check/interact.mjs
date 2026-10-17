@@ -55,14 +55,14 @@ await check('three quick taps on Player: chips show at once, one request carries
   });
   const before = await wallet(page);
   await page.getByRole('radio', { name: '$2 chip' }).click();
-  const player = page.getByRole('button', { name: /^Player, pays/ });
+  const player = page.getByRole('button', { name: /Player, pays/ });
   await player.click();
   await player.click();
   await player.click();
   const shownAt = Date.now();
   assert.match(await player.innerText(), /\$6\.00/, 'all three chips on the spot at once');
   assert.notEqual(await wallet(page), before);
-  assert.match(await wallet(page), /\$90\.40/, 'wallet shows the $6 pending');
+  assert.match(await wallet(page), /\$90\.40/, `wallet shows the $6 pending (shows ${await wallet(page)})`);
   assert.ok(Date.now() - shownAt < 200);
   await page.waitForTimeout(1200);
   assert.equal(bets.length, 1, `taps within 300 ms → one request (got ${bets.length})`);
@@ -78,7 +78,7 @@ await check('a refused chip comes back off and the reason is shown', async () =>
     if (body.action === 'bet') return json(route, 409, { error: { code: 'PHASE', message: 'Betting is closed for this hand.' } });
     return json(route, 200, { ok: true, serverNow: now() });
   });
-  const banker = page.getByRole('button', { name: /^Banker, pays/ });
+  const banker = page.getByRole('button', { name: /Banker, pays/ });
   await page.getByRole('radio', { name: '$5 chip' }).click();
   await banker.click();
   assert.match(await banker.innerText(), /\$5\.00/);
@@ -112,8 +112,8 @@ await check('Undo takes back the last chip, Clear takes back the rest', async ()
     }
     return json(route, 200, { ok: true, serverNow: now() });
   });
-  const player = page.getByRole('button', { name: /^Player, pays/ });
-  const tie = page.getByRole('button', { name: /^Tie, pays/ });
+  const player = page.getByRole('button', { name: /Player, pays/ });
+  const tie = page.getByRole('button', { name: /Tie, pays/ });
   await page.getByRole('radio', { name: '$5 chip' }).click();
   await player.click();
   await page.waitForTimeout(500);
@@ -128,6 +128,26 @@ await check('Undo takes back the last chip, Clear takes back the rest', async ()
   await page.waitForTimeout(600);
   assert.deepEqual([sent.at(-1).player, sent.at(-1).tie], [0, 0]);
   assert.doesNotMatch(await player.innerText(), /\$5\.00/);
+  await context.close();
+});
+
+// ---------- Leaving the table page gives up every seat ----------
+await check('leaving the table page sends one leave-all; opening it never does', async () => {
+  const calls = [];
+  const bjSeat = (uid, name) => ({ uid, name, sitAt: now() - 1000, leaving: false, reqs: [], betCents: 0, stakeCents: 0, returnCents: 0, insurance: null, hands: [], result: null, ready: false });
+  const table = { id: 'blackjack', game: 'blackjack', epoch: 'y', roundNo: 3, roundId: 'y-3', phase: 'betting', deadline: null, turn: null, dealer: { cards: [], holeDown: false }, lastDeal: null, shoe: { remaining: 300, total: 312, shuffles: 0 }, version: 5, updatedAt: now() - 5000, seats: [null, bjSeat('u1', 'Mike'), null, bjSeat('u1', 'Mike'), null] };
+  const { page, context } = await openPage('/casino/blackjack', [table], async (route, body) => {
+    calls.push(body);
+    return json(route, 200, { ok: true, serverNow: now() });
+  });
+  await page.waitForTimeout(900);
+  assert.equal(calls.filter((c) => c.action === 'leave').length, 0, 'no leave while on the page (React dev double-mount included)');
+  assert.equal(await page.getByRole('tab', { name: /Seat/ }).count(), 2, 'one tab per seat I hold');
+  await page.getByRole('link', { name: /Casino/ }).first().click();
+  await page.waitForTimeout(900);
+  const leaves = calls.filter((c) => c.action === 'leave');
+  assert.equal(leaves.length, 1, `one leave (got ${leaves.length})`);
+  assert.deepEqual([leaves[0].game, leaves[0].all], ['blackjack', true]);
   await context.close();
 });
 

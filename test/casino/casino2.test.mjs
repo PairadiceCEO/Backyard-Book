@@ -166,12 +166,15 @@ test('payouts: Player 1:1, Banker 0.95:1 ($3 returns $5.85), Tie 8:1, Tie pushes
 });
 
 // ---------- seats ----------
-test('sit, watch, leave: one seat per player, seat numbers, full table, names in the public doc', async () => {
+test('sit, watch, leave: seat numbers, a second seat for the same player, full table, names in the public doc', async () => {
   seed();
   const r = await act('p1', 'sit', { seat: 0 });
   assert.equal(r.seat, 0);
   assert.equal((await act('p1', 'sit', { seat: 0 })).already, true);
-  await err(act('p1', 'sit', { seat: 2 }), 'ALREADY_SEATED');
+  const second = await act('p1', 'sit', { seat: 2 });
+  assert.deepEqual([second.seat, second.mySeats], [2, [0, 2]], 'Baccarat allows several seats per player');
+  const gone = await act('p1', 'leave', { seat: 2 });
+  assert.deepEqual([gone.freedSeats, table().seats[2], table().seats[0].uid], [[2], null, 'p1'], 'leaving one seat keeps the other');
   await err(act('p2', 'sit', { seat: 0 }), 'SEAT_TAKEN');
   await err(act('p2', 'sit', { seat: 5 }), 'BAD_SEAT');
   await act('p2', 'sit', { seat: 2 });
@@ -236,7 +239,7 @@ test('a full round: bets start a 15 s clock, both confirm → dealt at once, pai
   assert.equal(t.history, undefined);
   assertShoeSecret('after deal');
   const pays = ledger().filter((e) => e.type === 'casino_payout');
-  assert.deepEqual(pays.map((e) => [e.id, e.uid, e.amountCents, e.game]), [[`cpay_baccarat_${t.roundId}_p2_end`, 'p2', 585, 'baccarat']]);
+  assert.deepEqual(pays.map((e) => [e.id, e.uid, e.amountCents, e.game]), [[`cpay_baccarat_${t.roundId}_p2_s2_end`, 'p2', 585, 'baccarat']]);
   assert.deepEqual(fake.get('users/p2').stats, { won: 1, lost: 1 }, 'win rate stays sportsbook-only');
   // Betting is closed during results.
   await err(bet('p1', { player: 1 }, T0 + 7000), 'PHASE');

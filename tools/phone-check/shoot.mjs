@@ -88,6 +88,15 @@ const cr = {
   watch: () => crTable('craps', { point: 8, deadline: Date.now() + 9000, shooter: 0, seats: [crSeat('u0', 'Will', { pass: 500 }), null, crSeat('u2', 'Dan', { field: 300 }), null, null] }),
 };
 const withTable = (make) => () => ({ ...fsDefault, casinoTables: make ? [make()] : [] });
+// Several seats per player (Mike = u1) and the new craps bets.
+const bjTwo = {
+  betting: () => bjTable({ deadline: Date.now() + 11000, seats: [bjSeat('u0', 'Will', { betCents: 500, stakeCents: 500, ready: true }), bjSeat('u1', 'Mike the Bookie Slayer', { betCents: 300, stakeCents: 300 }), null, bjSeat('u1', 'Mike the Bookie Slayer'), null] }),
+  myTurn: () => bjTable({ phase: 'playing', deadline: Date.now() + 9000, lastDeal: oldDeal(), turn: { seat: 3, hand: 0 }, dealer: { cards: ['6H0'], holeDown: true }, seats: [bjSeat('u0', 'Will', { betCents: 500, hands: [hand(['TS1', '9H0'], { status: 'stood' })] }), bjSeat('u1', 'Mike', { betCents: 500, stakeCents: 500, hands: [hand(['8C0', '8D2'], { status: 'stood' })] }), null, bjSeat('u1', 'Mike', { betCents: 1000, stakeCents: 1000, hands: [hand(['5C0', '6D2'], { betCents: 1000 })] }), null] }),
+};
+const bacTwo = () => bacTable({ deadline: Date.now() + 12000, seats: [seat('u0', 'Will', { bets: { player: 500, banker: 0, tie: 0 }, ready: true }), seat('u1', 'Mike', { bets: { player: 0, banker: 300, tie: 100 } }), null, seat('u1', 'Mike', { bets: { player: 1000, banker: 0, tie: 0 } }), null] });
+const crNew = () => crTable('craps', { point: 6, deadline: Date.now() + 9000, lastRoll: { dice: [5, 1], total: 6, at: Date.now() - 60000, kind: 'point', pointBefore: null, seq: 57, shooter: 1 }, seats: [crSeat('u0', 'Will', { dontPass: 500, dontOdds: 1000 }), crSeat('u1', 'Mike', { pass: 1000, odds: 2000, come: 500, comeOn: { 5: { bet: 500, odds: 1000 }, 9: { bet: 300, odds: 0 } }, hard: { 6: 200, 8: 200 }, place: { 8: 600 }, field: 100 }), null, crSeat('u2', 'Dan', { place: { 4: 500 } }), null] });
+const crDont = () => crTable('craps', { point: 4, deadline: Date.now() + 9000, seats: [null, crSeat('u1', 'Mike', { dontPass: 1000, dontOdds: 500 }), null, null, null] });
+
 
 const S = (name, path, opts = {}) => ({ name, path, user: 'u0', admin: true, fs: fsDefault, ...opts });
 const scenarios = [
@@ -114,7 +123,7 @@ const scenarios = [
   S('bac-empty', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(null) }),
   S('bac-watch', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.watch) }),
   S('bac-betting', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.betting) }),
-  S('bac-betting-chip', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.betting), act: async (p) => { await p.getByRole('radio', { name: '$5' }).click(); await p.getByRole('button', { name: /^Player, pays/ }).click(); await p.waitForTimeout(150); } }),
+  S('bac-betting-chip', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.betting), act: async (p) => { await p.getByRole('radio', { name: '$5' }).click(); await p.getByRole('button', { name: /Player, pays/ }).click(); await p.waitForTimeout(150); } }),
   S('bac-dealing', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.dealing) }),
   S('bac-results', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.results) }),
   S('bac-roads-derived', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.watch), act: async (p) => { await p.getByRole('tab', { name: 'Derived roads' }).click(); await p.waitForTimeout(150); } }),
@@ -144,6 +153,12 @@ const scenarios = [
   S('casino-slots-win', '/casino/slots', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('radio', { name: '$1 chip' }).click(); await p.locator('.slot-bet').click(); await p.getByRole('button', { name: /^Spin/ }).click(); await p.waitForTimeout(2200); } }),
   
   S('admin-players', '/admin'),
+  S('bj-two-seats-betting', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bjTwo.betting) }),
+  S('bj-two-seats-turn', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bjTwo.myTurn) }),
+  S('bac-two-seats', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(bacTwo) }),
+  S('bac-two-seats-tab2', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(bacTwo), act: async (p) => { await p.getByRole('tab', { name: /Seat 4/ }).click(); await p.waitForTimeout(150); } }),
+  S('cr-come-hard', '/casino/craps', { admin: false, user: 'u1', fs: withTable(crNew) }),
+  S('cr-dont-odds', '/casino/craps', { admin: false, user: 'u1', fs: withTable(crDont) }),
   S('admin-bets', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Bets' }).click(); await p.waitForTimeout(300); } }),
   S('admin-bets-cashed', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Bets' }).click(); await p.waitForTimeout(300); await p.locator('select').filter({ hasText: 'Cashed out' }).selectOption('cashed_out'); await p.waitForTimeout(200); } }),
   S('admin-bets-confirm', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Bets' }).click(); await p.waitForTimeout(300); await p.getByRole('button', { name: 'Force win' }).first().click(); await p.waitForTimeout(300); } }),

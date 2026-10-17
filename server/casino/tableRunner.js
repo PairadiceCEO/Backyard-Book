@@ -7,7 +7,8 @@
 // What the action gets (ctx):
 //   ctx.state         the public table doc, as a plain object the action edits in place
 //   ctx.now           server time in ms (the only clock deadlines are compared against)
-//   ctx.seatIndex     the caller's seat (−1 if only watching)
+//   ctx.seatIndex     the caller's first seat (−1 if only watching)
+//   ctx.mySeats       every seat the caller holds (Blackjack and Baccarat allow several), in seat order
 //   ctx.changed       set true to write the table doc (version is bumped, for display only)
 //   ctx.shoe()        the secret shoe and the dealer's hole card (loaded once, written back at the end)
 //   ctx.balance(uid)  wallet balance, counting money already queued in this action
@@ -25,6 +26,10 @@ import { CASINO_SEATS, PRESENCE_WRITE_SECONDS } from '../../shared/casino/consta
 
 export function findSeat(state, uid) {
   return (state.seats ?? []).findIndex((seat) => seat && seat.uid === uid);
+}
+
+export function seatsOf(state, uid) {
+  return (state.seats ?? []).map((seat, i) => (seat && seat.uid === uid ? i : -1)).filter((i) => i >= 0);
 }
 
 function shoeSignature(shoe) {
@@ -111,6 +116,9 @@ export async function runTableAction({ game, engine, caller, now = Date.now(), r
       changed: false,
       get seatIndex() {
         return findSeat(state, caller.uid);
+      },
+      get mySeats() {
+        return seatsOf(state, caller.uid);
       },
       async shoe() {
         if (!shoe) adoptShoe(await timing.time('read-more', () => tx.get(shoeRef), 'shoe'));
@@ -202,10 +210,20 @@ export async function runTableAction({ game, engine, caller, now = Date.now(), r
 }
 
 // Refusals shared by every table.
-export function requireSeat(ctx) {
-  const index = ctx.seatIndex;
-  if (index === -1) throw new HttpError(403, 'NOT_SEATED', 'Take a seat to play. You can watch without one.');
-  return index;
+// The seat an action is for: body.seat (0–4) when given — it must be one of the caller's — or, when the
+// caller holds exactly one seat, that one.
+export function requireSeat(ctx, body = {}) {
+  const mine = ctx.mySeats;
+  if (!mine.length) throw new HttpError(403, 'NOT_SEATED', 'Take a seat to play. You can watch without one.');
+  const wanted = body?.seat;
+  if (wanted === undefined || wanted === null) {
+    if (mine.length === 1) return mine[0];
+    throw new HttpError(400, 'PICK_SEAT', `You have ${mine.length} seats here. Say which one (seat ${mine.map((i) => i + 1).join(', ')}).`);
+  }
+  if (!Number.isInteger(wanted) || !mine.includes(wanted)) {
+    throw new HttpError(403, 'NOT_YOUR_SEAT', Number.isInteger(wanted) && wanted >= 0 && wanted < CASINO_SEATS ? `Seat ${wanted + 1} isn't yours.` : 'Pick one of your seats.');
+  }
+  return wanted;
 }
 
 export function requirePhase(ctx, phase, message) {

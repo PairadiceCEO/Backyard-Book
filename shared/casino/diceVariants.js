@@ -2,6 +2,16 @@
 // to either game: every rule it applies comes from here, so a rule can only differ between the two
 // games by changing this file. Odds and payouts are [winnings, stake] (e.g. [7, 6] = 7:6).
 
+// Table limits (cents), the same for both games.
+//   line   Pass, Don't Pass and each Come bet (also a Come bet once it has moved to its number)
+//   spot   every other spot: each Place number, the Field, each Hard way
+//   total  everything one player has on the felt at once, Odds included
+// Odds (behind Pass, Don't Pass or a Come bet) are limited only by oddsMultiple × that line bet.
+export const CRAPS_LIMITS = { line: 2000, spot: 3000, total: 6000 };
+
+// Hard ways: [winnings, stake]. Off on come-out rolls; a winner is paid and stays up.
+const HARD_WAYS = { 4: [6, 1], 6: [8, 1], 8: [8, 1], 10: [6, 1] };
+
 const FIELD = {
   2: [2, 1],
   3: [1, 1],
@@ -17,15 +27,18 @@ export const DICE_VARIANTS = {
     id: 'craps',
     name: 'Craps',
     seven: 7,
-    lineOdds: [1, 1], // Pass and Don't Pass pay even money
-    oddsMultiple: 2, // Odds behind Pass up to 2× the Pass bet
-    comeOutPassWins: [7, 11],
-    comeOutPassLoses: [2, 3, 12],
+    lineOdds: [1, 1], // Pass, Don't Pass and Come pay even money
+    oddsMultiple: 2, // Odds behind Pass, Don't Pass or a Come bet: up to 2× that bet
+    comeOutPassWins: [7, 11], // also what a fresh Come bet wins on
+    comeOutPassLoses: [2, 3, 12], // also what a fresh Come bet loses on
     dontPass: { comeOutWins: [2, 3], comeOutPushes: [12] },
     points: [4, 5, 6, 8, 9, 10],
+    // Pass and Come Odds pay true odds; Don't Pass Odds pay the inverse (e.g. 4 at 1:2).
     odds: { 4: [2, 1], 10: [2, 1], 5: [3, 2], 9: [3, 2], 6: [6, 5], 8: [6, 5] },
     place: { 4: [9, 5], 10: [9, 5], 5: [7, 5], 9: [7, 5], 6: [7, 6], 8: [7, 6] },
     field: FIELD,
+    hardWays: HARD_WAYS,
+    limits: CRAPS_LIMITS,
   },
   crapless: {
     id: 'crapless',
@@ -40,6 +53,8 @@ export const DICE_VARIANTS = {
     odds: { 2: [5, 1], 12: [5, 1], 3: [3, 1], 11: [3, 1], 4: [2, 1], 10: [2, 1], 5: [3, 2], 9: [3, 2], 6: [6, 5], 8: [6, 5] },
     place: { 2: [9, 2], 12: [9, 2], 3: [11, 4], 11: [11, 4], 4: [9, 5], 10: [9, 5], 5: [7, 5], 9: [7, 5], 6: [7, 6], 8: [7, 6] },
     field: FIELD,
+    hardWays: HARD_WAYS,
+    limits: CRAPS_LIMITS,
   },
 };
 

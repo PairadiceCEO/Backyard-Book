@@ -1,9 +1,13 @@
 // Craps and Crapless Craps at the shared table: one engine, built for each variant from
 // shared/casino/diceVariants.js. The rules themselves are the pure functions in shared/casino/dice.js.
 //
-//   Bets       bet { kind, number?, amount, requestId } adds to a spot ($1–$10 a time, $10 a spot);
-//              removeBet { kind, number? } takes one down before the next roll (Pass / Don't Pass
-//              only before a come-out) and refunds it.
+//   Bets       bets { changes: [{ kind, number?, cents }], requestId } puts chips down / takes them back
+//              (bet { kind, number?, amount } = one chip). Kinds: pass, dontPass, odds, dontOdds, come,
+//              comeOdds (number), place (number), hard (number), field. Limits (diceVariants.js):
+//              line bets $20 each, Odds 2× their line bet, every other spot $30, $60 on the felt in
+//              all. removeBet { kind, number? } takes one down before the next roll (Pass / Don't Pass
+//              only before a come-out; a Come bet that moved to its number can't come down) and
+//              refunds it.
 //   Roll       the shooter only, with a line bet, carrying rollSeq (rolls so far at the table). It's
 //              refused (STALE) only if a roll already happened; other players' bets never block it.
 //              Dice come from crypto.randomInt; every bet the roll decides is settled in the same
@@ -14,9 +18,9 @@
 //              after a full lap with no shooter willing, the table waits (no clock) until someone bets
 //              a line, and that player gets the dice.
 //   Seven-out  the dice go to the next occupied seat, clockwise.
-//   Seats      after every roll, a seat whose player left or has been gone 60 s: Pass / Don't Pass /
-//              Odds keep working until they resolve; once none are left the seat frees and its Place
-//              and Field bets are refunded.
+//   Seats      one per player. After every roll, a seat whose player left or has been gone 60 s:
+//              line bets, Come bets and every Odds keep working until they resolve; once none are left
+//              the seat frees and its Place, Field and Hard-way bets are refunded.
 
 import { HttpError } from '../http.js';
 import { requireSeat } from './tableRunner.js';
@@ -28,11 +32,13 @@ import { DICE_VARIANTS } from '../../shared/casino/diceVariants.js';
 import {
   BET_KINDS,
   BET_LABELS,
-  spotLimitCents,
+  NUMBERED_KINDS,
   cloneBets,
   emptyDiceBets,
   hasLineAction,
+  limitProblem,
   placeBlocker,
+  refundableCents,
   removeBlocker,
   rollKind,
   settleRoll,
@@ -97,7 +103,7 @@ export function makeDiceEngine(variantId) {
     return { uid, name, sitAt, leaving: false, reqs: [], bets: emptyDiceBets(), lastRoll: null };
   }
 
-  // Pass, Don't Pass and Odds have to play out; Place and Field can be refunded.
+  // Line bets, Come bets and every Odds have to play out; Place, Field and Hard ways can be refunded.
   function seatInPlay(state, index) {
     const seat = state.seats[index];
     return Boolean(seat) && hasLineAction(seat.bets);
@@ -119,14 +125,13 @@ export function makeDiceEngine(variantId) {
     });
   }
 
-  // A seat is about to be freed: its Place and Field bets come back to the wallet.
+  // A seat is about to be freed: its Place, Field and Hard-way bets come back to the wallet.
   async function beforeFree(ctx, index) {
     const seat = ctx.state.seats[index];
     if (!seat) return;
     const bets = cloneBets(seat.bets);
-    const placeTotal = Object.values(bets.place).reduce((s, v) => s + (v || 0), 0);
-    refund(ctx, seat, placeTotal + bets.field, 'Place and Field bets (seat freed)');
-    seat.bets = { ...bets, place: {}, field: 0 };
+    refund(ctx, seat, refundableCents(bets), 'Place, Field and Hard-way bets (seat freed)');
+    seat.bets = { ...bets, place: {}, field: 0, hard: {} };
   }
 
   // Keep the dice with a seated player; with nobody seated the table stops its clock.
@@ -152,10 +157,32 @@ export function makeDiceEngine(variantId) {
 
   function parseKind(change) {
     const kind = change?.kind;
-    if (!BET_KINDS.includes(kind)) throw new HttpError(400, 'BAD_BET', 'Pick a bet: pass, dontPass, odds, place or field.');
-    const number = kind === 'place' ? change.number : undefined;
-    if (kind === 'place' && !Number.isInteger(number)) throw new HttpError(400, 'BAD_BET', 'A Place bet needs its number.');
+    if (!BET_KINDS.includes(kind)) throw new HttpError(400, 'BAD_BET', `Pick a bet: ${BET_KINDS.join(', ')}.`);
+    const numbered = NUMBERED_KINDS.includes(kind);
+    const number = numbered ? change.number : undefined;
+    if (numbered && !(Number.isInteger(number) && number >= 2 && number <= 12)) {
+      throw new HttpError(400, 'BAD_BET', `${BET_LABELS[kind]} needs its number.`);
+    }
     return { kind, number };
+  }
+
+  function labelOf(kind, number) {
+    if (kind === 'place') return `Place ${number}`;
+    if (kind === 'hard') return `Hard ${number}`;
+    if (kind === 'comeOdds') return `Odds on Come ${number}`;
+    return BET_LABELS[kind];
+  }
+
+  // Writes `amount` into a copy of the bets at one spot.
+  function setSpot(bets, kind, number, amount) {
+    if (kind === 'place' || kind === 'hard') {
+      if (amount > 0) bets[kind][number] = amount;
+      else delete bets[kind][number];
+    } else if (kind === 'comeOdds') {
+      bets.comeOn[number] = { ...bets.comeOn[number], odds: amount };
+    } else {
+      bets[kind] = amount;
+    }
   }
 
   // Applies chip changes to a copy of the seat's bets: + puts chips down, − takes them back.
@@ -164,35 +191,30 @@ export function makeDiceEngine(variantId) {
     const bets = cloneBets(seatBets);
     let addCents = 0;
     let backCents = 0;
+    let lastAdded = null;
     for (const change of changes) {
       const { kind, number } = parseKind(change);
       const cents = change.cents;
       if (!Number.isInteger(cents) || cents === 0 || cents % 100 !== 0) throw new HttpError(400, 'BAD_BET', 'Chips are whole dollars.');
-      const label = kind === 'place' ? `Place ${number}` : BET_LABELS[kind];
+      const label = labelOf(kind, number);
       const have = spotAmount(bets, kind, number);
       if (cents > 0) {
         const blocked = placeBlocker(variant, state.point, bets, kind, number);
         if (blocked) throw new HttpError(409, 'BET_NOT_ALLOWED', blocked);
-        const limit = spotLimitCents(variant, bets, kind);
-        if (have + cents > limit) {
-          throw new HttpError(409, 'SPOT_LIMIT', `${label} holds up to ${formatDollars(limit)}${kind === 'odds' ? ` (${variant.oddsMultiple}× your Pass)` : ''}; you have ${formatDollars(have)} there.`);
-        }
         addCents += cents;
+        lastAdded = { kind, number };
       } else {
         const blocked = removeBlocker(state.point, kind);
         if (blocked) throw new HttpError(409, 'BET_LOCKED', blocked);
         if (have + cents < 0) throw new HttpError(409, 'NO_BET', `You have only ${formatDollars(have)} on ${label}.`);
         backCents += -cents;
       }
-      if (kind === 'place') {
-        if (have + cents > 0) bets.place[number] = have + cents;
-        else delete bets.place[number];
-      } else {
-        bets[kind] = have + cents;
-      }
+      setSpot(bets, kind, number, have + cents);
     }
-    if (bets.odds > bets.pass * variant.oddsMultiple) throw new HttpError(409, 'SPOT_LIMIT', `Odds can be up to ${variant.oddsMultiple}× your Pass bet.`);
-    return { bets, addCents, backCents };
+    // Every limit is checked on the bets as they would be: each spot, each Odds, and the $60 total.
+    const problem = limitProblem(variant, bets, lastAdded ?? {});
+    if (problem && addCents > 0) throw new HttpError(409, 'SPOT_LIMIT', problem);
+    return { bets: cloneBets(bets), addCents, backCents };
   }
 
   // A chip went down: start the come-out clock, or hand the dice to whoever bets a line while waiting.
@@ -241,7 +263,7 @@ export function makeDiceEngine(variantId) {
   }
 
   async function bets(ctx, body) {
-    const index = requireSeat(ctx);
+    const index = requireSeat(ctx, body);
     const changes = body.changes;
     if (!Array.isArray(changes) || changes.length === 0 || changes.length > CHANGE_LIMIT) {
       throw new HttpError(400, 'BAD_BET', `Send 1–${CHANGE_LIMIT} chip changes.`);
@@ -251,36 +273,46 @@ export function makeDiceEngine(variantId) {
 
   // One bet { kind, number?, amount (dollars), requestId }: the same as a single chip.
   async function bet(ctx, body) {
-    const index = requireSeat(ctx);
+    const index = requireSeat(ctx, body);
     const { kind, number } = parseKind(body);
-    if (!isValidCasinoBet(body.amount)) throw new HttpError(400, 'BAD_BET', 'Bets are whole dollars from $1 to $10.');
+    if (!isValidCasinoBet(body.amount)) throw new HttpError(400, 'BAD_BET', 'A chip is $1, $2, $5 or $10 (whole dollars up to $10).');
     const result = await placeChips(ctx, index, [{ kind, number, cents: body.amount * 100 }], body.requestId);
     return result.duplicate ? result : { spotCents: spotAmount(result.bets, kind, number) };
   }
 
   async function removeBet(ctx, body) {
-    const index = requireSeat(ctx);
+    const index = requireSeat(ctx, body);
     const { state } = ctx;
     const seat = state.seats[index];
-    const kind = body.kind;
-    const number = kind === 'place' ? body.number : undefined;
-    if (!BET_KINDS.includes(kind)) throw new HttpError(400, 'BAD_BET', 'Pick a bet to take down.');
+    const { kind, number } = parseKind(body);
     const blocked = removeBlocker(state.point, kind);
     if (blocked) throw new HttpError(409, 'BET_LOCKED', blocked);
     const amount = spotAmount(seat.bets, kind, number);
+    if (!amount && kind === 'come' && Object.keys(cloneBets(seat.bets).comeOn).length) {
+      throw new HttpError(409, 'BET_LOCKED', 'A Come bet stays on its number until it wins or loses. Its Odds can come down.');
+    }
     if (!amount) throw new HttpError(409, 'NO_BET', 'You have nothing on that spot.');
     const bets = cloneBets(seat.bets);
-    if (kind === 'place') delete bets.place[number];
-    else bets[kind] = 0;
-    if (kind === 'pass') bets.odds = 0; // (Odds can't exist without a point; kept for safety)
-    seat.bets = bets;
-    refund(ctx, seat, amount, `${kind === 'place' ? `Place ${number}` : BET_LABELS[kind]} taken down`);
+    setSpot(bets, kind, number, 0);
+    let back = amount;
+    // Odds can't stay without their line bet (Pass / Don't Pass come down only before a come-out,
+    // when there are no Odds; kept for safety).
+    if (kind === 'pass' && bets.odds) {
+      back += bets.odds;
+      bets.odds = 0;
+    }
+    if (kind === 'dontPass' && bets.dontOdds) {
+      back += bets.dontOdds;
+      bets.dontOdds = 0;
+    }
+    seat.bets = cloneBets(bets);
+    refund(ctx, seat, back, `${labelOf(kind, number)} taken down`);
     ctx.changed = true;
-    return { refundedCents: amount };
+    return { refundedCents: back };
   }
 
   async function roll(ctx, body) {
-    const index = requireSeat(ctx);
+    const index = requireSeat(ctx, body);
     const { state } = ctx;
     if (!Number.isInteger(body.rollSeq)) throw new HttpError(400, 'BAD_ROLL', 'A roll needs the table’s rollSeq.');
     // The double-tap guard: only "a roll already happened" refuses it. Bets by other seats don't.
@@ -308,7 +340,7 @@ export function makeDiceEngine(variantId) {
 
     for (const seat of state.seats) {
       if (!seat) continue;
-      const result = settleRoll(variant, pointBefore, seat.bets, total);
+      const result = settleRoll(variant, pointBefore, seat.bets, total, dice);
       seat.bets = result.bets;
       seat.lastRoll = result.lines.length
         ? { seq: state.rollSeq, netCents: result.netCents, profitCents: result.profitCents, lostCents: result.lostCents, returnCents: result.returnCents }

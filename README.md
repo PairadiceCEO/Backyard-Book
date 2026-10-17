@@ -117,6 +117,13 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Build notes: `docs/CASINO_PROGRESS.md`.
 
+## Casino seats and craps (batch A)
+
+- No console step. **Blackjack and Baccarat:** sit in as many open seats as you like (up to all 5). Each seat plays like a separate player: its own $1–$10 bet (Baccarat: its own Player / Banker / Tie bets), hands, insurance, double, split and 15 s turn, in normal seat order. Tabs under the seats switch between your seats and jump to the one that needs a decision. **Craps / Crapless:** one seat per player.
+- **Leaving:** "Leave seat N" gives up one seat; "Leave all seats" gives up every one and you keep watching. Leaving the table page (lobby, another tab, another game) leaves all your seats there automatically. Bets in play play out first (Craps: line, Come and Odds keep working; Place, Field and Hard ways are refunded). Closing the browser is still the 60 s heartbeat rule.
+- **Craps limits:** Pass, Don't Pass and each Come bet $1–$20; Odds up to 2× their line bet; each Place number, Field and Hard way $1–$30; $60 on the felt in all, Odds included. The meter above the felt shows what's down and the room left.
+- **New bets:** Hard 4/6/8/10 (4 and 10 pay 6:1, 6 and 8 pay 8:1; off on the come-out; win stays up). Come (opens with a Point; then sits on its number, where Odds can go behind it; Come Odds are off on the come-out). Don't Pass Odds (Craps only) pay the inverse of Pass Odds. Every number lives in `shared/casino/diceVariants.js`.
+
 ## Casino speed and chips (batch 5)
 
 - **Region:** `vercel.json` runs every function (sportsbook too) in `cle1` (Cleveland), the Vercel region closest to Firestore `nam5` (Iowa + Oklahoma). Hobby allows one region.

@@ -35,3 +35,8 @@ export function isValidCasinoBet(dollars) {
 export function winningsCents(stakeCents, num, den) {
   return Math.round((stakeCents * num) / den);
 }
+
+// "$5" or "$5.50": dollars for messages shared by the server and the phone.
+export function dollarsText(cents) {
+  return `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`;
+}

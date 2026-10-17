@@ -3491,3 +3491,150 @@ body.no-scroll {
   border-color: var(--gold);
   color: #2a1d00;
 }
+
+/* Several seats per player (Blackjack, Baccarat): one tab per seat I hold, one panel per seat */
+.seat-tabs {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.seat-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.seat-tab {
+  flex: 1 0 auto;
+  min-width: 72px;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.05rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.seat-tab.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.seat-tab.needs {
+  border-color: var(--gold);
+}
+
+.seat-tab.needs .seat-tab-note {
+  color: var(--gold);
+}
+
+.seat-tab-note {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.seat-panel[hidden] {
+  display: none;
+}
+
+.seat-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.seat-panel-flag {
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+}
+
+.seat-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.leave-all-btn {
+  min-height: 44px;
+  margin-left: auto;
+}
+
+/* Craps: $60 meter, Come bets on their numbers, Come box, Hard ways */
+.craps-meter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.craps-meter-room {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.craps-meter-room.full {
+  color: var(--danger);
+}
+
+.craps-meter-bar {
+  flex-basis: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.craps-meter-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  border-radius: inherit;
+}
+
+.craps-come-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 0.35rem;
+}
+
+.craps-spot.come-on {
+  border-color: var(--gold);
+  border-style: solid;
+}
+
+.craps-spot.band.come {
+  border-color: #9fd8ff;
+}
+
+.craps-hard {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.craps-hard .craps-spot .spot-odds {
+  font-size: 0.68rem;
+}

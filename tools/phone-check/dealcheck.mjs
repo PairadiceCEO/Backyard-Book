@@ -73,7 +73,7 @@ await check('Blackjack: every seat gets its card in turn (seat totals: 1 â†’ 2 â
     await page.waitForTimeout(Math.max(0, at + t - Date.now()));
     snaps.push(await seatText());
   }
-  const totals = snaps.map((line) => [...line.matchAll(/(Will|You|Dan|Bo) (\d+)/g)].map((m) => Number(m[2])));
+  const totals = snaps.map((line) => [...line.matchAll(/(Will|you|Dan|Bo) (\d+)/g)].map((m) => Number(m[2])));
   assert.deepEqual(totals, [
     [5, 0, 0, 0], [5, 6, 0, 0], [5, 6, 7, 0], [5, 6, 7, 8],
     [14, 6, 7, 8], [14, 12, 7, 8], [14, 12, 17, 8], [14, 12, 17, 10],

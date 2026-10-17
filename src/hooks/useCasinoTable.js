@@ -185,3 +185,62 @@ export function useRollAnimation(at, durationMs) {
 
   return rolling;
 }
+
+// Leaving the table page (to the lobby, another tab or another game) gives up every seat the player
+// holds there. Sent shortly after the page goes away and cancelled if the same table page comes straight
+// back (React's development double-mount, or a quick back/forward), so a re-render never drops a seat.
+// Closing the browser or losing the connection is still covered by the 60 s heartbeat rule.
+const LEAVE_DELAY_MS = 400;
+const pendingLeaves = new Map(); // game → timer
+
+export function useLeaveOnExit(game, seated) {
+  // The table this page was seated at, remembered past the render that switches games (Craps ↔
+  // Crapless share a page), so the cleanup below still knows to leave the old one.
+  const seatedAt = useRef(null);
+  useEffect(() => {
+    if (seated) seatedAt.current = game;
+  }, [game, seated]);
+  useEffect(() => {
+    if (!game) return undefined;
+    clearTimeout(pendingLeaves.get(game));
+    pendingLeaves.delete(game);
+    return () => {
+      if (seatedAt.current !== game) return;
+      seatedAt.current = null;
+      const timer = setTimeout(() => {
+        pendingLeaves.delete(game);
+        tableAction(game, 'leave', { all: true }).catch(() => {});
+      }, LEAVE_DELAY_MS);
+      pendingLeaves.set(game, timer);
+    };
+  }, [game]);
+}
+
+// Several chip racks (one per seat) feed one "pending" figure for the nav wallet. pendingFor(key) gives a
+// stable callback per seat; the total is passed on whenever any seat's pending amount changes.
+export function usePendingTotal(setPendingCents) {
+  const amounts = useRef(new Map());
+  const callbacks = useRef(new Map());
+  const setRef = useRef(setPendingCents);
+  setRef.current = setPendingCents;
+  return useCallback((key) => {
+    if (!callbacks.current.has(key)) {
+      callbacks.current.set(key, (cents) => {
+        if ((amounts.current.get(key) ?? 0) === cents) return;
+        amounts.current.set(key, cents);
+        let total = 0;
+        for (const v of amounts.current.values()) total += v;
+        setRef.current(total);
+      });
+    }
+    return callbacks.current.get(key);
+  }, []);
+}
+
+// The player's seats at a table, in seat order, and which one the controls show: the seat that needs a
+// decision now (its turn, or an undecided insurance) wins; otherwise the one last tapped; otherwise the first.
+export function useSeatFocus(mySeats, needsAction) {
+  const [preferred, setPreferred] = useState(null);
+  const focus = needsAction ?? (mySeats.includes(preferred) ? preferred : (mySeats[0] ?? null));
+  return [focus, setPreferred];
+}

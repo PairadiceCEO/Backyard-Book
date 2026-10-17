@@ -1,46 +1,152 @@
 // One dice engine for Craps and Crapless Craps. Every game-specific number comes from the variant table
 // (shared/casino/diceVariants.js); this file has none of its own. Pure functions: bets in, results out.
 //
-// A seat's bets (cents): { pass, dontPass, odds, field, place: { [number]: cents } }.
+// A seat's bets (cents):
+//   pass, dontPass        line bets (made on a come-out)
+//   odds, dontOdds        Odds behind Pass / Don't Pass (once a Point is set)
+//   come                  a fresh Come bet in the Come spot (point phase only; decided by the next roll)
+//   comeOn { [n]: { bet, odds } }   Come bets that moved to their number, with their Odds
+//   place { [n] }, hard { [n] }, field
 
-import { CASINO_MAX_BET_DOLLARS, winningsCents } from './constants.js';
+import { dollarsText, winningsCents } from './constants.js';
 
-export const SPOT_MAX_CENTS = CASINO_MAX_BET_DOLLARS * 100;
-export const BET_KINDS = ['pass', 'dontPass', 'odds', 'place', 'field'];
-export const BET_LABELS = { pass: 'Pass', dontPass: "Don't Pass", odds: 'Odds', place: 'Place', field: 'Field' };
+export const BET_KINDS = ['pass', 'dontPass', 'odds', 'dontOdds', 'come', 'comeOdds', 'place', 'hard', 'field'];
+export const NUMBERED_KINDS = ['place', 'hard', 'comeOdds'];
+export const BET_LABELS = {
+  pass: 'Pass',
+  dontPass: "Don't Pass",
+  odds: 'Odds',
+  dontOdds: "Don't Pass Odds",
+  come: 'Come',
+  comeOdds: 'Come Odds',
+  place: 'Place',
+  hard: 'Hard',
+  field: 'Field',
+};
 
 export function emptyDiceBets() {
-  return { pass: 0, dontPass: 0, odds: 0, field: 0, place: {} };
+  return { pass: 0, dontPass: 0, odds: 0, dontOdds: 0, come: 0, field: 0, place: {}, hard: {}, comeOn: {} };
+}
+
+function cleanMap(map) {
+  const out = {};
+  for (const [n, v] of Object.entries(map ?? {})) if (v) out[n] = v;
+  return out;
 }
 
 export function cloneBets(bets) {
-  const b = bets ?? emptyDiceBets();
-  return { pass: b.pass || 0, dontPass: b.dontPass || 0, odds: b.odds || 0, field: b.field || 0, place: { ...(b.place ?? {}) } };
+  const b = bets ?? {};
+  const comeOn = {};
+  for (const [n, c] of Object.entries(b.comeOn ?? {})) {
+    if (c && (c.bet || c.odds)) comeOn[n] = { bet: c.bet || 0, odds: c.odds || 0 };
+  }
+  return {
+    pass: b.pass || 0,
+    dontPass: b.dontPass || 0,
+    odds: b.odds || 0,
+    dontOdds: b.dontOdds || 0,
+    come: b.come || 0,
+    field: b.field || 0,
+    place: cleanMap(b.place),
+    hard: cleanMap(b.hard),
+    comeOn,
+  };
 }
+
+const sum = (map) => Object.values(map).reduce((s, v) => s + (v || 0), 0);
 
 export function totalOnFelt(bets) {
   const b = cloneBets(bets);
-  return b.pass + b.dontPass + b.odds + b.field + Object.values(b.place).reduce((s, v) => s + (v || 0), 0);
+  const comeOn = Object.values(b.comeOn).reduce((s, c) => s + c.bet + c.odds, 0);
+  return b.pass + b.dontPass + b.odds + b.dontOdds + b.come + b.field + sum(b.place) + sum(b.hard) + comeOn;
 }
 
-// Bets that must play out before a seat can be freed (Place and Field are refunded instead).
+// Bets that must play out before a seat can be freed: Pass, Don't Pass, their Odds, Come bets (in the
+// Come spot or on a number) and Come Odds. Place, Field and Hard ways are refunded instead.
 export function hasLineAction(bets) {
   const b = cloneBets(bets);
-  return b.pass > 0 || b.dontPass > 0 || b.odds > 0;
+  return b.pass > 0 || b.dontPass > 0 || b.odds > 0 || b.dontOdds > 0 || b.come > 0 || Object.keys(b.comeOn).length > 0;
 }
 
-// The most a spot can hold: $10, except Odds, which can be up to oddsMultiple × the Pass bet.
-export function spotLimitCents(variant, bets, kind) {
-  if (kind === 'odds') return cloneBets(bets).pass * variant.oddsMultiple;
-  return SPOT_MAX_CENTS;
+// Refundable bets (when a seat frees): Place, Field and Hard ways.
+export function refundableCents(bets) {
+  const b = cloneBets(bets);
+  return sum(b.place) + b.field + sum(b.hard);
 }
 
 export function spotAmount(bets, kind, number) {
   const b = cloneBets(bets);
-  return kind === 'place' ? b.place[number] || 0 : b[kind] || 0;
+  if (kind === 'place') return b.place[number] || 0;
+  if (kind === 'hard') return b.hard[number] || 0;
+  if (kind === 'comeOdds') return b.comeOn[number]?.odds || 0;
+  return b[kind] || 0;
+}
+
+function spotLabel(kind, number) {
+  if (kind === 'place') return `Place ${number}`;
+  if (kind === 'hard') return `Hard ${number}`;
+  if (kind === 'comeOdds') return `Odds on Come ${number}`;
+  if (kind === 'odds') return 'Pass Odds';
+  return BET_LABELS[kind] ?? kind;
+}
+
+// The line bet an Odds spot sits behind (cents), or null for a spot that isn't Odds.
+function oddsBase(bets, kind, number) {
+  const b = cloneBets(bets);
+  if (kind === 'odds') return b.pass;
+  if (kind === 'dontOdds') return b.dontPass;
+  if (kind === 'comeOdds') return b.comeOn[number]?.bet || 0;
+  return null;
+}
+
+// The most a spot can hold (cents).
+export function spotLimitCents(variant, bets, kind, number) {
+  const base = oddsBase(bets, kind, number);
+  if (base !== null) return base * variant.oddsMultiple;
+  if (kind === 'pass' || kind === 'dontPass' || kind === 'come') return variant.limits.line;
+  return variant.limits.spot;
+}
+
+const dollars = dollarsText;
+
+// Why `bets` (after a change) break a limit, or '' if they don't: each spot, each Odds (2× its line
+// bet), and the $60 total. Used by the server (refusals) and the phone (refusing a chip at once).
+export function limitProblem(variant, bets, { kind, number } = {}) {
+  const b = cloneBets(bets);
+  const check = (k, n, amount) => {
+    const limit = spotLimitCents(variant, b, k, n);
+    if (amount <= limit) return '';
+    const base = oddsBase(b, k, n);
+    if (base !== null) {
+      const behind = k === 'odds' ? 'Pass' : k === 'dontOdds' ? "Don't Pass" : `Come ${n}`;
+      return `${spotLabel(k, n)} can be up to ${variant.oddsMultiple}× your ${behind} bet (${dollars(limit)}).`;
+    }
+    const which = k === 'pass' || k === 'dontPass' || k === 'come' ? 'Line limit' : 'Spot limit';
+    return `${which}: ${spotLabel(k, n)} holds up to ${dollars(limit)}.`;
+  };
+  // The spot just changed first, so its message wins.
+  if (kind) {
+    const problem = check(kind, number, spotAmount(b, kind, number));
+    if (problem) return problem;
+  }
+  for (const k of ['pass', 'dontPass', 'come', 'field', 'odds', 'dontOdds']) {
+    const problem = check(k, undefined, b[k]);
+    if (problem) return problem;
+  }
+  for (const [n, v] of Object.entries(b.place)) if (v > variant.limits.spot) return check('place', Number(n), v);
+  for (const [n, v] of Object.entries(b.hard)) if (v > variant.limits.spot) return check('hard', Number(n), v);
+  for (const [n, c] of Object.entries(b.comeOn)) {
+    if (c.odds > c.bet * variant.oddsMultiple) return check('comeOdds', Number(n), c.odds);
+  }
+  const total = totalOnFelt(b);
+  if (total > variant.limits.total) {
+    return `Table limit: up to ${dollars(variant.limits.total)} on the felt at once, Odds included (that would be ${dollars(total)}).`;
+  }
+  return '';
 }
 
 const win = (stake, ratio) => winningsCents(stake, ratio[0], ratio[1]);
+const inverse = (ratio) => [ratio[1], ratio[0]];
 
 // What a roll means for the line: 'natural' | 'craps' | 'point' (sets a point) on a come-out;
 // 'pointMade' | 'sevenOut' | 'roll' while a point is on.
@@ -56,9 +162,10 @@ export function rollKind(variant, point, total) {
   return 'roll';
 }
 
-// Why a bet can't go down right now (null if it can). number is the Place number.
+// Why a bet can't go down right now (null if it can). number is the Place / Hard / Come Odds number.
 export function placeBlocker(variant, point, bets, kind, number) {
   const pointOn = point !== null && point !== undefined;
+  const b = cloneBets(bets);
   switch (kind) {
     case 'pass':
       return pointOn ? 'Pass goes down before a come-out roll.' : null;
@@ -67,10 +174,20 @@ export function placeBlocker(variant, point, bets, kind, number) {
       return pointOn ? "Don't Pass goes down before a come-out roll." : null;
     case 'odds':
       if (!pointOn) return 'Odds go behind Pass once a Point is set.';
-      return cloneBets(bets).pass > 0 ? null : 'Odds need a Pass bet.';
+      return b.pass > 0 ? null : 'Odds need a Pass bet.';
+    case 'dontOdds':
+      if (!variant.dontPass) return `${variant.name} has no Don't Pass.`;
+      if (!pointOn) return "Don't Pass Odds go down once a Point is set.";
+      return b.dontPass > 0 ? null : "Don't Pass Odds need a Don't Pass bet.";
+    case 'come':
+      return pointOn ? null : 'The Come spot opens once a Point is set.';
+    case 'comeOdds':
+      return b.comeOn[number]?.bet > 0 ? null : `Odds on ${number} need a Come bet on ${number}.`;
     case 'place':
       if (!variant.place[number]) return `There's no Place ${number} in ${variant.name}.`;
       return pointOn ? null : 'Place bets go up once a Point is set.';
+    case 'hard':
+      return variant.hardWays[number] ? null : `There's no Hard ${number}.`;
     case 'field':
       return null;
     default:
@@ -78,34 +195,48 @@ export function placeBlocker(variant, point, bets, kind, number) {
   }
 }
 
-// Why a bet can't be taken down right now (null if it can). Everything comes down before the next roll
-// except Pass / Don't Pass once a Point is set.
+// Why a bet can't be taken down right now (null if it can). Everything comes down before the next
+// roll except Pass / Don't Pass once a Point is set, and a Come bet once it has moved to its number
+// (that one isn't a spot you can take chips from at all; its Odds are).
 export function removeBlocker(point, kind) {
   const pointOn = point !== null && point !== undefined;
   if ((kind === 'pass' || kind === 'dontPass') && pointOn) return `${BET_LABELS[kind]} stays up until the Point is decided.`;
   return BET_KINDS.includes(kind) ? null : 'Unknown bet.';
 }
 
-// Settles one roll for one seat. Returns the bets left on the felt, what comes back to the wallet
-// (returnCents: stakes + winnings), profitCents (winnings only), lostCents (stakes lost), one line per
-// bet decided, and the table's next point.
-export function settleRoll(variant, point, bets, total) {
+// Settles one roll for one seat. dice: [d1, d2] (Hard ways need them). Returns the bets left on the
+// felt, what comes back to the wallet (returnCents: stakes + winnings), profitCents (winnings only),
+// lostCents (stakes lost), one line per bet decided, and the table's next point.
+export function settleRoll(variant, point, bets, total, dice = null) {
   const before = cloneBets(bets);
   const after = cloneBets(bets);
   const lines = [];
   let returnCents = 0;
   let profitCents = 0;
   let lostCents = 0;
+  const pointOn = point !== null && point !== undefined;
+  const hardRoll = Array.isArray(dice) && dice[0] !== undefined && dice[0] === dice[1];
 
-  const payOff = (bet, stake, ratio, number) => {
+  const payOff = (bet, stake, ratio, number, extra = {}) => {
     const w = win(stake, ratio);
     returnCents += stake + w;
     profitCents += w;
-    lines.push({ bet, number, result: 'win', stake, winnings: w });
+    lines.push({ bet, number, result: 'win', stake, winnings: w, ...extra });
+  };
+  // A winner that stays up: only the winnings come back.
+  const payStays = (bet, stake, ratio, number) => {
+    const w = win(stake, ratio);
+    returnCents += w;
+    profitCents += w;
+    lines.push({ bet, number, result: 'win', stake, winnings: w, stays: true });
   };
   const lose = (bet, stake, number) => {
     lostCents += stake;
     lines.push({ bet, number, result: 'lose', stake });
+  };
+  const giveBack = (bet, stake, number, why) => {
+    returnCents += stake;
+    lines.push({ bet, number, result: 'returned', stake, why });
   };
 
   // Field: decided by every roll, then it comes off.
@@ -114,6 +245,58 @@ export function settleRoll(variant, point, bets, total) {
     if (ratio) payOff('field', before.field, ratio);
     else lose('field', before.field);
     after.field = 0;
+  }
+
+  // Hard ways: off on a come-out. With a Point on: the hard number wins (and stays up); the same
+  // number rolled the easy way, or any 7, loses.
+  if (pointOn) {
+    for (const [n, stake] of Object.entries(before.hard)) {
+      const number = Number(n);
+      if (total === variant.seven) {
+        lose('hard', stake, number);
+        delete after.hard[n];
+      } else if (total === number) {
+        if (hardRoll) payStays('hard', stake, variant.hardWays[number], number);
+        else {
+          lose('hard', stake, number);
+          delete after.hard[n];
+        }
+      }
+    }
+  }
+
+  // Come bets already on a number: the number wins (1:1, Odds at true odds), a 7 loses. Their Odds
+  // are off on a come-out roll: returned, never won or lost.
+  for (const [n, c] of Object.entries(before.comeOn)) {
+    const number = Number(n);
+    if (total !== number && total !== variant.seven) continue;
+    const wins = total === number;
+    if (c.bet) {
+      if (wins) payOff('come', c.bet, variant.lineOdds, number);
+      else lose('come', c.bet, number);
+    }
+    if (c.odds) {
+      if (!pointOn) giveBack('comeOdds', c.odds, number, 'off on the come-out');
+      else if (wins) payOff('comeOdds', c.odds, variant.odds[number], number);
+      else lose('comeOdds', c.odds, number);
+    }
+    delete after.comeOn[n];
+  }
+
+  // A fresh Come bet: decided like a Pass bet on a come-out, or it moves to its number. Landing on a
+  // number that already holds a Come bet adds to it, up to the line limit (any extra comes back).
+  if (before.come) {
+    after.come = 0;
+    if (variant.comeOutPassWins.includes(total)) payOff('come', before.come, variant.lineOdds);
+    else if (variant.comeOutPassLoses.includes(total)) lose('come', before.come);
+    else {
+      const there = after.comeOn[total] ?? { bet: 0, odds: 0 };
+      const room = Math.max(0, variant.limits.line - there.bet);
+      const moved = Math.min(before.come, room);
+      if (moved > 0) after.comeOn[total] = { bet: there.bet + moved, odds: there.odds };
+      lines.push({ bet: 'come', number: total, result: 'moved', stake: moved });
+      if (before.come > moved) giveBack('come', before.come - moved, total, `Come ${total} is at the ${dollars(variant.limits.line)} limit`);
+    }
   }
 
   const kind = rollKind(variant, point, total);
@@ -136,43 +319,35 @@ export function settleRoll(variant, point, bets, total) {
       }
     }
   } else if (kind === 'point') {
-    nextPoint = total; // line bets stay up; Place bets were off for the come-out
+    nextPoint = total; // line bets stay up; Place bets and Hard ways were off for the come-out
   } else if (kind === 'pointMade') {
     if (before.pass) payOff('pass', before.pass, variant.lineOdds);
     if (before.odds) payOff('odds', before.odds, variant.odds[point], point);
     if (before.dontPass) lose('dontPass', before.dontPass);
+    if (before.dontOdds) lose('dontOdds', before.dontOdds, point);
     after.pass = 0;
     after.odds = 0;
     after.dontPass = 0;
+    after.dontOdds = 0;
     const placed = before.place[point];
-    if (placed) {
-      // A Place win pays its winnings; the bet stays up.
-      const w = win(placed, variant.place[point]);
-      returnCents += w;
-      profitCents += w;
-      lines.push({ bet: 'place', number: point, result: 'win', stake: placed, winnings: w, stays: true });
-    }
+    if (placed) payStays('place', placed, variant.place[point], point); // a Place win stays up
     nextPoint = null;
   } else if (kind === 'sevenOut') {
     if (before.pass) lose('pass', before.pass);
     if (before.odds) lose('odds', before.odds, point);
     if (before.dontPass) payOff('dontPass', before.dontPass, variant.lineOdds);
+    if (before.dontOdds) payOff('dontOdds', before.dontOdds, inverse(variant.odds[point]), point);
     for (const [number, stake] of Object.entries(before.place)) if (stake) lose('place', stake, Number(number));
     after.pass = 0;
     after.odds = 0;
     after.dontPass = 0;
+    after.dontOdds = 0;
     after.place = {};
     nextPoint = null;
   } else {
     const placed = before.place[total];
-    if (placed) {
-      const w = win(placed, variant.place[total]);
-      returnCents += w;
-      profitCents += w;
-      lines.push({ bet: 'place', number: total, result: 'win', stake: placed, winnings: w, stays: true });
-    }
+    if (placed) payStays('place', placed, variant.place[total], total);
   }
 
-  for (const [number, stake] of Object.entries(after.place)) if (!stake) delete after.place[number];
-  return { kind, bets: after, returnCents, profitCents, lostCents, netCents: profitCents - lostCents, lines, nextPoint };
+  return { kind, bets: cloneBets(after), returnCents, profitCents, lostCents, netCents: profitCents - lostCents, lines, nextPoint };
 }

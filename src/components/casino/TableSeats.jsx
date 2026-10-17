@@ -1,5 +1,6 @@
-// The five seats in one row, the same on every phone. An empty seat is a "Sit" button for a player
-// who isn't seated yet; the caller's own seat is outlined and the detail line comes from the game.
+// The five seats in one row, the same on every phone. An empty seat is a "Sit" button while the player
+// may take another seat (any time at Blackjack and Baccarat, only before sitting at Craps); the player's
+// own seats are outlined and labelled with their name and "you", and the detail line comes from the game.
 
 import { CASINO_SEATS } from '../../../shared/casino/constants.js';
 
@@ -28,9 +29,10 @@ export default function TableSeats({ seats, myUid, canSit, sitting, onSit, detai
         const info = detail ? detail(seat, i) : null;
         const classes = ['seat-tile', seat.uid === myUid ? 'mine' : '', seat.leaving ? 'leaving' : '', info?.tone ?? ''].filter(Boolean).join(' ');
         return (
-          <li key={i} className={classes}>
+          <li key={i} className={classes} aria-label={`Seat ${i + 1}: ${seat.name}${seat.uid === myUid ? ' (you)' : ''}`}>
             <span className="seat-num">{i + 1}</span>
-            <span className="seat-name">{seat.uid === myUid ? 'You' : seat.name}</span>
+            <span className="seat-name">{seat.name}</span>
+            {seat.uid === myUid ? <span className="seat-you">you</span> : null}
             <span className="seat-detail">{seat.leaving ? 'leaving' : info?.text ?? ''}</span>
           </li>
         );

@@ -1,6 +1,7 @@
 // Baccarat at the shared table.
 //
-//   Betting   no timer until the first bet, then 15 s; closes early once every seated player confirms.
+//   Seats     a player may hold several; each seat has its own bets, limits, confirm and result.
+//   Betting   no timer until the first bet, then 15 s; closes early once every seat has confirmed.
 //             `bet` sets a seat's three spots (each $0 or $1–$10); a change charges or refunds the
 //             difference. `confirm` locks the seat's bets.
 //   Deal      when betting closes, in the same transaction: draw from the private shoe, play the coup,
@@ -109,7 +110,7 @@ function parseBets(body) {
 // ---------- actions ----------
 
 async function bet(ctx, body) {
-  const index = requireSeat(ctx);
+  const index = requireSeat(ctx, body);
   const { bets, requestId } = parseBets(body);
   const seat = ctx.state.seats[index];
   if (seat.reqs?.includes(requestId)) return { duplicate: true };
@@ -138,7 +139,7 @@ async function bet(ctx, body) {
     });
   } else if (diff < 0) {
     ctx.addMoney(uid, {
-      id: `cref_baccarat_${ctx.state.roundId}_${uid}_${requestId}`,
+      id: `cref_baccarat_${ctx.state.roundId}_${uid}_s${index}_${requestId}`,
       type: 'casino_refund',
       amountCents: -diff,
       roundId: ctx.state.roundId,
@@ -154,8 +155,8 @@ async function bet(ctx, body) {
   return { betCents: totalBetCents(bets) };
 }
 
-async function confirm(ctx) {
-  const index = requireSeat(ctx);
+async function confirm(ctx, body) {
+  const index = requireSeat(ctx, body);
   const seat = ctx.state.seats[index];
   requirePhase(ctx, 'betting', 'Betting is closed for this hand.');
   if (seat.ready) return { ready: true };
@@ -197,11 +198,11 @@ async function closeBetting(ctx) {
     seat.result = settled;
     if (settled.returnCents > 0) {
       ctx.addMoney(seat.uid, {
-        id: `cpay_baccarat_${state.roundId}_${seat.uid}_end`,
+        id: `cpay_baccarat_${state.roundId}_${seat.uid}_s${state.seats.indexOf(seat)}_end`,
         type: 'casino_payout',
         amountCents: settled.returnCents,
         roundId: state.roundId,
-        note: `Baccarat hand ${state.roundNo}: ${result} (${describeBets(seat.bets)})`,
+        note: `Baccarat hand ${state.roundNo}, seat ${state.seats.indexOf(seat) + 1}: ${result} (${describeBets(seat.bets)})`,
       });
     }
   }
@@ -245,6 +246,7 @@ async function afterSeatsChanged(ctx) {
 
 export const baccaratEngine = {
   id: 'baccarat',
+  multiSeat: true, // a player may hold several seats; each has its own bets and limits
   // Actions that can close betting and deal (the shoe is read with the table, in one round trip).
   preloadShoe: (action) => action === 'confirm' || action === 'leave',
   decks: BACCARAT_DECKS,

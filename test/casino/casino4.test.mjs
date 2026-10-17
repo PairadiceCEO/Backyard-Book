@@ -104,7 +104,7 @@ test('a full Craps hand: point, Odds, Place 6 at 7:6 ($5 wins $5.83), Field, poi
   assert.equal(wallet('p1'), 10000 - 500 - 1000 + 1000 + 1000 + 1200);
   assert.equal(wallet('p2'), 10000 - 500 - 100 + 583, 'Place 6 pays $5.83; its $5 stays up');
   assert.deepEqual(betsOf('p2').place, { 6: 500 });
-  assert.deepEqual(betsOf('p1'), { pass: 0, dontPass: 0, odds: 0, field: 0, place: {} });
+  assert.deepEqual(betsOf('p1'), { pass: 0, dontPass: 0, odds: 0, dontOdds: 0, come: 0, field: 0, place: {}, hard: {}, comeOn: {} });
   const pays = ledger().filter((e) => e.type === 'casino_payout');
   assert.deepEqual(pays.map((e) => e.id).sort(), [`cpay_craps_${t.epoch}-2_p1`, `cpay_craps_${t.epoch}-2_p2`].sort());
   assert.deepEqual(t.seats[1].lastRoll, { seq: 2, netCents: 583 - 100, profitCents: 583, lostCents: 100, returnCents: 583 });
@@ -183,14 +183,14 @@ test('taking bets down: Odds, Place and Field any time before the roll; Pass onl
   await act('p1', 'removeBet', { kind: 'odds' });
   await act('p1', 'removeBet', { kind: 'place', number: 9 });
   await err(act('p1', 'removeBet', { kind: 'pass' }), 'BET_LOCKED');
-  assert.deepEqual(betsOf('p1'), { pass: 500, dontPass: 0, odds: 0, field: 0, place: {} });
+  assert.deepEqual(betsOf('p1'), { pass: 500, dontPass: 0, odds: 0, dontOdds: 0, come: 0, field: 0, place: {}, hard: {}, comeOn: {} });
   assert.equal(wallet('p1'), 9500);
   assert.equal(new Set(ledger().map((e) => e.id)).size, ledger().length);
   moneyAddsUp(10000);
 });
 
-test('limits: $1–$10 a bet, $10 a spot, the wallet, leaving players, unknown bets', async () => {
-  seed(1200);
+test('limits: chips are whole dollars up to $10, Pass up to $20, the wallet, leaving players, unknown bets', async () => {
+  seed(2200);
   GAME = 'craps';
   await sitAll(['p1', 'p2']);
   await err(bet('p1', 'pass', 11), 'BAD_BET');
@@ -198,9 +198,10 @@ test('limits: $1–$10 a bet, $10 a spot, the wallet, leaving players, unknown b
   await err(bet('p1', 'pass', 2.5), 'BAD_BET');
   await err(bet('p1', 'hardways', 1), 'BAD_BET');
   await err(bet('p1', 'place', 1), 'BAD_BET');
-  await bet('p1', 'pass', 6);
-  await err(bet('p1', 'pass', 5), 'SPOT_LIMIT');
-  await bet('p1', 'pass', 4);
+  await err(bet('p1', 'hard', 1), 'BAD_BET', 'a Hard way needs its number');
+  await bet('p1', 'pass', 10);
+  await bet('p1', 'pass', 10);
+  await err(bet('p1', 'pass', 1), 'SPOT_LIMIT');
   await err(bet('p1', 'field', 3), 'INSUFFICIENT_BALANCE');
   assert.equal(wallet('p1'), 200);
   await act('p2', 'leave');
@@ -432,7 +433,7 @@ test('chips tapped together arrive as one request: all applied with one charge, 
   assert.equal(ledger().filter((e) => e.uid === 'p1' && e.type === 'casino_bet').length, 1, 'one charge for the batch');
   // One bad chip refuses the whole batch and changes nothing.
   const before = table();
-  await err(chipsDown('p1', [{ kind: 'field', cents: 100 }, { kind: 'pass', cents: 500 }]), 'SPOT_LIMIT');
+  await err(chipsDown('p1', [{ kind: 'field', cents: 100 }, { kind: 'pass', cents: 1400 }]), 'SPOT_LIMIT');
   await err(chipsDown('p1', [{ kind: 'place', number: 6, cents: 100 }]), 'BET_NOT_ALLOWED');
   await err(chipsDown('p1', [{ kind: 'field', cents: 150 }]), 'BAD_BET');
   await err(chipsDown('p1', [{ kind: 'field', cents: -300 }]), 'NO_BET');

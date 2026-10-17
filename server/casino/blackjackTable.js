@@ -180,20 +180,25 @@ async function revealHole(ctx) {
 }
 
 // ---------- money ----------
+// Ledger ids name the seat (s0–s4) as well as the player: one player may hold several seats.
+
+function seatNo(ctx, seat) {
+  return ctx.state.seats.indexOf(seat);
+}
 
 function charge(ctx, seat, id, cents, note) {
-  ctx.addMoney(seat.uid, { id, type: 'casino_bet', amountCents: -cents, roundId: ctx.state.roundId, note: `Blackjack hand ${ctx.state.roundNo}: ${note}` });
+  ctx.addMoney(seat.uid, { id, type: 'casino_bet', amountCents: -cents, roundId: ctx.state.roundId, note: `Blackjack hand ${ctx.state.roundNo}, seat ${seatNo(ctx, seat) + 1}: ${note}` });
   seat.stakeCents += cents;
 }
 
 function pay(ctx, seat, step, cents, note) {
   if (cents <= 0) return;
   ctx.addMoney(seat.uid, {
-    id: `cpay_blackjack_${ctx.state.roundId}_${seat.uid}_${step}`,
+    id: `cpay_blackjack_${ctx.state.roundId}_${seat.uid}_s${seatNo(ctx, seat)}_${step}`,
     type: 'casino_payout',
     amountCents: cents,
     roundId: ctx.state.roundId,
-    note: `Blackjack hand ${ctx.state.roundNo}: ${note}`,
+    note: `Blackjack hand ${ctx.state.roundNo}, seat ${seatNo(ctx, seat) + 1}: ${note}`,
   });
   seat.returnCents += cents;
 }
@@ -383,7 +388,7 @@ async function openNextRound(ctx) {
 // refunds the difference. `confirm` locks it in. The cards come out when every seated player has
 // confirmed, or 15 s after the first bet for whoever has a bet down.
 async function bet(ctx, body) {
-  const index = requireSeat(ctx);
+  const index = requireSeat(ctx, body);
   const seat = ctx.state.seats[index];
   const amount = body.amount;
   if (!(amount === 0 || isValidCasinoBet(amount))) throw new HttpError(400, 'BAD_BET', 'Bets are whole dollars from $1 to $10.');
@@ -407,7 +412,7 @@ async function bet(ctx, body) {
       type: 'casino_refund',
       amountCents: -diff,
       roundId: ctx.state.roundId,
-      note: `Blackjack hand ${ctx.state.roundNo}: bet lowered to ${formatDollars(cents)}`,
+      note: `Blackjack hand ${ctx.state.roundNo}, seat ${index + 1}: bet lowered to ${formatDollars(cents)}`,
     });
     seat.stakeCents += diff;
   }
@@ -418,8 +423,8 @@ async function bet(ctx, body) {
   return { betCents: cents };
 }
 
-async function confirm(ctx) {
-  const index = requireSeat(ctx);
+async function confirm(ctx, body) {
+  const index = requireSeat(ctx, body);
   const seat = ctx.state.seats[index];
   requirePhase(ctx, 'betting', 'Betting is closed for this hand.');
   if (seat.ready) return { ready: true };
@@ -431,7 +436,7 @@ async function confirm(ctx) {
 }
 
 async function insurance(ctx, body) {
-  const index = requireSeat(ctx);
+  const index = requireSeat(ctx, body);
   const seat = ctx.state.seats[index];
   requirePhase(ctx, 'insurance', 'Insurance is only offered while the dealer shows an Ace.');
   if (!(seat.betCents > 0)) throw new HttpError(403, 'NO_HAND', "You don't have a hand this round.");
@@ -443,7 +448,7 @@ async function insurance(ctx, body) {
   if (seat.insurance !== null) return { insurance: seat.insurance, duplicate: true };
   if (cents > 0) {
     await requireFunds(ctx, seat, cents, 'insurance');
-    charge(ctx, seat, `cbet_${seat.uid}_ins_${ctx.state.roundId}`, cents, `insurance ${formatDollars(cents)}`);
+    charge(ctx, seat, `cbet_${seat.uid}_s${index}_ins_${ctx.state.roundId}`, cents, `insurance ${formatDollars(cents)}`);
   }
   seat.insurance = cents;
   ctx.changed = true;
@@ -454,9 +459,14 @@ async function insurance(ctx, body) {
 
 // Finds the caller's hand for a move and applies the double-tap guard: refused only if that hand has
 // already moved on (its actionSeq changed or it's finished). Other players' actions never matter.
+// The seat is body.seat, or (when not given) the seat whose turn it is if it's the caller's.
 function handForMove(ctx, body) {
-  const index = requireSeat(ctx);
   requirePhase(ctx, 'playing', 'No hands are being played right now.');
+  const turnSeat = ctx.state.turn?.seat;
+  const index =
+    (body.seat === undefined || body.seat === null) && Number.isInteger(turnSeat) && ctx.mySeats.includes(turnSeat)
+      ? turnSeat
+      : requireSeat(ctx, body);
   const handIndex = body.hand;
   const actionSeq = body.actionSeq;
   if (!Number.isInteger(handIndex) || !Number.isInteger(actionSeq)) {
@@ -469,7 +479,7 @@ function handForMove(ctx, body) {
     throw new HttpError(409, 'STALE', 'That hand already moved on.');
   }
   const turn = ctx.state.turn;
-  if (!turn || turn.seat !== index || turn.hand !== handIndex) throw new HttpError(403, 'NOT_YOUR_TURN', "It isn't this hand's turn.");
+  if (!turn || turn.seat !== index || turn.hand !== handIndex) throw new HttpError(403, 'NOT_YOUR_TURN', `It isn't seat ${index + 1}'s turn.`);
   return { seat, hand, index, handIndex };
 }
 
@@ -502,7 +512,7 @@ async function double(ctx, body) {
   const { seat, hand, index, handIndex } = handForMove(ctx, body);
   if (!canDouble(hand)) throw new HttpError(409, 'CANT_DOUBLE', 'Double on your first two cards only.');
   await requireFunds(ctx, seat, hand.betCents, 'doubling');
-  charge(ctx, seat, `cbet_${seat.uid}_dbl${handIndex}_${ctx.state.roundId}`, hand.betCents, `double ${formatDollars(hand.betCents)}`);
+  charge(ctx, seat, `cbet_${seat.uid}_s${index}_dbl${handIndex}_${ctx.state.roundId}`, hand.betCents, `double ${formatDollars(hand.betCents)}`);
   hand.betCents *= 2;
   hand.doubled = true;
   await dealToHand(ctx, index, handIndex);
@@ -522,7 +532,7 @@ async function split(ctx, body) {
   const { seat, hand, index } = handForMove(ctx, body);
   if (!canSplit(hand, seat.hands.length)) throw new HttpError(409, 'CANT_SPLIT', 'Split two cards of the same value, once per hand.');
   await requireFunds(ctx, seat, hand.betCents, 'splitting');
-  charge(ctx, seat, `cbet_${seat.uid}_split_${ctx.state.roundId}`, hand.betCents, `split ${formatDollars(hand.betCents)}`);
+  charge(ctx, seat, `cbet_${seat.uid}_s${index}_split_${ctx.state.roundId}`, hand.betCents, `split ${formatDollars(hand.betCents)}`);
   const aces = cardRank(hand.cards[0]) === 'A' && cardRank(hand.cards[1]) === 'A';
   const make = (card, seq) => ({ cards: [card], betCents: hand.betCents, status: 'playing', seq, fromSplit: true, splitAces: aces, doubled: false, outcome: null });
   seat.hands = [make(hand.cards[0], hand.seq + 1), make(hand.cards[1], 0)];
@@ -571,6 +581,7 @@ async function afterSeatsChanged(ctx) {
 
 export const blackjackEngine = {
   id: 'blackjack',
+  multiSeat: true, // a player may hold several seats; each plays like its own player
   // Actions that can deal, draw or turn the hole card (the shoe is read with the table).
   preloadShoe: (action) => ['confirm', 'insurance', 'hit', 'stand', 'double', 'split', 'leave'].includes(action),
   decks: BLACKJACK_DECKS,

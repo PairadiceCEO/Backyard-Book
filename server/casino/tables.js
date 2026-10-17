@@ -1,7 +1,10 @@
 // Seats, watching, heartbeats and deadlines: the part every table game shares.
 //
-//   sit        take an empty seat (or a seat whose player has been gone 60 s with nothing in play)
-//   leave      free the seat now, or mark it "leaving" if its bets are still in play
+//   sit        take an empty seat (or a seat whose player has been gone 60 s with nothing in play).
+//              Blackjack and Baccarat: as many seats as you like (each plays like its own player);
+//              Craps: one seat per player.
+//   leave      { seat } frees that seat now, or marks it "leaving" if its bets are still in play;
+//              without a seat, every seat the caller holds
 //   heartbeat  "still here": presence is written at most every 30 s; on an idle table it also frees
 //              seats whose player has been gone 60 s
 //   tick       anyone at the table may send it; applies the phase's default only if the server's clock
@@ -41,21 +44,25 @@ function displayName(caller) {
 }
 
 async function sit(ctx, body, engine) {
-  const current = ctx.seatIndex;
+  const mine = ctx.mySeats;
   const wanted = body.seat === undefined || body.seat === null ? null : body.seat;
   if (wanted !== null && (!Number.isInteger(wanted) || wanted < 0 || wanted >= CASINO_SEATS)) {
     throw new HttpError(400, 'BAD_SEAT', `Seats are numbered 1–${CASINO_SEATS}.`);
   }
-  if (current !== -1) {
-    if (wanted === null || wanted === current) return { seat: current, already: true };
-    throw new HttpError(409, 'ALREADY_SEATED', `You're already in seat ${current + 1}. Leave it first.`);
+  if (wanted !== null && mine.includes(wanted)) return { seat: wanted, already: true };
+  if (mine.length && !engine.multiSeat) {
+    if (wanted === null) return { seat: mine[0], already: true };
+    const name = casinoGame(ctx.game)?.name ?? 'This table';
+    throw new HttpError(409, 'ONE_SEAT', `${name} is one seat per player. You're in seat ${mine[0] + 1}; leave it first to move.`);
   }
+  if (mine.length && wanted === null) return { seat: mine[0], already: true };
 
   const seats = ctx.state.seats;
   if (seats.every(Boolean) || (wanted !== null && seats[wanted])) await ctx.prefetchPresence(seats.filter(Boolean).map((s) => s.uid));
   const canTake = async (i) => {
     const seat = seats[i];
     if (!seat) return true;
+    if (seat.uid === ctx.caller.uid) return false;
     // A seat whose player left long ago, with nothing riding, can be taken over.
     return !engine.seatInPlay(ctx.state, i) && (seat.leaving || (await seatIsStale(ctx, seat)));
   };
@@ -75,31 +82,38 @@ async function sit(ctx, body, engine) {
   ctx.changed = true;
   await ctx.markPresent(ctx.caller.uid, { force: true });
   await engine.afterSeatsChanged?.(ctx);
-  return { seat: index };
+  return { seat: index, mySeats: ctx.mySeats };
 }
 
-async function leave(ctx, _body, engine) {
-  const index = ctx.seatIndex;
-  if (index === -1) return { left: true };
-  if (engine.seatInPlay(ctx.state, index)) {
-    // Its bets play out; the seat frees when the round ends.
-    if (!ctx.state.seats[index].leaving) {
-      ctx.state.seats[index].leaving = true;
-      ctx.changed = true;
-      await engine.afterSeatsChanged?.(ctx);
+// leave { seat } gives up one seat; leave {} gives up every seat the caller holds (leaving the page).
+// A seat with bets in play is marked "leaving": its bets play out and it frees when the round ends.
+async function leave(ctx, body, engine) {
+  const mine = ctx.mySeats;
+  if (!mine.length) return { left: true, leaving: false, freedSeats: [], leavingSeats: [] };
+  const list = body.seat === undefined || body.seat === null ? mine : [requireSeat(ctx, body)];
+  const freedSeats = [];
+  const leavingSeats = [];
+  for (const index of list) {
+    if (engine.seatInPlay(ctx.state, index)) {
+      if (!ctx.state.seats[index].leaving) {
+        ctx.state.seats[index].leaving = true;
+        ctx.changed = true;
+      }
+      leavingSeats.push(index);
+      continue;
     }
-    return { left: false, leaving: true };
+    await engine.beforeFree?.(ctx, index);
+    ctx.state.seats[index] = null;
+    ctx.changed = true;
+    freedSeats.push(index);
   }
-  await engine.beforeFree?.(ctx, index);
-  ctx.state.seats[index] = null;
-  ctx.changed = true;
-  await engine.afterSeatsChanged?.(ctx);
-  return { left: true };
+  if (ctx.changed) await engine.afterSeatsChanged?.(ctx);
+  return { left: leavingSeats.length === 0, leaving: leavingSeats.length > 0, freedSeats, leavingSeats };
 }
 
+// One heartbeat covers every seat the caller holds (presence is per player).
 async function heartbeat(ctx, _body, engine) {
-  const index = ctx.seatIndex;
-  if (index === -1) return { seated: false };
+  if (!ctx.mySeats.length) return { seated: false };
   const wrote = await ctx.markPresent(ctx.caller.uid);
   // An idle table has no round ending to free a seat, so a heartbeat that writes does it instead.
   if (wrote && engine.isIdle(ctx.state)) {
@@ -137,7 +151,9 @@ export async function handleTableAction(caller, body, { now = Date.now(), random
   };
 
   return runTableAction({ game: gameId, engine, caller, now, randomInt, timing, preload }, async (ctx) => {
-    if (handler !== sit && handler !== tick && handler !== heartbeat && handler !== leave) requireSeat(ctx);
+    if (handler !== sit && handler !== tick && handler !== heartbeat && handler !== leave && !ctx.mySeats.length) {
+      throw new HttpError(403, 'NOT_SEATED', 'Take a seat to play. You can watch without one.');
+    }
     return handler(ctx, body, engine);
   });
 }
