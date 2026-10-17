@@ -4,7 +4,7 @@ Read this first in every session: `git fetch`, check out `wip` if it is ahead of
 file, continue from "Next". `main` = finished, tested phases only (Vercel deploys it). Work in
 progress is pushed to `wip` after every commit. Casino history: `docs/CASINO_PROGRESS.md`.
 
-## Current phase: Sportsbook CASH OUT (started 2026-10-17)
+## Current phase: Sportsbook CASH OUT — COMPLETE (2026-10-17), merged to main, ready for Will to test
 
 Spec: Will's message of 2026-10-17 (cash out for sportsbook bets). Summary of the rules:
 - Pre-game (no leg's game started, singles and parlays): cashout = floor(stake × 0.90).
@@ -55,11 +55,12 @@ Spec: Will's message of 2026-10-17 (cash out for sportsbook bets). Summary of th
       `src/pages/admin/AdminBets.jsx` (status filter "Cashed out", no Set leg / Force buttons, note),
       CSS in `src/styles/index.css` (/* Cash out */). Harness: `tools/phone-check` fixtures (bet b7
       cashed out) + scenarios my-bets-cashout-{confirm,changed,unavailable,done}, admin-bets-cashed.
-- [ ] 5 Full suite, build, phone check 320/375/414, merge wip → main, report with live test steps
+- [x] 5 Full suite (26 + 70 + 21 + scratchpad sportsbook suites), lint, production build, phone check
+      60 screens × 320/375/414 with no overflow, small targets or console errors; README "Cash out"
+      section; version 0.7.0; merged wip → main
 
 ## Next
-Step 5: all suites pass (26 + 70 + 21 + scratchpad sportsbook suites), lint clean, cash-out screens pass
-320/375/414. Remaining: full phone check of every screen + production build, then merge wip → main.
+Nothing pending. Wait for Will's test results / next task. Start the next phase on a fresh `wip` from main.
 
 ## Open questions
 None yet.
