@@ -121,3 +121,26 @@ export function useCardReveal(dealtAt, cardCount, gapMs) {
 
   return shown;
 }
+
+// True while a roll that the server made at `at` (server ms) is still tumbling on screen.
+// A phone that opens the page later just shows the dice.
+export function useRollAnimation(at, durationMs) {
+  const [rolling, setRolling] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!at) {
+      setRolling(false);
+      return undefined;
+    }
+    const left = at + durationMs - serverNow();
+    if (left <= 0) {
+      setRolling(false);
+      return undefined;
+    }
+    setRolling(true);
+    const timer = setTimeout(() => setRolling(false), left);
+    return () => clearTimeout(timer);
+  }, [at, durationMs]);
+
+  return rolling;
+}

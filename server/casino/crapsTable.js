@@ -23,7 +23,7 @@ import { requireSeat } from './tableRunner.js';
 import { seatIsStale } from './seats.js';
 import { formatDollars } from './money.js';
 import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
-import { CASINO_SEATS, TURN_SECONDS, isValidCasinoBet } from '../../shared/casino/constants.js';
+import { CASINO_SEATS, DICE_ANIMATION_MS, TURN_SECONDS, isValidCasinoBet } from '../../shared/casino/constants.js';
 import { DICE_VARIANTS } from '../../shared/casino/diceVariants.js';
 import {
   BET_KINDS,
@@ -40,7 +40,7 @@ import {
   totalOnFelt,
 } from '../../shared/casino/dice.js';
 
-export const DICE_ANIMATION_MS = 1400; // phones tumble the dice this long before showing the result
+export { DICE_ANIMATION_MS };
 const TURN_MS = TURN_SECONDS * 1000;
 const ROLL_HISTORY = 20;
 const RECENT_REQUESTS = 8;

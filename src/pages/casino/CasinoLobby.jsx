@@ -1,4 +1,4 @@
-// Casino lobby: the 7s slot, Baccarat (live seats from its table doc) and the tables still to open.
+// Casino lobby: the 7s slot and the four tables (live seats from each table doc, Sit / Watch).
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -13,6 +13,7 @@ const ICONS = { blackjack: 'A♠', baccarat: '9♥', craps: '⚂⚄', crapless: 
 
 function phaseLabel(table) {
   if (!table || !table.seats?.some(Boolean)) return 'Nobody playing yet';
+  if (table.game === 'craps' || table.game === 'crapless') return table.point ? `Point is ${table.point}` : 'Come-out roll';
   if (table.phase === 'results') return 'Showing results';
   return table.deadline ? 'Betting now' : 'Waiting for bets';
 }

@@ -5,8 +5,18 @@ import { EmptyState } from '../../components/StatusViews.jsx';
 import { casinoGame } from '../../../shared/casino/constants.js';
 import BaccaratPage from './BaccaratPage.jsx';
 import BlackjackPage from './BlackjackPage.jsx';
+import CrapsPage from './CrapsPage.jsx';
 
-const TABLES = { baccarat: BaccaratPage, blackjack: BlackjackPage };
+const TABLES = {
+  baccarat: BaccaratPage,
+  blackjack: BlackjackPage,
+  craps: function Craps() {
+    return <CrapsPage game="craps" />;
+  },
+  crapless: function Crapless() {
+    return <CrapsPage game="crapless" />;
+  },
+};
 
 export default function CasinoTablePage() {
   const { game: gameId } = useParams();
