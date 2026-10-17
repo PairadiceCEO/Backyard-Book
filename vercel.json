@@ -1,9 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": [
+    "cle1"
+  ],
   "crons": [
-    { "path": "/api/settle", "schedule": "0 11 * * *" }
+    {
+      "path": "/api/settle",
+      "schedule": "0 11 * * *"
+    }
   ],
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ]
 }

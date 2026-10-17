@@ -1,10 +1,17 @@
 // In-memory Firestore for server tests: nested collections, optimistic transactions that interleave
 // and retry on conflict like the real thing, create() failing on existing docs, and "reads after writes"
-// refused. Counts reads/writes per path prefix so tests can check costs.
+// refused. Counts reads/writes per path prefix so tests can check costs, and network round trips (rpcs).
+// setLatency({ rpcMs, commitMs }) makes every round trip wait, to benchmark how many a call makes in series.
 export function makeFakeDb() {
   const store = new Map();
   const versions = new Map();
-  const counts = { reads: 0, writes: 0, commits: 0, retries: 0, byPrefix: {} };
+  const counts = { reads: 0, writes: 0, commits: 0, retries: 0, rpcs: 0, byPrefix: {} };
+  const latency = { rpcMs: 0, commitMs: 0 };
+  const network = async (extra = 0) => {
+    counts.rpcs += 1;
+    const ms = latency.rpcMs + extra;
+    if (ms > 0) await new Promise((r) => setTimeout(r, ms));
+  };
   let clock = 0;
   const clone = (v) => {
     if (v === null || typeof v !== 'object') return v;
@@ -31,7 +38,7 @@ export function makeFakeDb() {
       path,
       id: path.split('/').pop(),
       collection: (name) => collectionRef(`${path}/${name}`),
-      async get() { await pause(); bump('reads', path); return snap(path); },
+      async get() { await network(); await pause(); bump('reads', path); return snap(path); },
     };
   }
   function collectionRef(path) {
@@ -49,9 +56,21 @@ export function makeFakeDb() {
           get: async (r) => {
             if (ops.length) throw new Error('Firestore transactions require all reads to be executed before all writes.');
             reads.set(r.path, versions.get(r.path) ?? 0);
+            await network();
             await pause();
             bump('reads', r.path);
             return snap(r.path);
+          },
+          // One round trip for any number of docs, like the Admin SDK's batchGet.
+          getAll: async (...refs) => {
+            if (ops.length) throw new Error('Firestore transactions require all reads to be executed before all writes.');
+            for (const r of refs) reads.set(r.path, versions.get(r.path) ?? 0);
+            await network();
+            await pause();
+            return refs.map((r) => {
+              bump('reads', r.path);
+              return snap(r.path);
+            });
           },
           create: (r, d) => ops.push(['create', r.path, d]),
           update: (r, d) => ops.push(['update', r.path, d]),
@@ -59,6 +78,7 @@ export function makeFakeDb() {
           delete: (r) => ops.push(['delete', r.path]),
         };
         const result = await fn(tx);
+        await network(latency.commitMs); // the commit
         await pause();
         if ([...reads].some(([p, v]) => (versions.get(p) ?? 0) !== v)) { counts.retries += 1; continue; }
         for (const [k, p] of ops) if (k === 'create' && store.has(p)) throw new AlreadyExists(p);
@@ -81,5 +101,6 @@ export function makeFakeDb() {
     get: (path) => clone(store.get(path)),
     reset() { store.clear(); versions.clear(); for (const k of Object.keys(counts)) counts[k] = k === 'byPrefix' ? {} : 0; },
     resetCounts() { for (const k of Object.keys(counts)) counts[k] = k === 'byPrefix' ? {} : 0; },
+    setLatency({ rpcMs = 0, commitMs = 0 } = {}) { latency.rpcMs = rpcMs; latency.commitMs = commitMs; },
   };
 }

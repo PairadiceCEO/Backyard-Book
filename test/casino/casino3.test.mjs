@@ -31,7 +31,12 @@ const callerOf = (uid) => ({ uid, token: {}, user: fake.get(`users/${uid}`) });
 let rng = (max) => Math.floor(Math.random() * max);
 const act = (uid, action, fields = {}, now = T0) => handleTableAction(callerOf(uid), { game: 'blackjack', action, ...fields }, { now, randomInt: (m) => rng(m) });
 let reqNo = 0;
-const bet = (uid, amount, now = T0) => act(uid, 'bet', { amount, requestId: `bj-req-${String(++reqNo).padStart(6, '0')}` }, now);
+// chips: set this hand's bet (absolute, like stacking chips). bet: chips + Confirm (locks it in).
+const chips = (uid, amount, now = T0, requestId = `bj-req-${String(++reqNo).padStart(6, '0')}`) => act(uid, 'bet', { amount, requestId }, now);
+const bet = async (uid, amount, now = T0) => {
+  await chips(uid, amount, now);
+  return act(uid, 'confirm', {}, now);
+};
 const table = () => fake.get('casinoTables/blackjack');
 const shoeDoc = () => fake.get('casinoTables/blackjack/private/shoe');
 const wallet = (uid) => fake.get(`users/${uid}`).balanceCents;
@@ -207,7 +212,7 @@ test('dealer blackjack with insurance: insurance pays 2:1, a natural pushes, eve
   await bet('p3', 10);
   let t = table();
   assert.equal(t.phase, 'insurance');
-  assert.equal(t.deadline, T0 + t.lastDeal.cards.length * 450 + 300 + 15_000, '15 s after the cards are shown');
+  assert.equal(t.deadline, T0 + t.lastDeal.cards.at(-1).t + BJ.CARD_SETTLE_MS + 15_000, '15 s after the cards are shown');
   assertSecret('insurance phase');
   await err(move('p1', 'hit'), 'PHASE');
   await err(act('p1', 'insurance', { amountCents: 251 }), 'BAD_INSURANCE');
@@ -406,22 +411,49 @@ test('turn timer: 15 s per hand, then it stands; five phones ticking stand it on
 });
 
 // ---------- betting, leaving ----------
-test('betting: one bet per hand, the clock deals for whoever bet, others sit out', async () => {
+test('betting: chips stack into one bet, a change charges or refunds the difference, Confirm locks it, the clock deals for whoever has chips down', async () => {
   seed();
   await sitAll(['p1', 'p2', 'p3']);
   rng = (m) => Math.floor(Math.random() * m);
-  await bet('p1', 3, T0);
-  await err(bet('p1', 2, T0 + 10), 'ALREADY_BET');
-  await err(bet('p1', 11, T0 + 10), 'BAD_BET');
-  await bet('p2', 2, T0 + 20);
-  assert.equal(table().phase, 'betting', 'p3 has not bet');
+  await chips('p1', 3, T0);
+  assert.equal(table().deadline, T0 + 15_000, 'the first chip starts the clock');
+  await chips('p1', 8, T0 + 5); // $5 + $2 + $1 on top of nothing: one request with the total
+  assert.equal(wallet('p1'), 10000 - 800);
+  await chips('p1', 6, T0 + 6); // Undo a $2 chip
+  assert.equal(wallet('p1'), 10000 - 600);
+  assert.ok(ledger().some((e) => e.type === 'casino_refund' && e.amountCents === 200 && e.uid === 'p1'));
+  assert.equal((await chips('p1', 6, T0 + 7, 'bj-req-replay-001')).betCents, 600);
+  assert.equal((await chips('p1', 9, T0 + 8, 'bj-req-replay-001')).duplicate, true, 'a retried request is applied once');
+  await err(chips('p1', 11, T0 + 10), 'BAD_BET');
+  await err(chips('p2', 1.5, T0 + 10), 'BAD_BET');
+  await err(act('p2', 'confirm', {}, T0 + 10), 'NO_BET');
+  await act('p1', 'confirm', {}, T0 + 10);
+  await err(chips('p1', 2, T0 + 11), 'CONFIRMED');
+  await chips('p2', 2, T0 + 20);
+  assert.equal(table().phase, 'betting', 'p2 has not confirmed and p3 has no chips');
   await act('p3', 'tick', {}, T0 + 15_000);
   const t = table();
   assert.notEqual(t.phase, 'betting');
   assert.equal(t.seats[2].hands.length, 0, 'p3 sits this one out');
-  assert.equal(t.seats[0].hands.length, 1);
-  await err(bet('p3', 1, T0 + 15_001), 'PHASE');
+  assert.equal(t.seats[1].hands.length, 1, 'an unconfirmed bet still plays when the clock runs out');
+  assert.equal(t.seats[0].hands[0].betCents, 600);
+  await err(chips('p3', 1, T0 + 15_001), 'PHASE');
   assertSecret('sit-out deal');
+  const sum = ledger().filter((e) => e.uid === 'p1').reduce((a, e) => a + e.amountCents, 0);
+  assert.equal(10000 + sum, wallet('p1'), 'ledger adds up');
+});
+
+test('everyone confirmed: the cards come out at once without waiting for the clock', async () => {
+  seed();
+  await sitAll(['p1', 'p2']);
+  stackShoe(['TS', '9H', '9C', '6D', '9D', '7S']);
+  await chips('p1', 5);
+  await chips('p2', 2);
+  await act('p1', 'confirm');
+  assert.equal(table().phase, 'betting');
+  const r = await act('p2', 'confirm');
+  assert.equal(r.dealt, true);
+  assert.equal(table().phase, 'playing');
 });
 
 test('leaving mid-hand: the seat is marked leaving, its hand stands on the timer, the seat frees next hand', async () => {
@@ -561,4 +593,54 @@ test('400 real crypto hands with random play: secrets kept, money adds up, every
   }
   assert.equal(groupShopPurchases(ledger(), []).totalCount, 0);
   assert.ok(table().shoe.shuffles >= 3, 'went through several shoes');
+});
+
+test('replies carry the table and the wallet, never the hole card or the shoe', async () => {
+  seed();
+  await sitAll(['p1', 'p2']);
+  stackShoe(['TS', '9H', '9C', '6D', '9D', '7S', '3H']);
+  await chips('p1', 5);
+  await chips('p2', 5);
+  await act('p1', 'confirm');
+  const r = await act('p2', 'confirm');
+  assert.equal(r.table.phase, 'playing');
+  assert.equal(r.table.dealer.holeDown, true);
+  const hole = shoeDoc().holeCard;
+  assert.ok(hole);
+  assert.ok(!JSON.stringify(r).includes(hole), 'the hole card is not in the reply');
+  for (const card of shoeDoc().cards) assert.ok(!JSON.stringify(r).includes(`"${card}"`));
+  assert.equal(r.balanceCents, wallet('p2'));
+  const hit = await act('p1', 'hit', { hand: 0, actionSeq: handOf('p1').seq });
+  assert.equal(hit.table.seats[0].hands[0].cards.length, 3, 'the hit card is in the reply');
+  assert.ok(!JSON.stringify(hit).includes(shoeDoc().holeCard));
+});
+
+test('deal timing: seat order then dealer, opening cards 0.5 s apart, later cards 1 s apart, clocks start after the cards show', async () => {
+  seed();
+  await sitAll(['p1', 'p2', 'p3']);
+  // p1 T 2 · p2 sits out · p3 9 5; dealer 9 up, 7 hole. p1 hits a 3; p3 stands; dealer draws.
+  stackShoe(['TS', '9H', '9C', '2D', '5S', '7S', '3H', '4C', '2C']);
+  await chips('p1', 5, T0);
+  await chips('p3', 5, T0);
+  await act('p1', 'confirm', {}, T0);
+  await act('p3', 'confirm', {}, T0);
+  await act('p2', 'tick', {}, table().deadline); // p2 never bet: the clock deals for p1 and p3
+  let t = table();
+  const at = t.lastDeal.at;
+  assert.deepEqual(t.lastDeal.cards.map((c) => [c.to, c.i, c.t]), [
+    ['0-0', 0, 0], ['2-0', 0, 500], ['d', 0, 1000], ['0-0', 1, 1500], ['2-0', 1, 2000], ['d', 1, 2500],
+  ], 'seat 1, seat 3, dealer, then again; only seats with a bet; 0.5 s apart');
+  assert.deepEqual(t.dealer.cards.length, 1, 'only the up card is public');
+  assert.equal(t.deadline, at + 2500 + BJ.CARD_SETTLE_MS + 15_000, "the first turn's 15 s starts after the deal shows");
+  const hitAt = at + 4000;
+  await move('p1', 'hit', 0, hitAt);
+  t = table();
+  assert.deepEqual([t.lastDeal.at, t.lastDeal.cards.map((c) => c.t)], [hitAt, [0]]);
+  await move('p1', 'stand', 0, hitAt + 2000);
+  const standAt = hitAt + 3000;
+  await move('p3', 'stand', 0, standAt);
+  t = table();
+  assert.equal(t.phase, 'results');
+  assert.deepEqual(t.lastDeal.cards.map((c) => [c.to, c.t]), t.dealer.cards.slice(1).map((_, k) => ['d', k * 1000]), 'hole card, then each draw, 1 s apart');
+  assert.equal(t.deadline, standAt + t.lastDeal.cards.at(-1).t + BJ.CARD_SETTLE_MS + 5000);
 });

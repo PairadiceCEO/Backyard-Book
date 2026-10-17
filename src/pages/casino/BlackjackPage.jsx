@@ -5,20 +5,22 @@
 // The dealer's face-down card is never in the doc: it shows as a card back until the server turns it
 // over. Moves carry the hand's index and actionSeq, so a double tap can't play a hand twice.
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChipRack, ChipStack } from '../../components/casino/Chips.jsx';
 import { Link } from 'react-router-dom';
 import PlayingCard from '../../components/casino/PlayingCard.jsx';
 import TableSeats from '../../components/casino/TableSeats.jsx';
 import { ErrorState, LoadingState, friendlyError } from '../../components/StatusViews.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useWalletDisplay } from '../../context/WalletDisplayContext.jsx';
-import { useCardReveal, useCasinoTable, useCountdown, useDeadlineTick, useHeartbeat } from '../../hooks/useCasinoTable.js';
+import { useCasinoTable, useCountdown, useDeadlineTick, useHeartbeat, useTableCall, useTimedReveal } from '../../hooks/useCasinoTable.js';
+import { useChipBetting } from '../../hooks/useChipBetting.js';
 import { newRequestId, tableAction } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
 import { CASINO_MAX_BET_DOLLARS } from '../../../shared/casino/constants.js';
 import { cardRank } from '../../../shared/casino/cards.js';
 import {
-  BLACKJACK_CARD_REVEAL_MS,
+  BLACKJACK_INITIAL_GAP_MS,
   canDouble,
   canSplit,
   handValue,
@@ -27,7 +29,7 @@ import {
 } from '../../../shared/casino/blackjack.js';
 
 const GAME = 'blackjack';
-const CHIPS = [1, 2, 5, 10];
+const NO_SPOTS = { bet: 0 };
 const NO_SEATS = [null, null, null, null, null];
 const OUTCOME_TEXT = { win: 'Win', lose: 'Lose', push: 'Push', bust: 'Bust', blackjack: 'Blackjack' };
 
@@ -94,8 +96,9 @@ export default function BlackjackPage() {
   const { authUser, profile } = useAuth();
   const myUid = authUser?.uid ?? null;
   const balanceCents = Number(profile?.balanceCents) || 0;
-  const { setHeldCents } = useWalletDisplay();
-  const { table, loading, error } = useCasinoTable(GAME);
+  const { setHeldCents, setPendingCents, reportBalance } = useWalletDisplay();
+  const { table, loading, error, accept } = useCasinoTable(GAME);
+  const call = useTableCall(GAME, accept, reportBalance);
 
   const seats = table?.seats ?? NO_SEATS;
   const mySeatIndex = seats.findIndex((seat) => seat && seat.uid === myUid);
@@ -117,10 +120,11 @@ export default function BlackjackPage() {
     tableAction(GAME, 'tick').catch(() => {});
   }, []);
 
-  // ---- cards dealt in the latest write turn over one by one ----
+  // ---- cards dealt in the latest write turn over at the server's times ----
+  // (opening cards 0.5 s apart, later cards 1 s apart; t is each card's offset from lastDeal.at)
   const lastDeal = table?.lastDeal ?? null;
   const dealList = lastDeal?.cards ?? [];
-  const shown = useCardReveal(lastDeal?.at ?? null, dealList.length, BLACKJACK_CARD_REVEAL_MS);
+  const shown = useTimedReveal(lastDeal?.at ?? null, dealList.map((c, k) => (Number.isFinite(c.t) ? c.t : k * BLACKJACK_INITIAL_GAP_MS)));
   const revealing = dealList.length > 0 && shown < dealList.length;
   // For each hand, how many of its cards are face up right now.
   const hiddenFrom = (to, cardCount) => {
@@ -143,17 +147,39 @@ export default function BlackjackPage() {
     return () => setHeldCents(null);
   }, [holdWallet, setHeldCents]);
 
+  // ---- my bet: chips stack on the spot at once; taps close together go as one request ----
+  const canBet = Boolean(mySeat) && phase === 'betting' && !mySeat.ready && !mySeat.leaving;
+  const serverSpots = mySeat ? { bet: mySeat.betCents || 0 } : NO_SPOTS;
+  const validate = useCallback(
+    (_spot, cents) => {
+      if (cents > CASINO_MAX_BET_DOLLARS * 100) return `The bet is up to $${CASINO_MAX_BET_DOLLARS}.`;
+      if (cents - (mySeat?.betCents || 0) > balanceCents) return `Not enough in your wallet (${formatMoney(balanceCents)}).`;
+      return '';
+    },
+    [mySeat?.betCents, balanceCents],
+  );
+  const sendChips = useCallback((_changes, totals) => call('bet', { amount: (totals.bet ?? 0) / 100, requestId: newRequestId() }), [call]);
+  const chips = useChipBetting({ spots: serverSpots, roundKey: table?.roundId ?? null, validate, send: sendChips, onPending: setPendingCents, enabled: canBet });
+  const myBetCents = chips.spots.bet ?? 0;
+
   async function run(kind, action, fields = {}) {
     setBusy(kind);
     setActionError('');
     try {
-      await tableAction(GAME, action, fields);
+      await call(action, fields);
     } catch (err) {
       // A STALE refusal means the move already happened (double tap) or the timer stood the hand.
       if (err.code !== 'STALE') setActionError(friendlyError(err.message));
     } finally {
       setBusy('');
     }
+  }
+
+  async function confirmBet() {
+    setBusy('confirm');
+    await chips.flushNow();
+    setBusy('');
+    run('confirm', 'confirm');
   }
 
   if (loading) return <LoadingState label="Opening the Blackjack table…" />;
@@ -186,7 +212,10 @@ export default function BlackjackPage() {
       const net = seat.result.netCents;
       return { text: net === 0 ? 'push' : signedMoney(net), tone: net > 0 ? 'win' : net < 0 ? 'lose' : '' };
     }
-    if (!seat.hands?.length) return { text: seat.betCents ? formatMoney(seat.betCents) : '—', tone: seat.betCents ? 'ready' : '' };
+    if (!seat.hands?.length) {
+      const cents = seat.uid === myUid ? myBetCents : seat.betCents;
+      return { text: cents ? `${formatMoney(cents)}${seat.ready ? ' ✓' : ''}` : '—', tone: seat.ready ? 'ready' : '' };
+    }
     const labels = seat.hands.map((h, j) => {
       const visible = h.cards.slice(0, hiddenFrom(`${i}-${j}`, h.cards.length));
       if (isBlackjack(visible, h.fromSplit)) return 'BJ';
@@ -273,29 +302,43 @@ export default function BlackjackPage() {
           ) : null}
 
           {phase === 'betting' && !mySeat.leaving ? (
-            mySeat.betCents ? (
-              <p className="bj-note">
-                Your bet: <strong>{formatMoney(mySeat.betCents)}</strong>. Cards come out when everyone has bet or the clock runs out.
+            <>
+              <button
+                type="button"
+                className={myBetCents ? 'bj-bet-spot has-bet' : 'bj-bet-spot'}
+                onClick={() => chips.place('bet', chip * 100)}
+                disabled={!canBet}
+                aria-label={`Your bet ${formatMoney(myBetCents)}. Tap to add a $${chip} chip.`}
+              >
+                <span className="bj-bet-label">{mySeat.ready ? 'Bet locked in' : 'Tap to bet'}</span>
+                <span className="spot-chips">
+                  <ChipStack cents={myBetCents} />
+                  <strong>{myBetCents ? formatMoney(myBetCents) : '—'}</strong>
+                </span>
+              </button>
+              <ChipRack
+                chip={chip}
+                onChip={setChip}
+                onUndo={chips.undo}
+                onClear={chips.clear}
+                canUndo={chips.canUndo}
+                disabled={!canBet}
+                extra={
+                  <button type="button" className="btn btn-primary" onClick={confirmBet} disabled={!canBet || !myBetCents || busy === 'confirm'}>
+                    {mySeat.ready ? 'Confirmed ✓' : busy === 'confirm' ? 'Confirming…' : `Deal me in ${myBetCents ? formatMoney(myBetCents) : ''}`.trim()}
+                  </button>
+                }
+              />
+              <p className="bj-note muted small" aria-live="polite">
+                {chips.error ? (
+                  <span className="error-text">{chips.error}</span>
+                ) : mySeat.ready ? (
+                  'Locked in. Cards come out when everyone confirms or the clock runs out.'
+                ) : (
+                  `Pick a chip and tap the spot; each tap adds a chip. Up to $${CASINO_MAX_BET_DOLLARS}.`
+                )}
               </p>
-            ) : (
-              <>
-                <div className="quick-bets" role="radiogroup" aria-label="Bet amount">
-                  {CHIPS.map((d) => (
-                    <button key={d} type="button" role="radio" aria-checked={chip === d} className={chip === d ? 'btn chip active' : 'btn chip'} onClick={() => setChip(d)}>
-                      ${d}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-primary bj-bet-btn"
-                  disabled={busy === 'bet' || chip * 100 > balanceCents}
-                  onClick={() => run('bet', 'bet', { amount: chip, requestId: newRequestId() })}
-                >
-                  {busy === 'bet' ? 'Betting…' : chip * 100 > balanceCents ? `Not enough for $${chip}` : `Bet $${chip}`}
-                </button>
-              </>
-            )
+            </>
           ) : null}
 
           {phase === 'insurance' && !revealing && mySeat.betCents > 0 ? (

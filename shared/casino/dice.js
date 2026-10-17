@@ -29,6 +29,12 @@ export function hasLineAction(bets) {
   return b.pass > 0 || b.dontPass > 0 || b.odds > 0;
 }
 
+// The most a spot can hold: $10, except Odds, which can be up to oddsMultiple × the Pass bet.
+export function spotLimitCents(variant, bets, kind) {
+  if (kind === 'odds') return cloneBets(bets).pass * variant.oddsMultiple;
+  return SPOT_MAX_CENTS;
+}
+
 export function spotAmount(bets, kind, number) {
   const b = cloneBets(bets);
   return kind === 'place' ? b.place[number] || 0 : b[kind] || 0;

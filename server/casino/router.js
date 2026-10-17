@@ -11,7 +11,7 @@ const SLOT_ACTIONS = {
 
 // Shared seat actions plus every game's own actions. Which ones a game accepts is checked per table.
 const TABLE_ACTIONS = new Set([
-  'sit', 'leave', 'heartbeat', 'tick', 'bet', 'removeBet', 'confirm', 'insurance', 'hit', 'stand', 'double', 'split', 'roll',
+  'sit', 'leave', 'heartbeat', 'tick', 'bet', 'bets', 'removeBet', 'confirm', 'insurance', 'hit', 'stand', 'double', 'split', 'roll',
 ]);
 
 export async function handleCasinoAction(caller, body, options = {}) {

@@ -1,7 +1,7 @@
 // Blackjack at the shared table.
 //
-//   Betting    no timer until the first bet, then 15 s; deals at once when every seated player has bet.
-//              One bet per seat per hand, $1–$10.
+//   Betting    no timer until the first bet, then 15 s; chips build each seat's bet ($1–$10) and
+//              Confirm locks it; deals at once when every seated player has confirmed.
 //   Deal       two cards each, seat 1 → 5, the dealer's second card face down. The hole card goes to
 //              private/shoe.holeCard; the public doc only says holeDown: true.
 //   Insurance  only when the dealer shows an Ace: 15 s; each seat with a bet insures 0 to half its bet
@@ -27,7 +27,9 @@ import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
 import { buildShoe, cardRank } from '../../shared/casino/cards.js';
 import { CASINO_SEATS, RESULTS_SECONDS, TURN_SECONDS, isValidCasinoBet } from '../../shared/casino/constants.js';
 import {
-  BLACKJACK_CARD_REVEAL_MS,
+  BLACKJACK_INITIAL_GAP_MS,
+  BLACKJACK_LATER_GAP_MS,
+  CARD_SETTLE_MS,
   BLACKJACK_DECKS,
   BLACKJACK_RESHUFFLE_AT,
   canDouble,
@@ -76,6 +78,7 @@ function createTable(now) {
 }
 
 function freshSeatRound(seat) {
+  seat.ready = false;
   seat.betCents = 0;
   seat.stakeCents = 0;
   seat.returnCents = 0;
@@ -103,9 +106,10 @@ function isIdle(state) {
   return state.phase === 'betting' && !anyBets(state);
 }
 
-function everyoneBet(state) {
+// Every seated player has locked in a bet (a seat that's leaving counts as done).
+function everyoneReady(state) {
   const seated = state.seats.filter(Boolean);
-  return seated.length > 0 && anyBets(state) && seated.every((seat) => seat.betCents > 0 || seat.leaving);
+  return seated.length > 0 && anyBets(state) && seated.every((seat) => (seat.betCents > 0 && seat.ready) || seat.leaving);
 }
 
 function playerSeats(state) {
@@ -135,18 +139,27 @@ async function draw(ctx) {
   return drawCard(shoe, ctx.randomInt);
 }
 
-// Cards dealt in one write are turned over one by one on the phones, in this order.
+// Cards dealt in one write turn over one by one on the phones: each card carries t, its offset in ms
+// from lastDeal.at (the server's time of the write). Opening cards are 0.5 s apart, later cards 1 s.
 function logDeal(ctx, to, index) {
   if (!ctx.dealLog) {
     ctx.dealLog = { at: ctx.now, cards: [] };
     ctx.state.lastDeal = ctx.dealLog;
   }
-  ctx.dealLog.cards.push({ to, i: index });
+  const list = ctx.dealLog.cards;
+  const initial = Boolean(ctx.openingDeal);
+  let t = 0;
+  if (list.length) {
+    const prev = list[list.length - 1];
+    t = prev.t + (initial && prev.opening ? BLACKJACK_INITIAL_GAP_MS : BLACKJACK_LATER_GAP_MS);
+  }
+  list.push(initial ? { to, i: index, t, opening: true } : { to, i: index, t });
 }
 
+// How long this write's cards take to show: decision clocks start after it, so nobody loses time.
 function revealPadMs(ctx) {
-  const count = ctx.dealLog?.cards.length ?? 0;
-  return count ? count * BLACKJACK_CARD_REVEAL_MS + 300 : 0;
+  const list = ctx.dealLog?.cards ?? [];
+  return list.length ? list[list.length - 1].t + CARD_SETTLE_MS : 0;
 }
 
 async function dealToHand(ctx, seatIndex, handIndex) {
@@ -207,6 +220,8 @@ async function deal(ctx) {
   state.reshuffled = reshuffled;
   state.turn = null;
 
+  // Seat 1 → 5, dealer; then the second card in the same order (the dealer's face down).
+  ctx.openingDeal = true;
   for (const i of players) await dealToHand(ctx, i, 0);
   state.dealer.cards.push(await draw(ctx));
   logDeal(ctx, 'd', 0);
@@ -214,6 +229,7 @@ async function deal(ctx) {
   shoe.holeCard = await draw(ctx); // face down: never in the public doc until it's turned over
   state.dealer.holeDown = true;
   logDeal(ctx, 'd', 1);
+  ctx.openingDeal = false;
 
   for (const i of players) {
     const hand = state.seats[i].hands[0];
@@ -304,6 +320,8 @@ async function advance(ctx) {
 
 async function dealerTurn(ctx) {
   const { state } = ctx;
+  const uids = state.seats.filter(Boolean).map((seat) => seat.uid);
+  await ctx.prefetch({ wallets: uids, presence: uids }); // payouts in one round trip
   await revealHole(ctx);
   const live = [];
   for (const i of playerSeats(state)) {
@@ -360,29 +378,55 @@ async function openNextRound(ctx) {
 
 // ---------- actions ----------
 
+// Chips build the bet: `bet` sets this hand's total ($0 clears it, up to $10); a change charges or
+// refunds the difference. `confirm` locks it in. The cards come out when every seated player has
+// confirmed, or 15 s after the first bet for whoever has a bet down.
 async function bet(ctx, body) {
   const index = requireSeat(ctx);
   const seat = ctx.state.seats[index];
-  if (!isValidCasinoBet(body.amount)) throw new HttpError(400, 'BAD_BET', 'Bets are whole dollars from $1 to $10.');
+  const amount = body.amount;
+  if (!(amount === 0 || isValidCasinoBet(amount))) throw new HttpError(400, 'BAD_BET', 'Bets are whole dollars from $1 to $10.');
   if (typeof body.requestId !== 'string' || !REQUEST_ID_PATTERN.test(body.requestId)) {
     throw new HttpError(400, 'BAD_REQUEST_ID', 'Missing or invalid requestId.');
   }
   if (seat.reqs?.includes(body.requestId)) return { duplicate: true };
   requirePhase(ctx, 'betting', 'Betting is closed for this hand. Bet again when the next one opens.');
   if (seat.leaving) throw new HttpError(409, 'LEAVING', "You're leaving this table.");
-  if (seat.betCents > 0) throw new HttpError(409, 'ALREADY_BET', 'One bet per hand.');
+  if (seat.ready) throw new HttpError(409, 'CONFIRMED', 'Your bet is locked in for this hand.');
+  const cents = amount * 100;
+  const diff = cents - seat.betCents;
   const id = `cbet_${ctx.caller.uid}_${body.requestId}`;
-  if (await ctx.ledgerExists(id)) return { duplicate: true };
-  const cents = body.amount * 100;
-  await requireFunds(ctx, seat, cents, 'that bet');
-
-  charge(ctx, seat, id, cents, `bet ${formatDollars(cents)}`);
+  if (diff > 0) {
+    if (await ctx.ledgerExists(id)) return { duplicate: true };
+    await requireFunds(ctx, seat, diff, 'that bet');
+    charge(ctx, seat, id, diff, `bet now ${formatDollars(cents)}`);
+  } else if (diff < 0) {
+    ctx.addMoney(seat.uid, {
+      id: `cref_blackjack_${ctx.state.roundId}_${seat.uid}_${body.requestId}`,
+      type: 'casino_refund',
+      amountCents: -diff,
+      roundId: ctx.state.roundId,
+      note: `Blackjack hand ${ctx.state.roundNo}: bet lowered to ${formatDollars(cents)}`,
+    });
+    seat.stakeCents += diff;
+  }
   seat.betCents = cents;
   seat.reqs = [...(seat.reqs ?? []), body.requestId].slice(-RECENT_REQUESTS);
-  if (!ctx.state.deadline) ctx.state.deadline = ctx.now + TURN_MS;
+  if (anyBets(ctx.state) && !ctx.state.deadline) ctx.state.deadline = ctx.now + TURN_MS;
   ctx.changed = true;
-  if (everyoneBet(ctx.state)) await deal(ctx);
   return { betCents: cents };
+}
+
+async function confirm(ctx) {
+  const index = requireSeat(ctx);
+  const seat = ctx.state.seats[index];
+  requirePhase(ctx, 'betting', 'Betting is closed for this hand.');
+  if (seat.ready) return { ready: true };
+  if (!(seat.betCents > 0)) throw new HttpError(409, 'NO_BET', 'Put a chip down before you confirm.');
+  seat.ready = true;
+  ctx.changed = true;
+  if (everyoneReady(ctx.state)) await deal(ctx);
+  return { ready: true, dealt: ctx.state.phase !== 'betting' };
 }
 
 async function insurance(ctx, body) {
@@ -521,11 +565,13 @@ async function onDeadline(ctx) {
 }
 
 async function afterSeatsChanged(ctx) {
-  if (ctx.state.phase === 'betting' && everyoneBet(ctx.state)) await deal(ctx);
+  if (ctx.state.phase === 'betting' && everyoneReady(ctx.state)) await deal(ctx);
 }
 
 export const blackjackEngine = {
   id: 'blackjack',
+  // Actions that can deal, draw or turn the hole card (the shoe is read with the table).
+  preloadShoe: (action) => ['confirm', 'insurance', 'hit', 'stand', 'double', 'split', 'leave'].includes(action),
   decks: BLACKJACK_DECKS,
   createTable,
   newSeat,
@@ -533,5 +579,5 @@ export const blackjackEngine = {
   isIdle,
   onDeadline,
   afterSeatsChanged,
-  actions: { bet, insurance, hit, stand, double, split },
+  actions: { bet, confirm, insurance, hit, stand, double, split },
 };

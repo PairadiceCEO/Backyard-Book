@@ -106,3 +106,15 @@ Bets settle by ESPN game id once ESPN marks the game final (custom games once th
 - **Shooter:** only the shooter can roll, and only with a line bet. Roll carries `rollSeq`, so a double tap rolls once and other players' bets never block it. The clock starts at the first bet after a come-out roll, or right after each roll while a Point is on; at zero the server rolls (or, on a come-out with no line bet, passes the dice). Seven-out: dice to the next seat clockwise.
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Build notes: `docs/CASINO_PROGRESS.md`.
+
+## Casino speed and chips (batch 5)
+
+- **Region:** `vercel.json` runs every function (sportsbook too) in `cle1` (Cleveland), the Vercel region closest to Firestore `nam5` (Iowa + Oklahoma). Hobby allows one region.
+- **Fewer round trips:** each casino action reads everything it's known to need in one `tx.getAll` (table, your profile + wallet, your presence, the shoe when it may deal, the bet's retry check), then commits: 2 round trips, 3 when a step pays other players (their wallets come in one batch). The profile is read once, inside the transaction (`disabled` checked there); the ID token is verified locally. The private shoe is only written when a card moved.
+- **Timing:** every `/api/casino` reply has a `Server-Timing` header (auth, read, read-more, commit, total), visible in the browser's developer tools → Network → the request → Timing, and one JSON log line per call in Vercel → Logs. `test/casino/bench.mjs` replays the calls against an in-memory Firestore with a modeled delay.
+- **Instant results:** replies carry the public table (never the shoe or the hole card) and your balance, so your own action shows before the live listener brings it back; the Roll reply carries the dice.
+- **Chips:** $1 white, $2 yellow, $5 red, $10 blue on every game. Pick a chip, tap a spot; each tap stacks a chip. Taps within 300 ms go as one request; a refused chip comes back off with the reason; the nav wallet counts chips on the felt right away. Undo takes back your last chip this round, Clear the rest. Blackjack bets are built from chips and locked in with "Deal me in".
+- **Slots:** tap Spin again while the reels spin to stop them on the result at once (it never starts or charges another spin).
+- **Card timing:** opening cards 0.5 s apart, every later card (hits, doubles, splits, the hole card, the dealer's draws, Baccarat third cards) 1 s; timed from the server's deal time so every phone shows the same card at the same moment; decision clocks start after the cards finish.
+- **Craps Odds:** up to 2× your Pass bet (above the $10 spot limit); the Odds spot shows the current maximum.
+- **Phone check tool:** `tools/phone-check/` (see its README).

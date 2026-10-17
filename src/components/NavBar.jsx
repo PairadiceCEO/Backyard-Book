@@ -47,8 +47,8 @@ function bottomClass({ isActive }) {
 
 export default function NavBar() {
   const { profile, isAdmin, signOut } = useAuth();
-  const { heldCents } = useWalletDisplay();
-  const shownCents = heldCents ?? profile?.balanceCents ?? 0;
+  const { displayCents } = useWalletDisplay();
+  const shownCents = displayCents(Number(profile?.balanceCents) || 0);
   const tabs = isAdmin ? [...TABS, ADMIN_TAB] : TABS;
 
   return (

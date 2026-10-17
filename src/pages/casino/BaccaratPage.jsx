@@ -3,6 +3,7 @@
 // (roads), then (when seated) your bets and buttons, just above the tab bar.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChipRack, ChipStack } from '../../components/casino/Chips.jsx';
 import { Link } from 'react-router-dom';
 import BaccaratScoreboard from '../../components/casino/BaccaratScoreboard.jsx';
 import PlayingCard from '../../components/casino/PlayingCard.jsx';
@@ -10,21 +11,21 @@ import TableSeats from '../../components/casino/TableSeats.jsx';
 import { ErrorState, LoadingState, friendlyError } from '../../components/StatusViews.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useWalletDisplay } from '../../context/WalletDisplayContext.jsx';
-import { useCardReveal, useCasinoTable, useCountdown, useDeadlineTick, useHeartbeat } from '../../hooks/useCasinoTable.js';
+import { useCasinoTable, useCountdown, useDeadlineTick, useHeartbeat, useTableCall, useTimedReveal } from '../../hooks/useCasinoTable.js';
+import { useChipBetting } from '../../hooks/useChipBetting.js';
 import { newRequestId, tableAction } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
 import { CASINO_MAX_BET_DOLLARS } from '../../../shared/casino/constants.js';
 import {
-  BACCARAT_CARD_REVEAL_MS,
   BACCARAT_ODDS,
   SPOT_LABELS,
   handTotal,
+  coupRevealTimes,
   revealOrder,
   totalBetCents,
 } from '../../../shared/casino/baccarat.js';
 
 const GAME = 'baccarat';
-const CHIPS = [1, 2, 5, 10];
 const SPOT_ORDER = ['player', 'tie', 'banker'];
 const NO_SEATS = [null, null, null, null, null];
 const NO_BETS = { player: 0, banker: 0, tie: 0 };
@@ -60,8 +61,9 @@ export default function BaccaratPage() {
   const { authUser, profile } = useAuth();
   const myUid = authUser?.uid ?? null;
   const balanceCents = Number(profile?.balanceCents) || 0;
-  const { setHeldCents } = useWalletDisplay();
-  const { table, loading, error } = useCasinoTable(GAME);
+  const { setHeldCents, setPendingCents, reportBalance } = useWalletDisplay();
+  const { table, loading, error, accept } = useCasinoTable(GAME);
+  const call = useTableCall(GAME, accept, reportBalance);
 
   const seats = table?.seats ?? NO_SEATS;
   const mySeatIndex = seats.findIndex((seat) => seat && seat.uid === myUid);
@@ -77,7 +79,6 @@ export default function BaccaratPage() {
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(''); // 'sit' | 'leave' | 'confirm' while that call is in flight
   const [chip, setChip] = useState(1);
-  const [note, setNote] = useState('');
 
   // Arriving at the table: one tick applies anything overdue (an abandoned table waits for the first
   // visitor) and gives this phone the server's clock. Runs once per visit.
@@ -85,10 +86,10 @@ export default function BaccaratPage() {
     tableAction(GAME, 'tick').catch(() => {});
   }, []);
 
-  // ---- the deal, turned over one card at a time ----
+  // ---- the deal: cards turn over at the server's times (0.5 s apart, 1 s before a third card) ----
   const coup = phase === 'results' ? table?.coup ?? null : null;
   const order = coup ? revealOrder(coup.player, coup.banker) : [];
-  const shown = useCardReveal(coup?.dealtAt ?? null, order.length, BACCARAT_CARD_REVEAL_MS);
+  const shown = useTimedReveal(coup?.dealtAt ?? null, coup ? coupRevealTimes(coup.player, coup.banker) : []);
   const revealing = Boolean(coup) && shown < order.length;
   const visible = { player: 0, banker: 0 };
   order.slice(0, shown).forEach((o) => {
@@ -110,96 +111,49 @@ export default function BaccaratPage() {
     return () => setHeldCents(null);
   }, [holdWallet, setHeldCents]);
 
-  // ---- my bets: shown locally at once, sent one request at a time (the latest total wins) ----
+  // ---- my chips: on the felt the moment I tap; taps close together go as one request ----
   const serverBets = mySeat?.bets ?? NO_BETS;
-  const sp = serverBets.player;
-  const sb = serverBets.banker;
-  const st = serverBets.tie;
-  const [desired, setDesired] = useState(null);
-  const [sending, setSending] = useState(false);
-  const queuedRef = useRef(null);
-  const inFlightRef = useRef(false);
-
-  useEffect(() => {
-    setDesired(null);
-    queuedRef.current = null;
-    setNote('');
-  }, [roundId]);
-
-  const sendBets = useCallback(async function send() {
-    if (inFlightRef.current || !queuedRef.current) return;
-    const target = queuedRef.current;
-    queuedRef.current = null;
-    inFlightRef.current = true;
-    setSending(true);
-    try {
-      await tableAction(GAME, 'bet', {
-        player: target.player / 100,
-        banker: target.banker / 100,
-        tie: target.tie / 100,
-        requestId: newRequestId(),
-      });
-    } catch (err) {
-      queuedRef.current = null;
-      setDesired(null);
-      setActionError(friendlyError(err.message));
-    } finally {
-      inFlightRef.current = false;
-      setSending(false);
-    }
-    if (queuedRef.current) send();
-  }, []);
-
-  // Once the table shows what was sent, drop the local copy.
-  useEffect(() => {
-    if (!desired || sending || queuedRef.current) return;
-    if (desired.player === sp && desired.banker === sb && desired.tie === st) setDesired(null);
-  }, [desired, sending, sp, sb, st]);
-
-  const myBets = desired ?? serverBets;
-  const myTotal = totalBetCents(myBets);
   const canBet = Boolean(mySeat) && phase === 'betting' && !mySeat.ready && !mySeat.leaving;
-  const pending = sending || desired !== null;
-
-  function changeBets(next) {
-    const extra = totalBetCents(next) - totalBetCents(serverBets);
-    if (extra > balanceCents) {
-      setActionError(`Your wallet has ${formatMoney(balanceCents)}. Add money in the Shop.`);
-      return;
-    }
-    setActionError('');
-    setDesired(next);
-    queuedRef.current = next;
-    sendBets();
-  }
-
-  function placeChip(spot) {
-    if (!canBet) return;
-    const nextAmount = Math.min(MAX_SPOT_CENTS, myBets[spot] + chip * 100);
-    if (nextAmount === myBets[spot]) {
-      setNote(`${SPOT_LABELS[spot]} is at the $${CASINO_MAX_BET_DOLLARS} limit.`);
-      return;
-    }
-    setNote(nextAmount < myBets[spot] + chip * 100 ? `${SPOT_LABELS[spot]} capped at $${CASINO_MAX_BET_DOLLARS}.` : '');
-    changeBets({ ...myBets, [spot]: nextAmount });
-  }
-
-  function clearBets() {
-    if (!canBet || myTotal === 0) return;
-    setNote('');
-    changeBets({ ...NO_BETS });
-  }
+  const validate = useCallback(
+    (spot, cents, after) => {
+      if (cents > MAX_SPOT_CENTS) return `${SPOT_LABELS[spot]} holds up to $${CASINO_MAX_BET_DOLLARS}.`;
+      const extra = totalBetCents(after) - totalBetCents(serverBets);
+      if (extra > balanceCents) return `Not enough in your wallet (${formatMoney(balanceCents)}).`;
+      return '';
+    },
+    [serverBets, balanceCents],
+  );
+  const sendChips = useCallback(
+    (_changes, totals) =>
+      call('bet', {
+        player: (totals.player ?? 0) / 100,
+        banker: (totals.banker ?? 0) / 100,
+        tie: (totals.tie ?? 0) / 100,
+        requestId: newRequestId(),
+      }),
+    [call],
+  );
+  const chips = useChipBetting({ spots: serverBets, roundKey: roundId, validate, send: sendChips, onPending: setPendingCents, enabled: canBet });
+  const myBets = { ...NO_BETS, ...chips.spots };
+  const myTotal = totalBetCents(myBets);
 
   async function run(kind, action, fields) {
     setBusy(kind);
     setActionError('');
     try {
-      await tableAction(GAME, action, fields);
+      await call(action, fields);
     } catch (err) {
       setActionError(friendlyError(err.message));
     } finally {
       setBusy('');
     }
+  }
+
+  async function confirmBets() {
+    setBusy('confirm');
+    await chips.flushNow(); // every chip confirmed first
+    setBusy('');
+    run('confirm', 'confirm');
   }
 
   // ---- what each seat tile says ----
@@ -284,56 +238,51 @@ export default function BaccaratPage() {
                 key={spot}
                 type="button"
                 className={['bac-spot', spot, winner === spot ? 'won' : '', myBets[spot] ? 'has-bet' : ''].filter(Boolean).join(' ')}
-                onClick={() => placeChip(spot)}
+                onClick={() => chips.place(spot, chip * 100)}
                 disabled={!canBet}
-                aria-label={`${SPOT_LABELS[spot]}, pays ${BACCARAT_ODDS[spot].label}, your bet ${formatMoney(myBets[spot])}. Tap to add $${chip}.`}
+                aria-label={`${SPOT_LABELS[spot]}, pays ${BACCARAT_ODDS[spot].label}, your bet ${formatMoney(myBets[spot])}. Tap to add a $${chip} chip.`}
               >
                 <span className="bac-spot-name">{SPOT_LABELS[spot]}</span>
                 <span className="bac-spot-odds">{BACCARAT_ODDS[spot].label}</span>
-                <span className="bac-spot-bet">{myBets[spot] ? formatMoney(myBets[spot]) : '—'}</span>
+                <span className="spot-chips">
+                  <ChipStack cents={myBets[spot]} />
+                  <span className="bac-spot-bet">{myBets[spot] ? formatMoney(myBets[spot]) : '—'}</span>
+                </span>
               </button>
             ))}
           </div>
 
-          <div className="quick-bets" role="radiogroup" aria-label="Chip">
-            {CHIPS.map((d) => (
+          <ChipRack
+            chip={chip}
+            onChip={setChip}
+            onUndo={chips.undo}
+            onClear={chips.clear}
+            canUndo={chips.canUndo}
+            disabled={!canBet}
+            extra={
               <button
-                key={d}
                 type="button"
-                role="radio"
-                aria-checked={chip === d}
-                className={chip === d ? 'btn chip active' : 'btn chip'}
-                onClick={() => setChip(d)}
-                disabled={!canBet}
+                className="btn btn-primary"
+                onClick={confirmBets}
+                disabled={!canBet || myTotal === 0 || busy === 'confirm'}
               >
-                ${d}
+                {mySeat.ready ? 'Confirmed ✓' : busy === 'confirm' ? 'Confirming…' : `Confirm ${myTotal ? formatMoney(myTotal) : ''}`.trim()}
               </button>
-            ))}
-          </div>
-
-          <div className="bac-actions">
-            <button type="button" className="btn" onClick={clearBets} disabled={!canBet || myTotal === 0}>
-              Clear
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => run('confirm', 'confirm')}
-              disabled={!canBet || myTotal === 0 || pending || busy === 'confirm'}
-            >
-              {mySeat.ready ? 'Confirmed ✓' : busy === 'confirm' ? 'Confirming…' : `Confirm ${myTotal ? formatMoney(myTotal) : ''}`.trim()}
-            </button>
-          </div>
+            }
+          />
 
           <p className="muted small bac-help" aria-live="polite">
-            {note ||
-              (mySeat.leaving
-                ? 'You are leaving: your bets play out, then the seat frees.'
-                : mySeat.ready && phase === 'betting'
-                  ? 'Confirmed. The cards come out when everyone confirms or the clock runs out.'
-                  : phase === 'betting'
-                    ? `Pick a chip, tap Player, Banker or Tie. $1–$${CASINO_MAX_BET_DOLLARS} per spot.`
-                    : 'Bet again when the next hand opens.')}
+            {chips.error ? (
+              <span className="error-text">{chips.error}</span>
+            ) : mySeat.leaving ? (
+              'You are leaving: your bets play out, then the seat frees.'
+            ) : mySeat.ready && phase === 'betting' ? (
+              'Confirmed. The cards come out when everyone confirms or the clock runs out.'
+            ) : phase === 'betting' ? (
+              `Pick a chip and tap Player, Banker or Tie; each tap adds a chip. Up to $${CASINO_MAX_BET_DOLLARS} a spot.`
+            ) : (
+              'Bet again when the next hand opens.'
+            )}
           </p>
 
           <button type="button" className="btn btn-ghost small leave-btn" onClick={() => run('leave', 'leave')} disabled={busy === 'leave' || mySeat.leaving}>

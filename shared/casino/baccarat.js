@@ -8,7 +8,6 @@ export const BACCARAT_DECKS = 8;
 export const BACCARAT_SHOE_CARDS = 52 * BACCARAT_DECKS; // 416
 export const BACCARAT_RESHUFFLE_AT = 354; // reshuffle before a round once 85% of the shoe is dealt
 export const BACCARAT_MAX_SHOE_RESULTS = 200; // a shoe is ~80 hands; this is only a safety cap
-export const BACCARAT_CARD_REVEAL_MS = 700; // phones turn the cards over one by one, this far apart
 
 export const BACCARAT_SPOTS = ['player', 'banker', 'tie'];
 
@@ -132,7 +131,24 @@ export function emptyBets() {
   return { player: 0, banker: 0, tie: 0 };
 }
 
-// How long the phones take to turn every card over, so Results can stay up 5 s after the last card.
-export function revealMs(cardCount) {
-  return Math.max(0, cardCount - 1) * BACCARAT_CARD_REVEAL_MS + 600;
+// When each card of a coup turns over, in ms from the deal (in revealOrder): the four opening cards
+// 0.5 s apart, then 1 s before each third card. Every phone uses the server's deal time.
+export const BACCARAT_OPENING_GAP_MS = 500;
+export const BACCARAT_THIRD_CARD_GAP_MS = 1000;
+export const BACCARAT_SETTLE_MS = 700;
+
+export function coupRevealTimes(player = [], banker = []) {
+  const order = revealOrder(player, banker);
+  const times = [];
+  order.forEach((card, k) => {
+    if (k === 0) times.push(0);
+    else times.push(times[k - 1] + (card.index < 2 ? BACCARAT_OPENING_GAP_MS : BACCARAT_THIRD_CARD_GAP_MS));
+  });
+  return times;
+}
+
+// How long the phones take to show the whole coup (Results stay up 5 s after this).
+export function coupRevealMs(player = [], banker = []) {
+  const times = coupRevealTimes(player, banker);
+  return times.length ? times[times.length - 1] + BACCARAT_SETTLE_MS : 0;
 }

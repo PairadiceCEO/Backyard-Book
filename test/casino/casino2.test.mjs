@@ -226,7 +226,8 @@ test('a full round: bets start a 15 s clock, both confirm → dealt at once, pai
   const t = table();
   assert.equal(t.phase, 'results');
   assert.deepEqual([t.coup.player, t.coup.banker, t.coup.playerTotal, t.coup.bankerTotal, t.coup.winner], [['4S0', '3D0'], ['2H0', '3C0', '3S1'], 7, 8, 'banker']);
-  assert.equal(t.deadline, T0 + 6000 + B.revealMs(5) + 5000, 'results stay 5 s after the last card turns');
+  assert.equal(t.deadline, T0 + 6000 + B.coupRevealMs(t.coup.player, t.coup.banker) + 5000, 'results stay 5 s after the last card turns');
+  assert.deepEqual(B.coupRevealTimes(t.coup.player, t.coup.banker), [0, 500, 1000, 1500, 2500], 'opening cards 0.5 s apart, 1 s before the third card');
   assert.equal(wallet('p1'), 9500, 'Player lost');
   assert.equal(wallet('p2'), 9600 + 585, '$3 Banker returns $5.85');
   assert.deepEqual(t.seats[2].result, { stakeCents: 400, returnCents: 585, netCents: 185 });
@@ -496,4 +497,12 @@ test('tick and heartbeat on a table nobody has opened write nothing', async () =
   await err(act('p1', 'confirm'), 'NOT_SEATED');
   assert.equal(fake.counts.writes, 0);
   assert.equal(table(), undefined);
+});
+
+test('coup timing: four opening cards 0.5 s apart, 1 s before each third card', () => {
+  assert.deepEqual(B.coupRevealTimes(['a', 'b'], ['c', 'd']), [0, 500, 1000, 1500]);
+  assert.deepEqual(B.coupRevealTimes(['a', 'b', 'e'], ['c', 'd']), [0, 500, 1000, 1500, 2500]);
+  assert.deepEqual(B.coupRevealTimes(['a', 'b', 'e'], ['c', 'd', 'f']), [0, 500, 1000, 1500, 2500, 3500]);
+  assert.deepEqual(B.coupRevealTimes(['a', 'b'], ['c', 'd', 'f']), [0, 500, 1000, 1500, 2500], 'Player stands, Banker draws');
+  assert.equal(B.coupRevealMs(['a', 'b'], ['c', 'd']), 1500 + B.BACCARAT_SETTLE_MS);
 });
