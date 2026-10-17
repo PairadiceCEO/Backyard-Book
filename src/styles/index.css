@@ -2971,3 +2971,272 @@ body.no-scroll {
     margin-left: -20px;
   }
 }
+
+/* ===================== Craps / Crapless ===================== */
+
+.craps-status {
+  justify-content: flex-start;
+}
+
+.craps-status-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.puck {
+  flex: 0 0 auto;
+  min-width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 0.8rem;
+  background: #1b1b1b;
+  color: #ddd;
+  border: 3px solid #555;
+  text-align: center;
+  line-height: 1.05;
+  padding: 0 0.2rem;
+}
+
+.puck.on {
+  background: #fbfbf8;
+  color: #111;
+  border-color: var(--gold);
+}
+
+.craps-dice-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  background: radial-gradient(ellipse at center, #1d5a3a 0%, #134029 70%, #0f3322 100%);
+  border-color: #24694a;
+}
+
+.craps-dice {
+  display: flex;
+  gap: 1rem;
+}
+
+.die {
+  width: 58px;
+  height: 58px;
+  border-radius: 12px;
+  background: #fbfbf8;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), inset 0 -3px 0 rgba(0, 0, 0, 0.12);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  padding: 8px;
+  gap: 2px;
+}
+
+.pip {
+  border-radius: 999px;
+  margin: 2px;
+}
+
+.pip.on {
+  background: #b3121a;
+}
+
+.die.rolling {
+  animation: die-tumble 0.35s linear infinite;
+}
+
+@keyframes die-tumble {
+  0% {
+    transform: rotate(0deg) translateY(0);
+  }
+  50% {
+    transform: rotate(180deg) translateY(-6px);
+  }
+  100% {
+    transform: rotate(360deg) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .die.rolling {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+.craps-roll-text {
+  font-weight: 800;
+  font-size: 1.15rem;
+  min-height: 1.5rem;
+}
+
+.craps-roll-btn {
+  width: 100%;
+  min-height: 56px;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.craps-rolls {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.roll-chip {
+  min-width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.roll-chip.seven {
+  background: rgba(255, 107, 107, 0.2);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.roll-chip.made {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.craps-felt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: linear-gradient(180deg, #17553a 0%, #10402b 100%);
+  border-color: #24694a;
+  transition: opacity 0.2s;
+}
+
+.craps-felt.dim {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.craps-chips {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.5fr);
+  gap: 0.35rem;
+}
+
+.craps-chips .btn {
+  padding-left: 0.2rem;
+  padding-right: 0.2rem;
+  font-size: 0.9rem;
+}
+
+.btn.chip.take-down.active {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.craps-place {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.craps-place.n10 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.craps-spot {
+  min-height: 60px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.18);
+  color: #f3f3ee;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.05rem;
+  padding: 0.3rem 0.2rem;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.craps-spot .spot-name {
+  font-weight: 900;
+  font-size: 1.05rem;
+}
+
+.craps-spot .spot-odds {
+  font-size: 0.66rem;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+}
+
+.craps-spot .spot-bet {
+  font-weight: 800;
+  font-size: 0.85rem;
+  min-height: 1.1em;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.craps-spot.has-bet {
+  border-color: var(--gold);
+  background: rgba(245, 196, 81, 0.1);
+}
+
+.craps-spot.blocked {
+  opacity: 0.5;
+}
+
+.craps-spot.is-point {
+  box-shadow: inset 0 0 0 2px #fbfbf8;
+}
+
+.craps-spot.band {
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 52px;
+  padding: 0.4rem 0.75rem;
+  text-align: left;
+}
+
+.craps-spot.band .spot-odds {
+  flex: 1;
+  text-align: left;
+}
+
+.craps-spot.band.pass {
+  border-color: #fbfbf8;
+}
+
+.craps-spot.band.dont {
+  border-style: dashed;
+}
+
+.craps-spot.band.odds {
+  border-color: var(--gold);
+}
+
+@media (max-width: 360px) {
+  .craps-place.n10 .craps-spot .spot-odds {
+    font-size: 0.58rem;
+  }
+  .die {
+    width: 52px;
+    height: 52px;
+  }
+}

@@ -97,3 +97,12 @@ Bets settle by ESPN game id once ESPN marks the game final (custom games once th
 - **Timers:** betting closes 15 s after the first bet (or at once when every seated player has bet); 15 s per hand, then it stands; results stay 5 s after the last card turns over.
 - **Double taps:** Hit / Stand / Double / Split send the hand's index and its `actionSeq`; the server refuses a move only if that hand has already moved on, so another player's action in between never blocks you.
 - **Hole card:** dealt into `casinoTables/blackjack/private/shoe` (`holeCard`); the public doc only has `holeDown: true` until the dealer turns it over.
+
+## Casino phase 4: Craps and Crapless Craps
+
+- No console step (same rules). Casino → **Craps** or **Crapless Craps**: 5 seats each, separate tables.
+- **One engine, two games:** `shared/casino/dice.js` settles every roll; `shared/casino/diceVariants.js` is the only place the two games differ (come-out winners/losers, Don't Pass, point numbers, Odds and Place payouts). Crapless Odds on 2/12 pay 5:1.
+- **Bets:** pick a chip, tap a spot; "Take down" + tap takes a bet back (Pass / Don't Pass stay up once a Point is set). $1–$10 a bet, up to $10 a spot. Place bets work only while a Point is on and stay up after a win; Field is one roll.
+- **Shooter:** only the shooter can roll, and only with a line bet. Roll carries `rollSeq`, so a double tap rolls once and other players' bets never block it. The clock starts at the first bet after a come-out roll, or right after each roll while a Point is on; at zero the server rolls (or, on a come-out with no line bet, passes the dice). Seven-out: dice to the next seat clockwise.
+- **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
+- **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Build notes: `docs/CASINO_PROGRESS.md`.

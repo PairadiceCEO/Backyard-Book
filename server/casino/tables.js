@@ -14,12 +14,15 @@ import { randomInt as defaultRandomInt } from './rng.js';
 import { requireSeat, runTableAction } from './tableRunner.js';
 import { baccaratEngine } from './baccaratTable.js';
 import { blackjackEngine } from './blackjackTable.js';
+import { craplessEngine, crapsEngine } from './crapsTable.js';
 import { freeGoneSeats, seatIsStale } from './seats.js';
 import { CASINO_SEATS, casinoGame } from '../../shared/casino/constants.js';
 
 const ENGINES = {
   baccarat: baccaratEngine,
   blackjack: blackjackEngine,
+  craps: crapsEngine,
+  crapless: craplessEngine,
 };
 
 export function tableEngine(gameId) {
@@ -28,7 +31,7 @@ export function tableEngine(gameId) {
   if (game?.kind === 'table') {
     throw new HttpError(400, 'TABLE_NOT_OPEN', `${game.name} isn't open yet.${game.opensIn ? ` It opens in casino phase ${game.opensIn}.` : ''}`);
   }
-  throw new HttpError(400, 'BAD_GAME', 'Pick a table: "baccarat" or "blackjack".');
+  throw new HttpError(400, 'BAD_GAME', 'Pick a table: "blackjack", "baccarat", "craps" or "crapless".');
 }
 
 function displayName(caller) {
@@ -65,9 +68,11 @@ async function sit(ctx, body, engine) {
     if (index === -1) throw new HttpError(409, 'TABLE_FULL', 'All 5 seats are taken. You can still watch.');
   }
 
+  if (seats[index]) await engine.beforeFree?.(ctx, index); // taking over a gone player's seat
   seats[index] = engine.newSeat({ uid: ctx.caller.uid, name: displayName(ctx.caller), sitAt: ctx.now }, ctx.state);
   ctx.changed = true;
   await ctx.markPresent(ctx.caller.uid, { force: true });
+  await engine.afterSeatsChanged?.(ctx);
   return { seat: index };
 }
 
@@ -83,6 +88,7 @@ async function leave(ctx, _body, engine) {
     }
     return { left: false, leaving: true };
   }
+  await engine.beforeFree?.(ctx, index);
   ctx.state.seats[index] = null;
   ctx.changed = true;
   await engine.afterSeatsChanged?.(ctx);
