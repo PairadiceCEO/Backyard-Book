@@ -44,7 +44,7 @@ Spec summary:
   (Standard casino pays are 7:1 / 9:1 — mention to Will.)
 
 ### Plan / checklist
-- [ ] A1 Server multi-seat: tableRunner `mySeats` + `requireSeat(ctx, body)`; tables.js sit (multi for
+- [x] A1 Server multi-seat: tableRunner `mySeats` + `requireSeat(ctx, body)`; tables.js sit (multi for
       bj/baccarat, one for craps with message) / leave(seat | all) / heartbeat; blackjack + baccarat use
       the seat; ledger ids with seat
 - [ ] A2 Shared dice rules: limits, hard ways, Come, Come Odds, Don't Pass Odds; crapsTable uses them
@@ -54,7 +54,7 @@ Spec summary:
 - [ ] A5 Full suite, build, lint, interact/dealcheck, phone check, merge, report
 
 ## Next
-A1.
+A2 (A1 done: server multi-seat; new multi-seat tests still to write in A3).
 
 ## Open questions
 - Waiting for Will to approve the B/C plan.

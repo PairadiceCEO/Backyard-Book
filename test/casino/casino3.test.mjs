@@ -250,7 +250,7 @@ test('dealer shows an Ace without blackjack: insurance lost, naturals paid 3:2 r
   assert.equal(t.seats[0].insurance, 0, 'undecided = declined');
   assert.equal(handOf('p1').outcome, 'blackjack');
   assert.equal(wallet('p1'), 10000 - 500 + 1250, '$5 natural returned $12.50 before anyone played');
-  assert.ok(ledger().some((e) => e.id.endsWith('_p1_natural') && e.amountCents === 1250));
+  assert.ok(ledger().some((e) => e.id.endsWith('_p1_s0_natural') && e.amountCents === 1250));
   assert.equal(wallet('p2'), 10000 - 200 - 100, 'insurance lost');
   assert.deepEqual(t.turn, { seat: 1, hand: 0 }, 'the natural is skipped');
   assert.ok(t.dealer.holeDown, 'still face down');

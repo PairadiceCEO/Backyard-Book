@@ -241,7 +241,7 @@ export function makeDiceEngine(variantId) {
   }
 
   async function bets(ctx, body) {
-    const index = requireSeat(ctx);
+    const index = requireSeat(ctx, body);
     const changes = body.changes;
     if (!Array.isArray(changes) || changes.length === 0 || changes.length > CHANGE_LIMIT) {
       throw new HttpError(400, 'BAD_BET', `Send 1–${CHANGE_LIMIT} chip changes.`);
@@ -251,7 +251,7 @@ export function makeDiceEngine(variantId) {
 
   // One bet { kind, number?, amount (dollars), requestId }: the same as a single chip.
   async function bet(ctx, body) {
-    const index = requireSeat(ctx);
+    const index = requireSeat(ctx, body);
     const { kind, number } = parseKind(body);
     if (!isValidCasinoBet(body.amount)) throw new HttpError(400, 'BAD_BET', 'Bets are whole dollars from $1 to $10.');
     const result = await placeChips(ctx, index, [{ kind, number, cents: body.amount * 100 }], body.requestId);
@@ -259,7 +259,7 @@ export function makeDiceEngine(variantId) {
   }
 
   async function removeBet(ctx, body) {
-    const index = requireSeat(ctx);
+    const index = requireSeat(ctx, body);
     const { state } = ctx;
     const seat = state.seats[index];
     const kind = body.kind;
@@ -280,7 +280,7 @@ export function makeDiceEngine(variantId) {
   }
 
   async function roll(ctx, body) {
-    const index = requireSeat(ctx);
+    const index = requireSeat(ctx, body);
     const { state } = ctx;
     if (!Number.isInteger(body.rollSeq)) throw new HttpError(400, 'BAD_ROLL', 'A roll needs the table’s rollSeq.');
     // The double-tap guard: only "a roll already happened" refuses it. Bets by other seats don't.
