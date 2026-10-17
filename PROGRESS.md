@@ -52,8 +52,11 @@ Spec summary:
 - [x] A3 Tests: casino2/3/4 updated; new test/casino/casino5.test.mjs (16 tests; suite now 87). Mutation-
       checked (hard ways on come-out, Come Odds on come-out, DP Odds ratio, $60 total, easy way, seat in
       payout id, Odds capped by $30 → each fails a test)
-- [ ] A4 Phones: Blackjack/Baccarat seat panels (tabs per my seat, own chips, insurance, moves, leave),
-      leave-all on page exit, Craps felt (Come, Come bets on numbers, Hard ways, DP Odds, $60 meter)
+- [x] A4 Phones: Blackjack/Baccarat seat panels (tabs per my seat, own chips, insurance, moves, leave),
+      leave-all on page exit (useLeaveOnExit, survives the Craps↔Crapless page switch), Craps felt (Come,
+      Come bets on numbers + Odds, Hard ways, DP Odds, $60 meter). Harness: two-seat + craps scenarios,
+      interact.mjs "leaving the page sends one leave-all; opening it never does". dice.js "no numbers"
+      test fixed (dollarsText moved to constants.js).
 - [ ] A5 Full suite, build, lint, interact/dealcheck, phone check, merge, report
 
 ## Next

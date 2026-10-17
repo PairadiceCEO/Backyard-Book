@@ -8,7 +8,7 @@
 //   comeOn { [n]: { bet, odds } }   Come bets that moved to their number, with their Odds
 //   place { [n] }, hard { [n] }, field
 
-import { winningsCents } from './constants.js';
+import { dollarsText, winningsCents } from './constants.js';
 
 export const BET_KINDS = ['pass', 'dontPass', 'odds', 'dontOdds', 'come', 'comeOdds', 'place', 'hard', 'field'];
 export const NUMBERED_KINDS = ['place', 'hard', 'comeOdds'];
@@ -107,7 +107,7 @@ export function spotLimitCents(variant, bets, kind, number) {
   return variant.limits.spot;
 }
 
-const dollars = (cents) => `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`;
+const dollars = dollarsText;
 
 // Why `bets` (after a change) break a limit, or '' if they don't: each spot, each Odds (2× its line
 // bet), and the $60 total. Used by the server (refusals) and the phone (refusing a chip at once).
@@ -215,7 +215,7 @@ export function settleRoll(variant, point, bets, total, dice = null) {
   let profitCents = 0;
   let lostCents = 0;
   const pointOn = point !== null && point !== undefined;
-  const hardRoll = Array.isArray(dice) && dice.length === 2 && dice[0] === dice[1];
+  const hardRoll = Array.isArray(dice) && dice[0] !== undefined && dice[0] === dice[1];
 
   const payOff = (bet, stake, ratio, number, extra = {}) => {
     const w = win(stake, ratio);
