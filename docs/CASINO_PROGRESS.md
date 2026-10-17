@@ -2,7 +2,8 @@
 
 Plan: "Backyard Book — Casino Plan" (Claude Docs). Work order: phase 1 slots → 2 tables + Baccarat →
 roads → 3 Blackjack → 4 Craps + Crapless. Finished work goes to `main`; work in progress lives on
-the `casino-phase4` branch until it's tested, then it's merged.
+a branch until it's tested, then it's squash-merged. All four casino phases are built; next steps
+come from Will's live testing.
 
 ## Status
 
@@ -12,15 +13,15 @@ the `casino-phase4` branch until it's tested, then it's merged.
 | Phase 2: shared tables (seats, presence, deadlines/tick, shoe) + Baccarat | done, tested live | 2daba6d |
 | Baccarat scoreboard (Bead Plate, Big Road, derived roads) | done, tested live | 0d407aa |
 | Phase 3: Blackjack | done, tested live | 7d20181 |
-| Phase 4: Craps + Crapless | in progress (branch `casino-phase4`) | — |
+| Phase 4: Craps + Crapless | done, on main — waiting for Will's live test | (see git log) |
 
 ### Phase 4 checklist
 
 - [x] Branch, this file, casino server tests moved into `test/casino/` (`npm run test:casino`)
 - [x] `shared/casino/diceVariants.js` (the only place Craps and Crapless differ) + `shared/casino/dice.js` (pure roll/settle) + `test/dice.test.js`
 - [x] `server/casino/crapsTable.js` (one engine, two variants) wired in `server/casino/tables.js`; `test/casino/casino4.test.mjs`
-- [ ] Phone UI `src/pages/casino/CrapsPage.jsx`, lobby labels, CSS; phone check at 320/375/414
-- [ ] Full regression, README section, merge to `main`, push, report to Will
+- [x] Phone UI `src/pages/casino/CrapsPage.jsx`, lobby labels, CSS; phone check at 320/375/414
+- [x] Full regression, README section, merge to `main`, push, report to Will
 
 ## Phase 4 rules being built (from the approved plan)
 
