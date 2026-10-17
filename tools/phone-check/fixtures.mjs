@@ -92,6 +92,11 @@ export const bets = [
       leg({ gameId: '403', marketType: 'moneyline', selection: 'away', label: 'Panthers ML', gameLabel: 'Panthers @ Eagles', americanOdds: 120, result: 'loss', scoreText: 'Panthers 27 @ Eagles 30 · Final/OT' }),
       leg({ gameId: '401', marketType: 'total', selection: 'under', line: 42.5, label: 'Under 42.5' }),
     ] },
+  { id: 'b7', uid: 'u1', username: 'mike', type: 'parlay', status: 'cashed_out', stakeCents: 1000, potentialPayoutCents: 6084, payoutCents: 2210, cashoutCents: 2210, combinedAmerican: 508, placedAt: iso(now - 5 * H), settledAt: iso(now - 3 * H), cashedOutAt: iso(now - 3 * H), settledBy: 'cashout', version: 1,
+    legs: [
+      leg({ gameId: '403', marketType: 'moneyline', selection: 'home', label: 'Eagles ML', gameLabel: 'Panthers @ Eagles', americanOdds: -150 }),
+      leg({ gameId: '402', marketType: 'spread', selection: 'away', line: 6.5, label: 'Ravens +6.5', gameLabel: 'Ravens @ Browns', americanOdds: 150 }),
+    ] },
   { id: 'b5', uid: 'u2', username: 'dan', type: 'single', status: 'push', stakeCents: 2000, potentialPayoutCents: 3818, payoutCents: 2000, combinedAmerican: -110, placedAt: iso(now - 8 * H), settledAt: iso(now - 2 * H), version: 1,
     legs: [leg({ gameId: '403', marketType: 'spread', selection: 'home', line: -3, label: 'Eagles -3', gameLabel: 'Panthers @ Eagles', result: 'push', scoreText: 'Panthers 27 @ Eagles 30 · Final/OT' })] },
   { id: 'b6', uid: 'u2', username: 'dan', type: 'single', status: 'open', stakeCents: 500, potentialPayoutCents: 954, payoutCents: 0, combinedAmerican: -110, placedAt: iso(now - 90 * H), version: 0,

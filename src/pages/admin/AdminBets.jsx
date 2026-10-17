@@ -1,6 +1,7 @@
 // Admin → Bets: every player's bets (newest first), filters, "Needs review", and regrades:
 // force a whole bet to win / lose / void, or override one leg and recompute the bet with the normal rules.
 // Each regrade previews the wallet change first and is applied only after you confirm.
+// Bets the player cashed out are final: they show the cash out amount and offer no regrade.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { collection, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
@@ -13,8 +14,8 @@ import { EmptyState, ErrorState, LoadingState } from '../../components/StatusVie
 const MAX_BETS = 500;
 const PAGE = 50;
 const REVIEW_AFTER_MS = 72 * 60 * 60 * 1000;
-const STATUSES = ['open', 'won', 'lost', 'push', 'void'];
-const STATUS_LABELS = { open: 'Open', won: 'Won', lost: 'Lost', push: 'Push', void: 'Void' };
+const STATUSES = ['open', 'won', 'lost', 'push', 'void', 'cashed_out'];
+const STATUS_LABELS = { open: 'Open', won: 'Won', lost: 'Lost', push: 'Push', void: 'Void', cashed_out: 'Cashed out' };
 const RESULT_LABELS = { win: 'Won', loss: 'Lost', push: 'Push', void: 'Void', pending: 'Pending' };
 const FORCE_LABELS = { win: 'Force win', lose: 'Force lose', void: 'Void bet' };
 
@@ -67,6 +68,8 @@ function useNowMs() {
 
 function AdminBetCard({ bet, flagged, busy, onAction }) {
   const placed = toMs(bet.placedAt);
+  const cashedOut = bet.status === 'cashed_out';
+  const cashedAt = toMs(bet.cashedOutAt);
   return (
     <article className={`bet-card status-${bet.status}`}>
       <header className="bet-card-head">
@@ -93,6 +96,7 @@ function AdminBetCard({ bet, flagged, busy, onAction }) {
                 {RESULT_LABELS[leg.result || 'pending']}
                 {leg.overriddenBy ? ' (admin)' : ''}
               </span>
+              {cashedOut ? null : (
               <select
                 className="leg-override"
                 value=""
@@ -108,6 +112,7 @@ function AdminBetCard({ bet, flagged, busy, onAction }) {
                 <option value="push">Push</option>
                 <option value="void">Void</option>
               </select>
+              )}
             </div>
           </li>
         ))}
@@ -122,6 +127,10 @@ function AdminBetCard({ bet, flagged, busy, onAction }) {
           <span>
             To win <strong>{formatMoney(bet.potentialPayoutCents)}</strong>
           </span>
+        ) : cashedOut ? (
+          <span>
+            Cashed out <strong>{formatMoney(bet.cashoutCents ?? bet.payoutCents)}</strong>
+          </span>
         ) : (
           <span>
             Paid <strong>{formatMoney(bet.payoutCents)}</strong>
@@ -130,6 +139,12 @@ function AdminBetCard({ bet, flagged, busy, onAction }) {
       </footer>
       {flagged ? <div className="warning-text small">{bet.reviewReason || 'A leg is still pending 72+ hours after its game started.'}</div> : null}
       {bet.adminNote ? <div className="muted small">Admin: {bet.adminNote}</div> : null}
+      {cashedOut ? (
+        <div className="muted small">
+          Cashed out by the player{cashedAt ? ` ${formatCentralDateTime(new Date(cashedAt))}` : ''} (was to win{' '}
+          {formatMoney(bet.potentialPayoutCents)}). Final: no regrade.
+        </div>
+      ) : (
       <div className="button-row">
         {['win', 'lose', 'void'].map((outcome) => (
           <button
@@ -143,6 +158,7 @@ function AdminBetCard({ bet, flagged, busy, onAction }) {
           </button>
         ))}
       </div>
+      )}
       <div className="muted small">
         Placed {placed ? formatCentralDateTime(new Date(placed)) : ''} · v{Number(bet.version) || 0} · {bet.id}
       </div>

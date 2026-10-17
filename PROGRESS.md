@@ -48,15 +48,18 @@ Spec: Will's message of 2026-10-17 (cash out for sportsbook bets). Summary of th
       three suites). Mutation-checked: removing the tx status+version guards, the duplicate check, the
       CASHOUT_CHANGED check, freshness, the spread side rule, won=1, bid-vs-ask, or the settlement guard
       each fails a test. `test/casino/fakeFirestore.mjs` gained a non-transaction `db.getAll`.
-- [ ] 4 Phones: My Bets estimate + Cash out button + confirm dialog (CASHOUT_CHANGED re-confirm);
-      BetCard "Cashed out"; Admin Bets filter + no regrade buttons; Shop purchases unchanged
+- [x] 4 UI: `src/hooks/useCashoutQuotes.js` (estimates every 30 s while visible, restarts only when the
+      open-bet id set changes), `src/components/CashoutConfirmModal.jsx` (value, CASHOUT_CHANGED "changed
+      from $A to $B, confirm again", unavailable reason), `src/pages/MyBetsPage.jsx` (flow + success line +
+      reportBalance), `src/components/BetCard.jsx` ("Cash out $X" / reason, "Cashed out $X" in Finished),
+      `src/pages/admin/AdminBets.jsx` (status filter "Cashed out", no Set leg / Force buttons, note),
+      CSS in `src/styles/index.css` (/* Cash out */). Harness: `tools/phone-check` fixtures (bet b7
+      cashed out) + scenarios my-bets-cashout-{confirm,changed,unavailable,done}, admin-bets-cashed.
 - [ ] 5 Full suite, build, phone check 320/375/414, merge wip → main, report with live test steps
 
 ## Next
-Step 4 (UI). Files: `src/lib/api.js` (add cashoutQuote/cashOut calls), `src/pages/MyBetsPage.jsx` (poll
-quotes every 30 s while visible for Active bets; pass quote to cards; confirm dialog), `src/components/BetCard.jsx`
-("Cashed out" label, "Cash out $X" button / "Cash out unavailable right now"), `src/pages/admin/AdminBets.jsx`
-(STATUSES + filter + no regrade buttons for cashed_out).
+Step 5: all suites pass (26 + 70 + 21 + scratchpad sportsbook suites), lint clean, cash-out screens pass
+320/375/414. Remaining: full phone check of every screen + production build, then merge wip → main.
 
 ## Open questions
 None yet.

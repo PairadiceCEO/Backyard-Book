@@ -28,6 +28,18 @@ async function routeApi(page, mode) {
       if (body?.action !== 'spin') return json(route, 200, { ok: true, applied: false, seat: 1, seated: true, serverNow: Date.now() });
       return json(route, 200, { ok: true, duplicate: false, stops: [14, 5, 4], symbols: ['R7', 'R7', 'R7'], line: { id: 'red7x3', label: 'Red 7 · Red 7 · Red 7', pays: 300 }, betCents: 200, winCents: 60000, balanceCents: 69440, serverNow: Date.now() });
     }
+    if (u.pathname === '/api/bets' && body?.action === 'cashoutQuote') {
+      return json(route, 200, { ok: true, quotes: {
+        b1: { available: true, valueCents: mode.quoteCents ?? 2147, mode: 'live' },
+        b2: { available: false, valueCents: null, reason: 'Cash out closes once a custom game starts.' },
+      } });
+    }
+    if (u.pathname === '/api/bets' && body?.action === 'cashout') {
+      mode.cashoutCalls = (mode.cashoutCalls ?? 0) + 1;
+      if (mode.changed && body.expectedCents !== 2098) return json(route, 409, { error: { code: 'CASHOUT_CHANGED', message: 'The cash out value changed to $20.98.', valueCents: 2098 } });
+      if (mode.unavailable) return json(route, 409, { error: { code: 'CASHOUT_UNAVAILABLE', message: 'Cash out unavailable right now', reason: 'Cash out unavailable right now' } });
+      return json(route, 200, { ok: true, duplicate: false, cashoutCents: body.expectedCents, balanceCents: 14287, bet: { id: body.betId } });
+    }
     if (u.pathname === '/api/shop') return json(route, 200, { ok: true, balanceCents: 12140 });
     if (u.pathname === '/api/admin') {
       if (body?.action === 'gradeBet' || body?.action === 'setLegResult') return json(route, 200, F.regradePreview);
@@ -88,6 +100,10 @@ const scenarios = [
   S('sportsbook-error', '/sportsbook', { admin: false, user: 'u1', apiDown: true }),
   S('game-detail', '/sportsbook/nfl/401', { admin: false, user: 'u1' }),
   S('my-bets', '/my-bets', { admin: false, user: 'u1' }),
+  S('my-bets-cashout-confirm', '/my-bets', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('button', { name: 'Cash out $21.47' }).click(); await p.waitForTimeout(200); } }),
+  S('my-bets-cashout-changed', '/my-bets', { admin: false, user: 'u1', changed: true, act: async (p) => { await p.getByRole('button', { name: 'Cash out $21.47' }).click(); await p.getByRole('dialog').getByRole('button', { name: 'Cash out $21.47' }).click(); await p.waitForTimeout(300); } }),
+  S('my-bets-cashout-unavailable', '/my-bets', { admin: false, user: 'u1', unavailable: true, act: async (p) => { await p.getByRole('button', { name: 'Cash out $21.47' }).click(); await p.getByRole('dialog').getByRole('button', { name: 'Cash out $21.47' }).click(); await p.waitForTimeout(300); } }),
+  S('my-bets-cashout-done', '/my-bets', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('button', { name: 'Cash out $21.47' }).click(); await p.getByRole('dialog').getByRole('button', { name: 'Cash out $21.47' }).click(); await p.waitForTimeout(300); } }),
   S('my-bets-empty', '/my-bets', { admin: false, user: 'u9', fs: { ...fsDefault, users: [...F.users, { id: 'u9', username: 'newbie', balanceCents: 10000, stats: { won: 0, lost: 0 } }] } }),
   S('my-bets-error', '/my-bets', { admin: false, user: 'u1', fs: { ...fsDefault, bets: { error: 'The query requires an index.' } } }),
   S('leaderboard', '/leaderboard', { admin: false, user: 'u1' }),
@@ -129,6 +145,7 @@ const scenarios = [
   
   S('admin-players', '/admin'),
   S('admin-bets', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Bets' }).click(); await p.waitForTimeout(300); } }),
+  S('admin-bets-cashed', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Bets' }).click(); await p.waitForTimeout(300); await p.locator('select').filter({ hasText: 'Cashed out' }).selectOption('cashed_out'); await p.waitForTimeout(200); } }),
   S('admin-bets-confirm', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Bets' }).click(); await p.waitForTimeout(300); await p.getByRole('button', { name: 'Force win' }).first().click(); await p.waitForTimeout(300); } }),
   S('admin-custom', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Custom games' }).click(); await p.waitForTimeout(300); } }),
   S('admin-custom-form', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Custom games' }).click(); await p.getByRole('button', { name: 'New custom game' }).click(); await p.waitForTimeout(200); } }),
