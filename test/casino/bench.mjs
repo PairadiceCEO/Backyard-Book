@@ -61,10 +61,9 @@ for (let round = 0; round < 3; round += 1) {
   await timed('tick (nothing due)', 1, { action: 'tick', game: 'baccarat' }, results);
   // Blackjack: three players.
   for (let p = 1; p <= 3; p += 1) await call(p, { action: 'sit', game: 'blackjack', seat: p - 1 });
-  for (let p = 1; p <= 3; p += 1) {
-    const r = await call(p, { action: 'bet', game: 'blackjack', amount: 5, requestId: rid() });
-    void r;
-  }
+  for (let p = 1; p <= 3; p += 1) await call(p, { action: 'bet', game: 'blackjack', amount: 5, requestId: rid() });
+  for (let p = 1; p <= 2; p += 1) await call(p, { action: 'confirm', game: 'blackjack' });
+  await timed('blackjack confirm → deal', 3, { action: 'confirm', game: 'blackjack' }, results);
   for (let guard = 0; guard < 50; guard += 1) {
     const t = fake.get('casinoTables/blackjack');
     if (t.phase === 'insurance') {

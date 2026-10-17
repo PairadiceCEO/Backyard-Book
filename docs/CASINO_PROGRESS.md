@@ -41,9 +41,9 @@ come from Will's live testing.
 
 - `npm test` — pure rules (slot RTP, Baccarat tableau + exact odds, roads vs Wizard of Odds, Blackjack, dice).
 - `npm run test:casino` — server engines against an in-memory Firestore (transactions retry on conflict like the real one).
-- Phone layout check (Playwright at 320/375/414 px with mocked Firebase) lived in the session scratchpad; rebuild it from `src/` if needed.
+- Phone layout + behaviour check: `tools/phone-check/` (Playwright at 320/375/414 px with mocked Firebase).
 
-## Batch 5: speed, chips, quick stop, deal timing, Odds 2× (branch `casino-speed`)
+## Batch 5: speed, chips, quick stop, deal timing, Odds 2× — done, merged to main
 
 Will's request (2026-10-17), in order: 1 speed, 2 chips on every game, 3 slots quick stop, 4 Blackjack /
 Baccarat deal timing, 5 Craps Odds up to 2× Pass. Merge to main when all tests + phone check pass.
@@ -58,7 +58,7 @@ Baccarat deal timing, 5 Craps Odds up to 2× Pass. Merge to main when all tests 
 - [x] 3 Slots: second tap stops the reels on the result (never a second spin)
 - [x] 4 Deal timing: initial cards 0.5 s apart, later cards 1 s; server-timed; deadlines start after the animation
 - [x] 5 Odds up to 2× the Pass bet (above the $10 spot limit), max shown on the spot
-- [ ] Tests, phone check, merge, report (with timing numbers)
+- [x] Tests, phone check, merge, report (with timing numbers)
 
 Benchmark (test/casino/bench.mjs, in-memory Firestore with a modeled delay per round trip; round-trip
 counts are exact, milliseconds are the model): before 4–9 round trips per call (heartbeat 4, bet 6,
