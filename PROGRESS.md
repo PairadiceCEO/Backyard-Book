@@ -38,8 +38,9 @@ Spec summary:
 - Page-leave: the table page sends leave-all when it unmounts (delayed 400 ms and cancelled if the same
   table remounts, so React dev double-mounts and quick re-renders don't drop seats). Not on refresh/close
   (that stays the 60 s heartbeat rule).
-- Come bet landing on a number that already has a Come bet: combined up to $20; any excess goes back to
-  the wallet (refund) in the same roll.
+- Come bet "landing on a number that already has a Come bet" can't actually happen: the roll that moves
+  the new Come to n is the roll that makes the older Come n win, so the older one is paid and the new one
+  takes its place (standard "off and on"). The $20 cap on landing is still coded as a safety net. Tell Will.
 - Hard ways pay what the spec says (6:1, 8:1), kept in diceVariants.js so it's one number to change.
   (Standard casino pays are 7:1 / 9:1 — mention to Will.)
 
@@ -48,13 +49,15 @@ Spec summary:
       bj/baccarat, one for craps with message) / leave(seat | all) / heartbeat; blackjack + baccarat use
       the seat; ledger ids with seat
 - [x] A2 Shared dice rules: limits, hard ways, Come, Come Odds, Don't Pass Odds; crapsTable uses them
-- [ ] A3 Tests (casino2/3/4 updated + new casino5 for multi-seat and craps)
+- [x] A3 Tests: casino2/3/4 updated; new test/casino/casino5.test.mjs (16 tests; suite now 87). Mutation-
+      checked (hard ways on come-out, Come Odds on come-out, DP Odds ratio, $60 total, easy way, seat in
+      payout id, Odds capped by $30 → each fails a test)
 - [ ] A4 Phones: Blackjack/Baccarat seat panels (tabs per my seat, own chips, insurance, moves, leave),
       leave-all on page exit, Craps felt (Come, Come bets on numbers, Hard ways, DP Odds, $60 meter)
 - [ ] A5 Full suite, build, lint, interact/dealcheck, phone check, merge, report
 
 ## Next
-A3: write test/casino/casino5.test.mjs (multi-seat Blackjack/Baccarat, one seat at Craps, leave one/all, hard ways, Come, Come Odds off on come-out, Don't Pass Odds, every limit, shooter never blocked).
+A4: phones. BlackjackPage + BaccaratPage seat panels (one panel per my seat, kept mounted, tabs to switch, auto-switch to the seat whose turn it is / needs insurance), TableSeats canSit for multi-seat, leave-all on page unmount (delayed + cancel on remount), CrapsPage new spots (Come, Come bets on numbers + their Odds, Hard ways, Don't Pass Odds, $60 meter).
 
 ## Open questions
 - Waiting for Will to approve the B/C plan.
