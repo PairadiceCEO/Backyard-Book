@@ -17,7 +17,7 @@ export const CASINO_LEDGER_TYPES = ['casino_bet', 'casino_payout', 'casino_refun
 // The lobby. `opensIn` is the build phase that opens a table; null = open now.
 export const CASINO_GAMES = [
   { id: 'slots', name: '7s Slots', kind: 'slots', blurb: 'Three reels, one payline, Red 7s pay 300×.', opensIn: null },
-  { id: 'blackjack', name: 'Blackjack', kind: 'table', blurb: '6 decks · dealer hits soft 17 · blackjack pays 3:2', opensIn: 3 },
+  { id: 'blackjack', name: 'Blackjack', kind: 'table', blurb: '6 decks · dealer hits soft 17 · blackjack pays 3:2', opensIn: null },
   { id: 'baccarat', name: 'Baccarat', kind: 'table', blurb: 'Player 1:1 · Banker 0.95:1 · Tie 8:1 · 8 decks', opensIn: null },
   { id: 'craps', name: 'Craps', kind: 'table', blurb: 'Pass · Don’t Pass · Odds · Place · Field', opensIn: 4 },
   { id: 'crapless', name: 'Crapless Craps', kind: 'table', blurb: 'Every number but 7 is a point', opensIn: 4 },

@@ -13,11 +13,13 @@ import { HttpError } from '../http.js';
 import { randomInt as defaultRandomInt } from './rng.js';
 import { requireSeat, runTableAction } from './tableRunner.js';
 import { baccaratEngine } from './baccaratTable.js';
+import { blackjackEngine } from './blackjackTable.js';
 import { freeGoneSeats, seatIsStale } from './seats.js';
 import { CASINO_SEATS, casinoGame } from '../../shared/casino/constants.js';
 
 const ENGINES = {
   baccarat: baccaratEngine,
+  blackjack: blackjackEngine,
 };
 
 export function tableEngine(gameId) {
@@ -26,7 +28,7 @@ export function tableEngine(gameId) {
   if (game?.kind === 'table') {
     throw new HttpError(400, 'TABLE_NOT_OPEN', `${game.name} isn't open yet.${game.opensIn ? ` It opens in casino phase ${game.opensIn}.` : ''}`);
   }
-  throw new HttpError(400, 'BAD_GAME', 'Pick a table: "baccarat".');
+  throw new HttpError(400, 'BAD_GAME', 'Pick a table: "baccarat" or "blackjack".');
 }
 
 function displayName(caller) {

@@ -9,7 +9,7 @@
 //   ctx.now           server time in ms (the only clock deadlines are compared against)
 //   ctx.seatIndex     the caller's seat (−1 if only watching)
 //   ctx.changed       set true to write the table doc (version is bumped, for display only)
-//   ctx.shoe()        the secret shoe (loaded once, written back at the end)
+//   ctx.shoe()        the secret shoe and the dealer's hole card (loaded once, written back at the end)
 //   ctx.balance(uid)  wallet balance, counting money already queued in this action
 //   ctx.addMoney(uid, entry)        queue a casino_bet / casino_payout / casino_refund
 //   ctx.ledgerExists(id)            for retry checks
@@ -125,7 +125,7 @@ export async function runTableAction({ game, engine, caller, now = Date.now(), r
       applyCasinoEntries(tx, db, { uid, balanceCents: wallet.balanceCents, entries, now: new Date(now) });
     }
 
-    if (shoe) tx.set(shoeRef, { cards: shoe.cards, dealt: shoe.dealt, shuffles: shoe.shuffles ?? 0, updatedAt: now });
+    if (shoe) tx.set(shoeRef, { cards: shoe.cards, dealt: shoe.dealt, shuffles: shoe.shuffles ?? 0, holeCard: shoe.holeCard ?? null, updatedAt: now });
     for (const [uid, at] of presenceWrites) tx.set(presenceRef(uid), { at });
 
     if (ctx.changed) {

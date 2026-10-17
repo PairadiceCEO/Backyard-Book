@@ -4,8 +4,9 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../../components/StatusViews.jsx';
 import { casinoGame } from '../../../shared/casino/constants.js';
 import BaccaratPage from './BaccaratPage.jsx';
+import BlackjackPage from './BlackjackPage.jsx';
 
-const TABLES = { baccarat: BaccaratPage };
+const TABLES = { baccarat: BaccaratPage, blackjack: BlackjackPage };
 
 export default function CasinoTablePage() {
   const { game: gameId } = useParams();
@@ -26,7 +27,7 @@ export default function CasinoTablePage() {
           </Link>
         }
       >
-        {game.blurb}. The table opens with 5 seats in a later casino update; Baccarat and the 7s slot are open now.
+        {game.blurb}. The table opens with 5 seats in a later casino update; Blackjack, Baccarat and the 7s slot are open now.
       </EmptyState>
     </section>
   );
