@@ -6,6 +6,11 @@
 // as one request (Undo / Clear take back chips placed since the last roll). "Take down" + tap takes a
 // whole bet back. Roll carries the table's rollSeq, so a double tap can only roll once; the shooter's
 // dice start tumbling the moment Roll is tapped and land on the result from the reply.
+//
+// Spots: Pass / Don't Pass (+ their Odds), Come (open with a Point; each Come bet then shows on its
+// number, where its Odds go), Place numbers, Field, Hard ways. Limits: line $20, other spots $30, Odds 2×
+// their line bet, $60 on the felt in all; the meter above the felt shows what's down and the room left.
+// One seat per player here; leaving the page gives the seat up (useLeaveOnExit).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChipRack, ChipStack } from '../../components/casino/Chips.jsx';
@@ -15,13 +20,13 @@ import TableSeats from '../../components/casino/TableSeats.jsx';
 import { ErrorState, LoadingState, friendlyError } from '../../components/StatusViews.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useWalletDisplay } from '../../context/WalletDisplayContext.jsx';
-import { useCasinoTable, useCountdown, useDeadlineTick, useHeartbeat, useRollAnimation, useTableCall } from '../../hooks/useCasinoTable.js';
+import { useCasinoTable, useCountdown, useDeadlineTick, useHeartbeat, useLeaveOnExit, useRollAnimation, useTableCall } from '../../hooks/useCasinoTable.js';
 import { useChipBetting } from '../../hooks/useChipBetting.js';
 import { newRequestId, tableAction } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
 import { DICE_ANIMATION_MS } from '../../../shared/casino/constants.js';
 import { DICE_VARIANTS } from '../../../shared/casino/diceVariants.js';
-import { emptyDiceBets, placeBlocker, removeBlocker, spotAmount, spotLimitCents, totalOnFelt } from '../../../shared/casino/dice.js';
+import { cloneBets, emptyDiceBets, limitProblem, placeBlocker, removeBlocker, spotAmount, spotLimitCents, totalOnFelt } from '../../../shared/casino/dice.js';
 
 const NO_SEATS = [null, null, null, null, null];
 const KIND_TEXT = { natural: 'Winner!', craps: 'Craps', point: 'Point set', pointMade: 'Point made!', sevenOut: 'Seven out', roll: '' };
@@ -30,25 +35,37 @@ function ratio([n, d]) {
   return `${n}:${d}`;
 }
 
-// The felt as chip spots: pass, dontPass, odds, field, place:6 …
+const FLAT_KINDS = ['pass', 'dontPass', 'odds', 'dontOdds', 'come', 'field'];
+
+// The felt as chip spots: pass, dontPass, odds, dontOdds, come, field, place:6, hard:8, comeOdds:5 …
+// (A Come bet that moved to its number isn't a spot: chips can't go on or come off it; its Odds can.)
 function betsToSpots(bets) {
-  const spots = { pass: bets.pass || 0, dontPass: bets.dontPass || 0, odds: bets.odds || 0, field: bets.field || 0 };
-  for (const [n, cents] of Object.entries(bets.place ?? {})) spots[`place:${n}`] = cents || 0;
+  const b = cloneBets(bets);
+  const spots = {};
+  for (const kind of FLAT_KINDS) spots[kind] = b[kind] || 0;
+  for (const [n, cents] of Object.entries(b.place)) spots[`place:${n}`] = cents || 0;
+  for (const [n, cents] of Object.entries(b.hard)) spots[`hard:${n}`] = cents || 0;
+  for (const [n, c] of Object.entries(b.comeOn)) spots[`comeOdds:${n}`] = c.odds || 0;
   return spots;
 }
 
-function spotsToBets(spots) {
+// Spots back to bets, with the Come bets on numbers taken from the server's copy (`base`).
+function spotsToBets(spots, base) {
   const bets = emptyDiceBets();
+  const from = cloneBets(base);
+  for (const [n, c] of Object.entries(from.comeOn)) bets.comeOn[n] = { bet: c.bet, odds: 0 };
   for (const [key, cents] of Object.entries(spots)) {
-    if (key.startsWith('place:')) {
-      if (cents > 0) bets.place[Number(key.slice(6))] = cents;
-    } else bets[key] = cents || 0;
+    const [kind, num] = key.split(':');
+    if (num === undefined) bets[kind] = cents || 0;
+    else if (kind === 'comeOdds') {
+      if (bets.comeOn[num]) bets.comeOn[num].odds = cents || 0;
+    } else if (cents > 0) bets[kind][Number(num)] = cents;
   }
   return bets;
 }
 
 function spotKey(kind, number) {
-  return kind === 'place' ? `place:${number}` : kind;
+  return number === undefined ? kind : `${kind}:${number}`;
 }
 
 function signedMoney(cents) {
@@ -84,6 +101,7 @@ export default function CrapsPage({ game }) {
   const seconds = useCountdown(deadline);
   useDeadlineTick(game, deadline, Boolean(table));
   useHeartbeat(game, Boolean(mySeat));
+  useLeaveOnExit(game, Boolean(mySeat));
   const tumbling = useRollAnimation(lastRoll?.at ?? null, DICE_ANIMATION_MS);
   const [rollTapped, setRollTapped] = useState(false); // the shooter's dice tumble from the tap
   const rolling = tumbling || rollTapped;
@@ -118,12 +136,12 @@ export default function CrapsPage({ game }) {
       if (!variant) return 'Unknown table.';
       const [kind, num] = key.split(':');
       const number = num === undefined ? undefined : Number(num);
-      const afterBets = spotsToBets(after);
-      const before = { ...afterBets, place: { ...afterBets.place } };
-      const blocked = placeBlocker(variant, tablePoint, before, kind, number);
+      const afterBets = spotsToBets(after, serverBets);
+      const beforeSpots = { ...after, [key]: (after[key] ?? 0) - cents };
+      const blocked = placeBlocker(variant, tablePoint, spotsToBets(beforeSpots, serverBets), kind, number);
       if (blocked) return blocked;
-      const limit = spotLimitCents(variant, afterBets, kind);
-      if (cents > limit) return kind === 'odds' ? `Odds can be up to ${formatMoney(limit)} (${variant.oddsMultiple}× your Pass).` : `That spot holds up to ${formatMoney(limit)}.`;
+      const problem = limitProblem(variant, afterBets, { kind, number });
+      if (problem) return problem;
       const extra = totalOnFelt(afterBets) - totalOnFelt(serverBets);
       if (extra > balanceCents) return `Not enough in your wallet (${formatMoney(balanceCents)}).`;
       return '';
@@ -175,10 +193,14 @@ export default function CrapsPage({ game }) {
   const shooterIndex = table?.shooter ?? null;
   const shooter = shooterIndex === null ? null : seats[shooterIndex];
   const iShoot = Boolean(mySeat) && shooterIndex === mySeatIndex;
-  const myBets = spotsToBets(chips.spots);
+  const myBets = spotsToBets(chips.spots, serverBets);
   const hasLine = myBets.pass > 0 || myBets.dontPass > 0;
   const placeNumbers = variant.points;
   const oddsMax = spotLimitCents(variant, myBets, 'odds');
+  const dontOddsMax = spotLimitCents(variant, myBets, 'dontOdds');
+  const onFelt = totalOnFelt(myBets);
+  const tableMax = variant.limits.total;
+  const comeNumbers = placeNumbers.filter((n) => myBets.comeOn[n]);
 
   function tapSpot(kind, number) {
     if (!mySeat || rolling) return;
@@ -189,7 +211,7 @@ export default function CrapsPage({ game }) {
         setActionError(blocked);
         return;
       }
-      run(`down-${kind}${number ?? ''}`, 'removeBet', number === undefined ? { kind } : { kind, number });
+      run(`down-${spotKey(kind, number)}`, 'removeBet', number === undefined ? { kind } : { kind, number });
       return;
     }
     setActionError('');
@@ -303,6 +325,16 @@ export default function CrapsPage({ game }) {
             }
           />
 
+          <div className="craps-meter" aria-live="polite">
+            <span>
+              On the felt <strong>{formatMoney(onFelt)}</strong> of {formatMoney(tableMax)}
+            </span>
+            <span className={onFelt >= tableMax ? 'craps-meter-room full' : 'craps-meter-room'}>Room {formatMoney(Math.max(0, tableMax - onFelt))}</span>
+            <span className="craps-meter-bar" aria-hidden="true">
+              <span style={{ width: `${Math.min(100, (onFelt / tableMax) * 100)}%` }} />
+            </span>
+          </div>
+
           <div className={`craps-place n${placeNumbers.length}`}>
             {placeNumbers.map((n) => (
               <button key={n} type="button" className={spotClass('place', n, point === n ? 'is-point' : '')} onClick={() => tapSpot('place', n)}>
@@ -315,17 +347,65 @@ export default function CrapsPage({ game }) {
             ))}
           </div>
 
+          {comeNumbers.length ? (
+            <div className="craps-come-row" aria-label="Your Come bets">
+              {comeNumbers.map((n) => (
+                <button key={n} type="button" className={spotClass('comeOdds', n, 'come-on')} onClick={() => tapSpot('comeOdds', n)}>
+                  <span className="spot-name">Come {n}</span>
+                  <span className="spot-odds">
+                    {formatMoney(myBets.comeOn[n].bet)} · Odds {ratio(variant.odds[n])}
+                    {point ? '' : ' (off)'}
+                  </span>
+                  <span className="spot-bet">
+                    {myBets.comeOn[n].odds ? `Odds ${formatMoney(myBets.comeOn[n].odds)}` : `Odds up to ${formatMoney(spotLimitCents(variant, myBets, 'comeOdds', n))}`}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <button type="button" className={spotClass('come', undefined, 'band come')} onClick={() => tapSpot('come')}>
+            <span className="spot-name">Come</span>
+            <span className="spot-odds">{point ? `1:1 · ${variant.comeOutPassWins.join(' or ')} wins${variant.comeOutPassLoses.length ? `, ${variant.comeOutPassLoses.join(', ')} loses` : ''}, else moves to its number` : 'Opens once a Point is set'}</span>
+            <SpotAmount cents={myBets.come} />
+          </button>
+
           <button type="button" className={spotClass('field', undefined, 'band field')} onClick={() => tapSpot('field')}>
             <span className="spot-name">Field</span>
             <span className="spot-odds">3 4 9 10 11 pay 1:1 · 2 and 12 pay 2:1</span>
             <SpotAmount cents={myBets.field} />
           </button>
 
+          <div className="craps-hard" aria-label="Hard ways">
+            {Object.keys(variant.hardWays).map((key) => {
+              const n = Number(key);
+              return (
+                <button key={n} type="button" className={spotClass('hard', n)} onClick={() => tapSpot('hard', n)}>
+                  <span className="spot-name">Hard {n}</span>
+                  <span className="spot-odds">
+                    {n / 2}+{n / 2} · {ratio(variant.hardWays[n])}
+                  </span>
+                  <span className="spot-bet">{spotAmount(myBets, 'hard', n) ? <ChipStack cents={spotAmount(myBets, 'hard', n)} max={4} /> : point ? '' : 'off'}</span>
+                </button>
+              );
+            })}
+          </div>
+
           {variant.dontPass ? (
             <button type="button" className={spotClass('dontPass', undefined, 'band dont')} onClick={() => tapSpot('dontPass')}>
               <span className="spot-name">Don't Pass</span>
               <span className="spot-odds">1:1 · 12 is a push</span>
               <SpotAmount cents={myBets.dontPass} />
+            </button>
+          ) : null}
+
+          {variant.dontPass && point && myBets.dontPass ? (
+            <button type="button" className={spotClass('dontOdds', undefined, 'band odds dont')} onClick={() => tapSpot('dontOdds')}>
+              <span className="spot-name">Don't Pass Odds on {point}</span>
+              <span className="spot-odds">
+                {oddsRatio ? ratio([oddsRatio[1], oddsRatio[0]]) : ''} · max {formatMoney(dontOddsMax)} ({variant.oddsMultiple}× Don't Pass)
+              </span>
+              <SpotAmount cents={myBets.dontOdds} />
             </button>
           ) : null}
 
@@ -349,11 +429,11 @@ export default function CrapsPage({ game }) {
             {chips.error ? (
               <span className="error-text">{chips.error}</span>
             ) : mySeat.leaving ? (
-              'You are leaving: Pass and Odds play out, then the seat frees and Place/Field come back.'
+              'You are leaving: line, Come and Odds bets play out, then the seat frees and Place, Field and Hard ways come back.'
             ) : takeDown ? (
-              'Tap one of your bets to take all of it down (Pass stays up once a Point is set).'
+              'Tap one of your bets to take all of it down (Pass and Don’t Pass stay up once a Point is set; a Come bet on its number stays, its Odds can come down).'
             ) : (
-              `Pick a chip and tap a spot; each tap adds a chip. Up to $10 a spot; Odds up to ${variant.oddsMultiple}× your Pass.`
+              `Pick a chip and tap a spot; each tap adds a chip. Line bets $1–$20, other spots $1–$30, Odds up to ${variant.oddsMultiple}× their line bet, ${formatMoney(tableMax)} on the felt in all.`
             )}
           </p>
           <button type="button" className="btn btn-ghost small leave-btn" onClick={() => run('leave', 'leave')} disabled={busy === 'leave' || mySeat.leaving}>
@@ -377,8 +457,11 @@ export default function CrapsPage({ game }) {
         {game === 'crapless'
           ? 'Come-out: 7 wins; every other number becomes the Point (no craps, no Don’t Pass). '
           : 'Come-out: 7 or 11 wins, 2, 3 or 12 loses; Don’t Pass wins on 2 or 3 and pushes on 12. '}
-        Odds pay true odds{game === 'crapless' ? ' (2 and 12 at 5:1)' : ''}, up to {variant.oddsMultiple}× your Pass bet. Place bets work only while a
-        Point is on and stay up after a win. The shooter has 15 s to roll, then the dice roll themselves. Chips $1–$10, up to $10 a spot.
+        Odds pay true odds{game === 'crapless' ? ' (2 and 12 at 5:1, 3 and 11 at 3:1)' : ''}, up to {variant.oddsMultiple}× their line bet
+        {variant.dontPass ? '; Don’t Pass Odds pay the inverse' : ''}. Come bets work like a new Pass bet on the next roll, then on their number; Come
+        Odds are off on the come-out. Place bets and Hard ways are off on the come-out; Hard 4 and 10 pay{' '}
+        {ratio(variant.hardWays[4])}, Hard 6 and 8 pay {ratio(variant.hardWays[6])} and stay up after a win. The shooter has 15 s to roll, then the
+        dice roll themselves. One seat per player.
       </p>
     </section>
   );

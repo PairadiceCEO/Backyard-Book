@@ -3578,3 +3578,63 @@ body.no-scroll {
   min-height: 44px;
   margin-left: auto;
 }
+
+/* Craps: $60 meter, Come bets on their numbers, Come box, Hard ways */
+.craps-meter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.craps-meter-room {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.craps-meter-room.full {
+  color: var(--danger);
+}
+
+.craps-meter-bar {
+  flex-basis: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.craps-meter-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  border-radius: inherit;
+}
+
+.craps-come-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 0.35rem;
+}
+
+.craps-spot.come-on {
+  border-color: var(--gold);
+  border-style: solid;
+}
+
+.craps-spot.band.come {
+  border-color: #9fd8ff;
+}
+
+.craps-hard {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.craps-hard .craps-spot .spot-odds {
+  font-size: 0.68rem;
+}
