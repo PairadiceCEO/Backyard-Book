@@ -54,10 +54,10 @@ Baccarat deal timing, 5 Craps Odds up to 2× Pass. Merge to main when all tests 
 - [x] 1d Casino: verify token only, read users doc once inside the transaction, check disabled there
 - [x] 1e Replies carry the public table (never the shoe/hole card) + caller balance; Roll reply has the dice (server side; client merge pending)
 - [ ] 1f Client: chips appear at once, taps within 300 ms sent together, refusals roll back with the reason, wallet shows pending
-- [ ] 2 Chip tokens ($1/$2/$5/$10, colored) on Blackjack, Baccarat, Craps/Crapless, Slots; Undo + Clear; Blackjack stacks then confirms
+- [~] 2 Chip tokens (server done: blackjack bet+confirm, craps `bets` batch; phones pending): ($1/$2/$5/$10, colored) on Blackjack, Baccarat, Craps/Crapless, Slots; Undo + Clear; Blackjack stacks then confirms
 - [ ] 3 Slots: second tap stops the reels on the result (never a second spin)
-- [ ] 4 Deal timing: initial cards 0.5 s apart, later cards 1 s; server-timed; deadlines start after the animation
-- [ ] 5 Odds up to 2× the Pass bet (above the $10 spot limit), max shown on the spot
+- [~] 4 Deal timing (server done; phones pending): initial cards 0.5 s apart, later cards 1 s; server-timed; deadlines start after the animation
+- [x] 5 Odds up to 2× the Pass bet (above the $10 spot limit), max shown on the spot
 - [ ] Tests, phone check, merge, report (with timing numbers)
 
 Benchmark (test/casino/bench.mjs, in-memory Firestore with a modeled delay per round trip; round-trip

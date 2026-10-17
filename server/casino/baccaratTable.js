@@ -32,7 +32,7 @@ import {
   SPOT_LABELS,
   emptyBets,
   playCoup,
-  revealMs,
+  coupRevealMs,
   settleBaccaratBets,
   totalBetCents,
 } from '../../shared/casino/baccarat.js';
@@ -183,7 +183,6 @@ async function closeBetting(ctx) {
   const shoe = await ctx.shoe();
   const reshuffled = reshuffleIfDue(shoe, { decks: BACCARAT_DECKS, reshuffleAt: BACCARAT_RESHUFFLE_AT, minCards: 6 });
   const coup = playCoup(() => drawCard(shoe, ctx.randomInt));
-  const cardCount = coup.player.length + coup.banker.length;
   const headline = coup.winner === 'tie' ? 'Tie' : `${SPOT_LABELS[coup.winner]} wins`;
   const result = `${headline} ${coup.playerTotal}–${coup.bankerTotal}`;
 
@@ -213,7 +212,7 @@ async function closeBetting(ctx) {
   state.shoeResults = `${previous}${WINNER_LETTER[coup.winner]}`.slice(-BACCARAT_MAX_SHOE_RESULTS);
   delete state.history; // the old 20-hand strip (tables created before the scoreboard)
   state.phase = 'results';
-  state.deadline = ctx.now + revealMs(cardCount) + RESULTS_SECONDS * 1000;
+  state.deadline = ctx.now + coupRevealMs(coup.player, coup.banker) + RESULTS_SECONDS * 1000;
   ctx.changed = true;
 }
 

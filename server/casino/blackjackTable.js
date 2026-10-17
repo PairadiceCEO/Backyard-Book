@@ -27,7 +27,9 @@ import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
 import { buildShoe, cardRank } from '../../shared/casino/cards.js';
 import { CASINO_SEATS, RESULTS_SECONDS, TURN_SECONDS, isValidCasinoBet } from '../../shared/casino/constants.js';
 import {
-  BLACKJACK_CARD_REVEAL_MS,
+  BLACKJACK_INITIAL_GAP_MS,
+  BLACKJACK_LATER_GAP_MS,
+  CARD_SETTLE_MS,
   BLACKJACK_DECKS,
   BLACKJACK_RESHUFFLE_AT,
   canDouble,
@@ -137,18 +139,27 @@ async function draw(ctx) {
   return drawCard(shoe, ctx.randomInt);
 }
 
-// Cards dealt in one write are turned over one by one on the phones, in this order.
+// Cards dealt in one write turn over one by one on the phones: each card carries t, its offset in ms
+// from lastDeal.at (the server's time of the write). Opening cards are 0.5 s apart, later cards 1 s.
 function logDeal(ctx, to, index) {
   if (!ctx.dealLog) {
     ctx.dealLog = { at: ctx.now, cards: [] };
     ctx.state.lastDeal = ctx.dealLog;
   }
-  ctx.dealLog.cards.push({ to, i: index });
+  const list = ctx.dealLog.cards;
+  const initial = Boolean(ctx.openingDeal);
+  let t = 0;
+  if (list.length) {
+    const prev = list[list.length - 1];
+    t = prev.t + (initial && prev.opening ? BLACKJACK_INITIAL_GAP_MS : BLACKJACK_LATER_GAP_MS);
+  }
+  list.push(initial ? { to, i: index, t, opening: true } : { to, i: index, t });
 }
 
+// How long this write's cards take to show: decision clocks start after it, so nobody loses time.
 function revealPadMs(ctx) {
-  const count = ctx.dealLog?.cards.length ?? 0;
-  return count ? count * BLACKJACK_CARD_REVEAL_MS + 300 : 0;
+  const list = ctx.dealLog?.cards ?? [];
+  return list.length ? list[list.length - 1].t + CARD_SETTLE_MS : 0;
 }
 
 async function dealToHand(ctx, seatIndex, handIndex) {
@@ -209,6 +220,8 @@ async function deal(ctx) {
   state.reshuffled = reshuffled;
   state.turn = null;
 
+  // Seat 1 → 5, dealer; then the second card in the same order (the dealer's face down).
+  ctx.openingDeal = true;
   for (const i of players) await dealToHand(ctx, i, 0);
   state.dealer.cards.push(await draw(ctx));
   logDeal(ctx, 'd', 0);
@@ -216,6 +229,7 @@ async function deal(ctx) {
   shoe.holeCard = await draw(ctx); // face down: never in the public doc until it's turned over
   state.dealer.holeDown = true;
   logDeal(ctx, 'd', 1);
+  ctx.openingDeal = false;
 
   for (const i of players) {
     const hand = state.seats[i].hands[0];

@@ -7,7 +7,12 @@ import { winningsCents } from './constants.js';
 export const BLACKJACK_DECKS = 6;
 export const BLACKJACK_SHOE_CARDS = 52 * BLACKJACK_DECKS; // 312
 export const BLACKJACK_RESHUFFLE_AT = 281; // reshuffle before a round once 90% of the shoe is dealt
-export const BLACKJACK_CARD_REVEAL_MS = 450; // phones turn the cards of one write over this far apart
+// Card timing, measured from the server's timestamp of the write that dealt them, so every phone turns
+// the same card over at the same moment: the opening cards (two each, dealer included) 0.5 s apart,
+// every card after that (hits, doubles, split cards, the hole card, the dealer's draws) 1 s apart.
+export const BLACKJACK_INITIAL_GAP_MS = 500;
+export const BLACKJACK_LATER_GAP_MS = 1000;
+export const CARD_SETTLE_MS = 700; // after the last card turns over, before a decision clock starts
 
 // A = 11 (or 1), 2–9 face value, 10/J/Q/K = 10.
 export function cardValue(card) {

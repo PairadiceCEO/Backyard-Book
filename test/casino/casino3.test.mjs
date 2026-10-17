@@ -212,7 +212,7 @@ test('dealer blackjack with insurance: insurance pays 2:1, a natural pushes, eve
   await bet('p3', 10);
   let t = table();
   assert.equal(t.phase, 'insurance');
-  assert.equal(t.deadline, T0 + t.lastDeal.cards.length * 450 + 300 + 15_000, '15 s after the cards are shown');
+  assert.equal(t.deadline, T0 + t.lastDeal.cards.at(-1).t + BJ.CARD_SETTLE_MS + 15_000, '15 s after the cards are shown');
   assertSecret('insurance phase');
   await err(move('p1', 'hit'), 'PHASE');
   await err(act('p1', 'insurance', { amountCents: 251 }), 'BAD_INSURANCE');
@@ -613,4 +613,34 @@ test('replies carry the table and the wallet, never the hole card or the shoe', 
   const hit = await act('p1', 'hit', { hand: 0, actionSeq: handOf('p1').seq });
   assert.equal(hit.table.seats[0].hands[0].cards.length, 3, 'the hit card is in the reply');
   assert.ok(!JSON.stringify(hit).includes(shoeDoc().holeCard));
+});
+
+test('deal timing: seat order then dealer, opening cards 0.5 s apart, later cards 1 s apart, clocks start after the cards show', async () => {
+  seed();
+  await sitAll(['p1', 'p2', 'p3']);
+  // p1 T 2 · p2 sits out · p3 9 5; dealer 9 up, 7 hole. p1 hits a 3; p3 stands; dealer draws.
+  stackShoe(['TS', '9H', '9C', '2D', '5S', '7S', '3H', '4C', '2C']);
+  await chips('p1', 5, T0);
+  await chips('p3', 5, T0);
+  await act('p1', 'confirm', {}, T0);
+  await act('p3', 'confirm', {}, T0);
+  await act('p2', 'tick', {}, table().deadline); // p2 never bet: the clock deals for p1 and p3
+  let t = table();
+  const at = t.lastDeal.at;
+  assert.deepEqual(t.lastDeal.cards.map((c) => [c.to, c.i, c.t]), [
+    ['0-0', 0, 0], ['2-0', 0, 500], ['d', 0, 1000], ['0-0', 1, 1500], ['2-0', 1, 2000], ['d', 1, 2500],
+  ], 'seat 1, seat 3, dealer, then again; only seats with a bet; 0.5 s apart');
+  assert.deepEqual(t.dealer.cards.length, 1, 'only the up card is public');
+  assert.equal(t.deadline, at + 2500 + BJ.CARD_SETTLE_MS + 15_000, "the first turn's 15 s starts after the deal shows");
+  const hitAt = at + 4000;
+  await move('p1', 'hit', 0, hitAt);
+  t = table();
+  assert.deepEqual([t.lastDeal.at, t.lastDeal.cards.map((c) => c.t)], [hitAt, [0]]);
+  await move('p1', 'stand', 0, hitAt + 2000);
+  const standAt = hitAt + 3000;
+  await move('p3', 'stand', 0, standAt);
+  t = table();
+  assert.equal(t.phase, 'results');
+  assert.deepEqual(t.lastDeal.cards.map((c) => [c.to, c.t]), t.dealer.cards.slice(1).map((_, k) => ['d', k * 1000]), 'hole card, then each draw, 1 s apart');
+  assert.equal(t.deadline, standAt + t.lastDeal.cards.at(-1).t + BJ.CARD_SETTLE_MS + 5000);
 });
