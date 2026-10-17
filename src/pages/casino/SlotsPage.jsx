@@ -1,6 +1,10 @@
 // 7s Slots. The server decides every spin (debit, crypto.randomInt reel stops, credit) before any
 // animation; the reels then stop one by one on the result. While they spin, the nav wallet is held at
 // "balance − bet" so the live balance can't give the result away early.
+//
+// The bet is built from chips ($1, $2, $5, $10; Undo, Clear; up to $10). Tap Spin again while the
+// reels spin to stop them at once on the result (as soon as it has arrived) — that tap never starts or
+// charges another spin.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -12,10 +16,10 @@ import { spinSlots } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
 import { friendlyError } from '../../components/StatusViews.jsx';
 import { PAYTABLE } from '../../../shared/casino/slotMachine.js';
+import { ChipRack, ChipStack, chipsFor } from '../../components/casino/Chips.jsx';
 import { CASINO_MAX_BET_DOLLARS, CASINO_MIN_BET_DOLLARS } from '../../../shared/casino/constants.js';
 
 const BET_STORAGE_KEY = 'backyardbook.slotBet';
-const QUICK_BETS = [1, 2, 5, 10];
 const MIN_SPIN_MS = 900; // reels spin at least this long, even if the server answers sooner
 const REEL_GAP_MS = 350; // then stop one after another
 const START_STOPS = [5, 13, 22];
@@ -35,7 +39,8 @@ export default function SlotsPage() {
   const { setHeldCents } = useWalletDisplay();
   const balanceCents = Number(profile?.balanceCents) || 0;
 
-  const [bet, setBet] = useState(readSavedBet);
+  const [chipList, setChipList] = useState(() => chipsFor(readSavedBet() * 100)); // chips on the bet, in order
+  const [chip, setChip] = useState(1);
   const [stops, setStops] = useState(START_STOPS);
   const [stoppedReels, setStoppedReels] = useState(3); // reels 0..stoppedReels-1 are still; the rest spin
   const [busy, setBusy] = useState(false);
@@ -45,6 +50,9 @@ export default function SlotsPage() {
 
   const timersRef = useRef([]);
   const mountedRef = useRef(true);
+  const quickStopRef = useRef(false); // Spin tapped again while spinning
+  const outcomeRef = useRef(null); // this spin's result, once the server has answered
+  const bet = chipList.reduce((sum, d) => sum + d, 0);
 
   // On leaving the page: stop pending reel timers and give the nav its real balance back.
   useEffect(() => {
@@ -57,18 +65,59 @@ export default function SlotsPage() {
     };
   }, [setHeldCents]);
 
-  const chooseBet = useCallback((dollars) => {
-    const next = Math.min(CASINO_MAX_BET_DOLLARS, Math.max(CASINO_MIN_BET_DOLLARS, dollars));
-    setBet(next);
+  // Remember the bet for this browser session.
+  useEffect(() => {
     try {
-      window.sessionStorage.setItem(BET_STORAGE_KEY, String(next));
+      if (bet >= CASINO_MIN_BET_DOLLARS) window.sessionStorage.setItem(BET_STORAGE_KEY, String(bet));
     } catch {
       // Not remembered; that's fine.
     }
-  }, []);
+  }, [bet]);
+
+  const addChip = useCallback(
+    (dollars) => {
+      setError('');
+      if (bet + dollars > CASINO_MAX_BET_DOLLARS) {
+        setError(`The bet is up to $${CASINO_MAX_BET_DOLLARS}.`);
+        return;
+      }
+      if ((bet + dollars) * 100 > balanceCents) {
+        setError(`Not enough in your wallet (${formatMoney(balanceCents)}).`);
+        return;
+      }
+      setChipList((list) => [...list, dollars]);
+    },
+    [bet, balanceCents],
+  );
+
+  // All reels stop on the result, the win shows, the wallet is released.
+  const land = useCallback(
+    (outcome) => {
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
+      setStops(outcome.stops);
+      setStoppedReels(3);
+      setResult(outcome);
+      setHistory((prev) => [outcome, ...prev].slice(0, 10));
+      setHeldCents(null);
+      setBusy(false);
+      quickStopRef.current = false;
+      outcomeRef.current = null;
+    },
+    [setHeldCents],
+  );
 
   async function spin() {
-    if (busy) return;
+    if (busy) {
+      // A second tap while spinning: stop now (or the moment the result arrives). Never a new spin.
+      quickStopRef.current = true;
+      if (outcomeRef.current) land(outcomeRef.current);
+      return;
+    }
+    if (bet < CASINO_MIN_BET_DOLLARS) {
+      setError('Put a chip on the bet first.');
+      return;
+    }
     const betCents = bet * 100;
     if (betCents > balanceCents) {
       setError(`Your wallet has ${formatMoney(balanceCents)}. Lower the bet or add money in the Shop.`);
@@ -79,6 +128,8 @@ export default function SlotsPage() {
     setResult(null);
     setStoppedReels(0);
     setHeldCents(balanceCents - betCents);
+    quickStopRef.current = false;
+    outcomeRef.current = null;
     const startedAt = Date.now();
 
     let outcome;
@@ -89,10 +140,16 @@ export default function SlotsPage() {
       setHeldCents(null);
       setStoppedReels(3);
       setBusy(false);
+      quickStopRef.current = false;
       setError(friendlyError(err.message || 'The spin failed. Nothing was charged.'));
       return;
     }
     if (!mountedRef.current) return;
+    outcomeRef.current = outcome;
+    if (quickStopRef.current) {
+      land(outcome);
+      return;
+    }
 
     // The result is final; now let the reels land on it one at a time.
     const wait = Math.max(0, MIN_SPIN_MS - (Date.now() - startedAt));
@@ -102,14 +159,7 @@ export default function SlotsPage() {
       setStoppedReels(1);
     });
     at(wait + REEL_GAP_MS, () => setStoppedReels(2));
-    at(wait + 2 * REEL_GAP_MS, () => {
-      setStoppedReels(3);
-      setResult(outcome);
-      setHistory((prev) => [outcome, ...prev].slice(0, 10));
-      setHeldCents(null);
-      setBusy(false);
-      timersRef.current = [];
-    });
+    at(wait + 2 * REEL_GAP_MS, () => land(outcome));
   }
 
   const won = result && result.winCents > 0;
@@ -147,25 +197,30 @@ export default function SlotsPage() {
           )}
         </div>
 
-        <div className="bet-stepper" role="group" aria-label="Bet per spin">
-          <button type="button" className="btn stepper-btn" onClick={() => chooseBet(bet - 1)} disabled={busy || bet <= CASINO_MIN_BET_DOLLARS} aria-label="Lower bet">
-            −
-          </button>
-          <span className="bet-amount">${bet}</span>
-          <button type="button" className="btn stepper-btn" onClick={() => chooseBet(bet + 1)} disabled={busy || bet >= CASINO_MAX_BET_DOLLARS} aria-label="Raise bet">
-            +
-          </button>
-        </div>
-        <div className="quick-bets">
-          {QUICK_BETS.map((d) => (
-            <button key={d} type="button" className={d === bet ? 'btn chip active' : 'btn chip'} onClick={() => chooseBet(d)} disabled={busy}>
-              ${d}
-            </button>
-          ))}
-        </div>
+        <button type="button" className={bet ? 'slot-bet has-bet' : 'slot-bet'} onClick={() => addChip(chip)} disabled={busy} aria-label={`Bet $${bet}. Tap to add a $${chip} chip.`}>
+          <span className="slot-bet-label">Bet · tap to add ${chip}</span>
+          <span className="spot-chips">
+            <ChipStack cents={bet * 100} />
+            <span className="bet-amount">${bet}</span>
+          </span>
+        </button>
+        <ChipRack
+          chip={chip}
+          onChip={setChip}
+          onUndo={() => {
+            setError('');
+            setChipList((list) => list.slice(0, -1));
+          }}
+          onClear={() => {
+            setError('');
+            setChipList([]);
+          }}
+          canUndo={chipList.length > 0}
+          disabled={busy}
+        />
 
-        <button type="button" className="btn btn-primary spin-btn" onClick={spin} disabled={busy}>
-          {busy ? 'Spinning…' : `Spin · $${bet}`}
+        <button type="button" className={busy ? 'btn btn-primary spin-btn spinning' : 'btn btn-primary spin-btn'} onClick={spin} disabled={!busy && bet < CASINO_MIN_BET_DOLLARS}>
+          {busy ? 'Stop' : bet ? `Spin · $${bet}` : 'Add a chip to spin'}
         </button>
         {error ? (
           <p className="error-text small" role="alert">

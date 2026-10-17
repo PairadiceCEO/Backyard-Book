@@ -1,17 +1,31 @@
 // Live hooks for a casino table: the public table doc, the server-time countdown, the tick that ends
 // a timed phase, heartbeats while seated, and the one-by-one card reveal.
 
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase.js';
 import { lastCasinoCallAt, serverNow, tableAction } from '../lib/casino.js';
 import { HEARTBEAT_SECONDS, TICK_JITTER_MS } from '../../shared/casino/constants.js';
 
+// Which of two copies of the table doc is newer (server time, then version).
+function newerTable(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const at = Number(a.updatedAt) || 0;
+  const bt = Number(b.updatedAt) || 0;
+  if (at !== bt) return at > bt ? a : b;
+  return (Number(b.version) || 0) > (Number(a.version) || 0) ? b : a;
+}
+
 // One onSnapshot listener on casinoTables/{game}. table is null until someone first sits down.
+// accept(table) takes the copy an API reply carried: the caller's own action shows at once, and the
+// listener's copy wins again as soon as it's as new.
 export function useCasinoTable(game) {
   const [state, setState] = useState({ table: null, loading: true, error: '' });
+  const [fromReply, setFromReply] = useState(null);
 
   useEffect(() => {
+    setFromReply(null);
     if (!db || !game) {
       setState({ table: null, loading: false, error: '' });
       return undefined;
@@ -25,7 +39,26 @@ export function useCasinoTable(game) {
     return unsubscribe;
   }, [game]);
 
-  return state;
+  const accept = useCallback((table) => {
+    if (table && typeof table === 'object') setFromReply((prev) => newerTable(prev, table));
+  }, []);
+
+  const table = newerTable(state.table, fromReply);
+  return { table, loading: state.loading && !fromReply, error: state.error, accept };
+}
+
+// Calls a table action and shows its result at once: the reply's table (accept) and wallet
+// (reportBalance). Everyone else still sees it through their listener.
+export function useTableCall(game, accept, reportBalance) {
+  return useCallback(
+    async (action, fields = {}) => {
+      const reply = await tableAction(game, action, fields);
+      if (reply?.table) accept(reply.table);
+      if (Number.isFinite(reply?.balanceCents)) reportBalance(reply.balanceCents);
+      return reply;
+    },
+    [game, accept, reportBalance],
+  );
 }
 
 // Whole seconds left until `deadline` (server ms), or null with no deadline. Re-renders once a second.
@@ -98,28 +131,32 @@ export function useHeartbeat(game, seated) {
   }, [game, seated]);
 }
 
-// How many of a deal's cards are face up, given when the server dealt them (server ms) and the gap
-// between cards. A phone that opens the page late shows the cards already turned at once.
-// A layout effect, so a fresh deal never flashes every card face up for one frame.
-export function useCardReveal(dealtAt, cardCount, gapMs) {
-  const [shown, setShown] = useState(cardCount);
+// How many of a write's cards are face up right now. offsets: when each card turns over, in ms after
+// `at` (the server's time of the deal), so every phone shows the same card at the same moment and a
+// phone that arrives late shows the cards already dealt. A layout effect, so a fresh deal never
+// flashes every card face up for one frame.
+export function useTimedReveal(at, offsets) {
+  const key = offsets.join(',');
+  const count = offsets.length;
+  const [shown, setShown] = useState(count);
 
   useLayoutEffect(() => {
-    if (!dealtAt || !cardCount) {
-      setShown(cardCount);
+    const times = key ? key.split(',').map(Number) : [];
+    if (!at || !times.length) {
+      setShown(times.length);
       return undefined;
     }
-    const elapsed = Math.max(0, serverNow() - dealtAt);
-    const already = Math.min(cardCount, Math.floor(elapsed / gapMs) + 1);
+    const elapsed = Math.max(0, serverNow() - at);
+    const already = times.filter((t) => t <= elapsed).length;
     setShown(already);
     const timers = [];
-    for (let i = already; i < cardCount; i += 1) {
-      timers.push(setTimeout(() => setShown(i + 1), i * gapMs - elapsed));
+    for (let i = already; i < times.length; i += 1) {
+      timers.push(setTimeout(() => setShown(i + 1), times[i] - elapsed));
     }
     return () => timers.forEach(clearTimeout);
-  }, [dealtAt, cardCount, gapMs]);
+  }, [at, key]);
 
-  return shown;
+  return Math.min(shown, count);
 }
 
 // True while a roll that the server made at `at` (server ms) is still tumbling on screen.

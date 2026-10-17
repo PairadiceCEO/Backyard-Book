@@ -11,7 +11,7 @@ export const HEARTBEAT_SECONDS = 20; // a seated phone says "still here" this of
 export const PRESENCE_WRITE_SECONDS = 30; // the server writes presence at most this often per player
 export const SEAT_TIMEOUT_SECONDS = 60; // no heartbeat for this long → the seat frees at round end
 export const TICK_JITTER_MS = 800; // phones wait 0–800 ms after zero before sending tick
-export const DICE_ANIMATION_MS = 1400; // phones tumble the dice this long; the point-phase clock starts after it
+export const DICE_ANIMATION_MS = 1000; // phones tumble the dice this long; the point-phase clock starts after it
 
 export const CASINO_LEDGER_TYPES = ['casino_bet', 'casino_payout', 'casino_refund'];
 
