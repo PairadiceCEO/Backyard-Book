@@ -30,10 +30,11 @@ function seed(balanceCents = 10000) {
 }
 const callerOf = (uid) => ({ uid, token: {}, user: fake.get(`users/${uid}`) });
 let dice = [];
-let rng = (max) => {
+const scriptedRng = (max) => {
   if (max === 6 && dice.length) return dice.shift() - 1;
   return Math.floor(Math.random() * max);
 };
+let rng = scriptedRng;
 const rollAs = (...d) => { dice = [...d]; };
 let GAME = 'craps';
 const act = (uid, action, fields = {}, now = T0) => handleTableAction(callerOf(uid), { game: GAME, action, ...fields }, { now, randomInt: (m) => rng(m) });
@@ -415,4 +416,82 @@ test('/api/casino: every table is open now; game errors are clear', async () => 
   assert.deepEqual([r.statusCode, r.body.error.code], [400, 'UNKNOWN_ACTION']);
   const roll2 = await call({ action: 'roll', game: 'craps', rollSeq: 0 });
   assert.equal(roll2.body.error.code, 'NEED_LINE_BET');
+});
+
+// ---------- chips in one request, Odds up to 2× Pass ----------
+const chipsDown = (uid, changes, now = T0, requestId = `cr-chips-${String(++reqNo).padStart(6, '0')}`) => act(uid, 'bets', { changes, requestId }, now);
+
+test('chips tapped together arrive as one request: all applied with one charge, or none', async () => {
+  rng = scriptedRng;
+  dice = [];
+  seed();
+  GAME = 'craps';
+  await sitAll(['p1', 'p2']);
+  await chipsDown('p1', [{ kind: 'pass', cents: 500 }, { kind: 'pass', cents: 200 }, { kind: 'field', cents: 100 }]);
+  assert.deepEqual([betsOf('p1').pass, betsOf('p1').field, wallet('p1')], [700, 100, 10000 - 800]);
+  assert.equal(ledger().filter((e) => e.uid === 'p1' && e.type === 'casino_bet').length, 1, 'one charge for the batch');
+  // One bad chip refuses the whole batch and changes nothing.
+  const before = table();
+  await err(chipsDown('p1', [{ kind: 'field', cents: 100 }, { kind: 'pass', cents: 500 }]), 'SPOT_LIMIT');
+  await err(chipsDown('p1', [{ kind: 'place', number: 6, cents: 100 }]), 'BET_NOT_ALLOWED');
+  await err(chipsDown('p1', [{ kind: 'field', cents: 150 }]), 'BAD_BET');
+  await err(chipsDown('p1', [{ kind: 'field', cents: -300 }]), 'NO_BET');
+  assert.deepEqual(table(), before);
+  // Undo = take a chip back (refund); mixed batches net out as one charge + one refund.
+  await chipsDown('p1', [{ kind: 'pass', cents: -200 }]);
+  assert.deepEqual([betsOf('p1').pass, wallet('p1')], [500, 10000 - 600]);
+  await chipsDown('p1', [{ kind: 'field', cents: -100 }, { kind: 'dontPass', cents: 300 }]);
+  assert.deepEqual([betsOf('p1').field, betsOf('p1').dontPass, wallet('p1')], [0, 300, 10000 - 800]);
+  // A retried request is applied once.
+  await chipsDown('p2', [{ kind: 'field', cents: 200 }], T0, 'cr-chips-replay-1');
+  assert.equal((await chipsDown('p2', [{ kind: 'field', cents: 200 }], T0, 'cr-chips-replay-1')).duplicate, true);
+  assert.equal(wallet('p2'), 9800);
+  // Wallet: refunds in the same batch count toward the new chips.
+  seed(300);
+  await sitAll(['p1']);
+  await chipsDown('p1', [{ kind: 'pass', cents: 300 }]);
+  await chipsDown('p1', [{ kind: 'pass', cents: -300 }, { kind: 'dontPass', cents: 300 }]);
+  assert.deepEqual([betsOf('p1').pass, betsOf('p1').dontPass, wallet('p1')], [0, 300, 0]);
+  await err(chipsDown('p1', [{ kind: 'field', cents: 100 }]), 'INSUFFICIENT_BALANCE');
+  moneyAddsUp(300);
+});
+
+test('Odds behind Pass: up to 2× the Pass bet, past the $10 spot limit; Crapless the same', async () => {
+  rng = scriptedRng;
+  dice = [];
+  for (const variant of ['craps', 'crapless']) {
+    seed();
+    GAME = variant;
+    await sitAll(['p1', 'p2']);
+    await bet('p1', 'pass', 10);
+    await bet('p2', 'pass', 3);
+    rollAs(3, 3); // point 6
+    await roll('p1');
+    await chipsDown('p1', [{ kind: 'odds', cents: 1000 }, { kind: 'odds', cents: 1000 }]);
+    assert.equal(betsOf('p1').odds, 2000, '$10 Pass allows $20 Odds');
+    await err(chipsDown('p1', [{ kind: 'odds', cents: 100 }]), 'SPOT_LIMIT');
+    await chipsDown('p2', [{ kind: 'odds', cents: 500 }, { kind: 'odds', cents: 100 }]);
+    await err(chipsDown('p2', [{ kind: 'odds', cents: 100 }]), 'SPOT_LIMIT', '$3 Pass allows $6 Odds');
+    await err(bet('p2', 'place', 11, { number: 6 }), 'BAD_BET');
+    // Point made: $20 Odds on 6 pay 6:5.
+    rollAs(4, 2);
+    await roll('p1');
+    assert.equal(wallet('p1'), 10000 - 3000 + 2000 + 2000 + 2400);
+    moneyAddsUp(10000);
+  }
+});
+
+test('the roll reply carries the dice and the table, so the shooter sees it at once', async () => {
+  rng = scriptedRng;
+  dice = [];
+  seed();
+  GAME = 'craps';
+  await sitAll(['p1']);
+  await bet('p1', 'pass', 5);
+  rollAs(2, 6);
+  const r = await roll('p1');
+  assert.deepEqual([r.dice, r.total, r.kind], [[2, 6], 8, 'point']);
+  assert.deepEqual(r.table.lastRoll.dice, [2, 6]);
+  assert.equal(r.table.version, table().version);
+  assert.equal(r.balanceCents, wallet('p1'));
 });

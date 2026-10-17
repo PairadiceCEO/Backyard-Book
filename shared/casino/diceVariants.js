@@ -18,6 +18,7 @@ export const DICE_VARIANTS = {
     name: 'Craps',
     seven: 7,
     lineOdds: [1, 1], // Pass and Don't Pass pay even money
+    oddsMultiple: 2, // Odds behind Pass up to 2× the Pass bet
     comeOutPassWins: [7, 11],
     comeOutPassLoses: [2, 3, 12],
     dontPass: { comeOutWins: [2, 3], comeOutPushes: [12] },
@@ -31,6 +32,7 @@ export const DICE_VARIANTS = {
     name: 'Crapless Craps',
     seven: 7,
     lineOdds: [1, 1],
+    oddsMultiple: 2,
     comeOutPassWins: [7],
     comeOutPassLoses: [],
     dontPass: null, // not offered

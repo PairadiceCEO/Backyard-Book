@@ -28,7 +28,7 @@ import { DICE_VARIANTS } from '../../shared/casino/diceVariants.js';
 import {
   BET_KINDS,
   BET_LABELS,
-  SPOT_MAX_CENTS,
+  spotLimitCents,
   cloneBets,
   emptyDiceBets,
   hasLineAction,
@@ -148,57 +148,114 @@ export function makeDiceEngine(variantId) {
 
   // ---------- actions ----------
 
-  async function bet(ctx, body) {
-    const index = requireSeat(ctx);
-    const { state } = ctx;
-    const seat = state.seats[index];
-    const kind = body.kind;
+  const CHANGE_LIMIT = 20;
+
+  function parseKind(change) {
+    const kind = change?.kind;
     if (!BET_KINDS.includes(kind)) throw new HttpError(400, 'BAD_BET', 'Pick a bet: pass, dontPass, odds, place or field.');
-    const number = kind === 'place' ? body.number : undefined;
+    const number = kind === 'place' ? change.number : undefined;
     if (kind === 'place' && !Number.isInteger(number)) throw new HttpError(400, 'BAD_BET', 'A Place bet needs its number.');
-    if (!isValidCasinoBet(body.amount)) throw new HttpError(400, 'BAD_BET', 'Bets are whole dollars from $1 to $10.');
-    if (typeof body.requestId !== 'string' || !REQUEST_ID_PATTERN.test(body.requestId)) {
-      throw new HttpError(400, 'BAD_REQUEST_ID', 'Missing or invalid requestId.');
-    }
-    if (seat.reqs?.includes(body.requestId)) return { duplicate: true };
-    if (seat.leaving) throw new HttpError(409, 'LEAVING', "You're leaving this table.");
-    const blocked = placeBlocker(variant, state.point, seat.bets, kind, number);
-    if (blocked) throw new HttpError(409, 'BET_NOT_ALLOWED', blocked);
-    const cents = body.amount * 100;
-    const already = spotAmount(seat.bets, kind, number);
-    if (already + cents > SPOT_MAX_CENTS) {
-      throw new HttpError(409, 'SPOT_LIMIT', `That spot holds up to ${formatDollars(SPOT_MAX_CENTS)}; you have ${formatDollars(already)} there.`);
-    }
-    const id = `cbet_${ctx.caller.uid}_${body.requestId}`;
-    if (await ctx.ledgerExists(id)) return { duplicate: true };
-    const balance = await ctx.balance(seat.uid);
-    if (balance < cents) throw new HttpError(409, 'INSUFFICIENT_BALANCE', `Your wallet has ${formatDollars(balance)}; that needs ${formatDollars(cents)}.`);
+    return { kind, number };
+  }
 
-    const label = kind === 'place' ? `Place ${number}` : BET_LABELS[kind];
-    ctx.addMoney(seat.uid, { id, type: 'casino_bet', amountCents: -cents, roundId: rollId(state), note: `${variant.name}: ${label} ${formatDollars(cents)}`, extra: { requestId: body.requestId } });
-    const bets = cloneBets(seat.bets);
-    if (kind === 'place') bets.place[number] = already + cents;
-    else bets[kind] = already + cents;
-    seat.bets = bets;
-    seat.reqs = [...(seat.reqs ?? []), body.requestId].slice(-RECENT_REQUESTS);
-
-    if (state.shooter === null) state.shooter = nextShooter(state, -1);
-    if (state.point === null) {
-      const isLine = kind === 'pass' || kind === 'dontPass';
-      if (state.waiting) {
-        if (isLine) {
-          // Nobody wanted the dice; the first player to bet a line gets them.
-          state.shooter = index;
-          state.waiting = false;
-          state.lap = 0;
-          state.deadline = ctx.now + TURN_MS;
+  // Applies chip changes to a copy of the seat's bets: + puts chips down, − takes them back.
+  // Returns { bets, addCents, backCents } or throws with the reason (and nothing changes).
+  function applyChanges(state, seatBets, changes) {
+    const bets = cloneBets(seatBets);
+    let addCents = 0;
+    let backCents = 0;
+    for (const change of changes) {
+      const { kind, number } = parseKind(change);
+      const cents = change.cents;
+      if (!Number.isInteger(cents) || cents === 0 || cents % 100 !== 0) throw new HttpError(400, 'BAD_BET', 'Chips are whole dollars.');
+      const label = kind === 'place' ? `Place ${number}` : BET_LABELS[kind];
+      const have = spotAmount(bets, kind, number);
+      if (cents > 0) {
+        const blocked = placeBlocker(variant, state.point, bets, kind, number);
+        if (blocked) throw new HttpError(409, 'BET_NOT_ALLOWED', blocked);
+        const limit = spotLimitCents(variant, bets, kind);
+        if (have + cents > limit) {
+          throw new HttpError(409, 'SPOT_LIMIT', `${label} holds up to ${formatDollars(limit)}${kind === 'odds' ? ` (${variant.oddsMultiple}× your Pass)` : ''}; you have ${formatDollars(have)} there.`);
         }
-      } else if (!state.deadline) {
-        state.deadline = ctx.now + TURN_MS; // the first bet after the last roll starts the clock
+        addCents += cents;
+      } else {
+        const blocked = removeBlocker(state.point, kind);
+        if (blocked) throw new HttpError(409, 'BET_LOCKED', blocked);
+        if (have + cents < 0) throw new HttpError(409, 'NO_BET', `You have only ${formatDollars(have)} on ${label}.`);
+        backCents += -cents;
+      }
+      if (kind === 'place') {
+        if (have + cents > 0) bets.place[number] = have + cents;
+        else delete bets.place[number];
+      } else {
+        bets[kind] = have + cents;
       }
     }
+    if (bets.odds > bets.pass * variant.oddsMultiple) throw new HttpError(409, 'SPOT_LIMIT', `Odds can be up to ${variant.oddsMultiple}× your Pass bet.`);
+    return { bets, addCents, backCents };
+  }
+
+  // A chip went down: start the come-out clock, or hand the dice to whoever bets a line while waiting.
+  function afterChipDown(ctx, index, kinds) {
+    const { state } = ctx;
+    if (state.shooter === null) state.shooter = nextShooter(state, -1);
+    if (state.point !== null) return;
+    if (state.waiting) {
+      if (kinds.some((k) => k === 'pass' || k === 'dontPass')) {
+        // Nobody wanted the dice; the first player to bet a line gets them.
+        state.shooter = index;
+        state.waiting = false;
+        state.lap = 0;
+        state.deadline = ctx.now + TURN_MS;
+      }
+    } else if (!state.deadline) {
+      state.deadline = ctx.now + TURN_MS; // the first bet after the last roll starts the clock
+    }
+  }
+
+  // bets { changes: [{ kind, number?, cents }], requestId }: chips tapped within a moment arrive
+  // together and are applied all-or-nothing, with one charge and/or one refund.
+  async function placeChips(ctx, index, changes, requestId) {
+    const { state } = ctx;
+    const seat = state.seats[index];
+    if (typeof requestId !== 'string' || !REQUEST_ID_PATTERN.test(requestId)) throw new HttpError(400, 'BAD_REQUEST_ID', 'Missing or invalid requestId.');
+    if (seat.reqs?.includes(requestId)) return { duplicate: true };
+    const { bets: next, addCents, backCents } = applyChanges(state, seat.bets, changes);
+    if (addCents > 0 && seat.leaving) throw new HttpError(409, 'LEAVING', "You're leaving this table.");
+    const id = `cbet_${ctx.caller.uid}_${requestId}`;
+    if (addCents > 0) {
+      if (await ctx.ledgerExists(id)) return { duplicate: true };
+      const balance = (await ctx.balance(seat.uid)) + backCents;
+      if (balance < addCents) throw new HttpError(409, 'INSUFFICIENT_BALANCE', `Your wallet has ${formatDollars(balance)}; that needs ${formatDollars(addCents)}.`);
+    }
+    if (backCents > 0) refund(ctx, seat, backCents, 'chips taken back');
+    if (addCents > 0) {
+      ctx.addMoney(seat.uid, { id, type: 'casino_bet', amountCents: -addCents, roundId: rollId(state), note: `${variant.name}: chips ${formatDollars(addCents)}`, extra: { requestId } });
+    }
+    seat.bets = next;
+    seat.reqs = [...(seat.reqs ?? []), requestId].slice(-RECENT_REQUESTS);
+    const added = changes.filter((c) => c.cents > 0).map((c) => c.kind);
+    if (added.length) afterChipDown(ctx, index, added);
     ctx.changed = true;
-    return { spotCents: already + cents };
+    return { bets: next };
+  }
+
+  async function bets(ctx, body) {
+    const index = requireSeat(ctx);
+    const changes = body.changes;
+    if (!Array.isArray(changes) || changes.length === 0 || changes.length > CHANGE_LIMIT) {
+      throw new HttpError(400, 'BAD_BET', `Send 1–${CHANGE_LIMIT} chip changes.`);
+    }
+    return placeChips(ctx, index, changes, body.requestId);
+  }
+
+  // One bet { kind, number?, amount (dollars), requestId }: the same as a single chip.
+  async function bet(ctx, body) {
+    const index = requireSeat(ctx);
+    const { kind, number } = parseKind(body);
+    if (!isValidCasinoBet(body.amount)) throw new HttpError(400, 'BAD_BET', 'Bets are whole dollars from $1 to $10.');
+    const result = await placeChips(ctx, index, [{ kind, number, cents: body.amount * 100 }], body.requestId);
+    return result.duplicate ? result : { spotCents: spotAmount(result.bets, kind, number) };
   }
 
   async function removeBet(ctx, body) {
@@ -231,7 +288,7 @@ export function makeDiceEngine(variantId) {
     if (state.shooter !== index) throw new HttpError(403, 'NOT_SHOOTER', "You don't have the dice.");
     if (!hasLine(state.seats[index])) throw new HttpError(409, 'NEED_LINE_BET', `Bet Pass${variant.dontPass ? " or Don't Pass" : ''} to roll.`);
     await doRoll(ctx);
-    return { rollSeq: state.rollSeq, total: state.lastRoll.total };
+    return { rollSeq: state.rollSeq, total: state.lastRoll.total, dice: state.lastRoll.dice, kind: state.lastRoll.kind };
   }
 
   // ---------- the roll ----------
@@ -336,7 +393,7 @@ export function makeDiceEngine(variantId) {
     onDeadline,
     afterSeatsChanged,
     beforeFree,
-    actions: { bet, removeBet, roll },
+    actions: { bet, bets, removeBet, roll },
   };
 }
 
