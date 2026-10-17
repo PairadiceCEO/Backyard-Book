@@ -472,10 +472,10 @@ test('/api/casino: baccarat open, other tables still closed, game errors are cle
   assert.equal(r.body.seat, 1);
   assert.equal(typeof r.body.serverNow, 'number');
   assert.equal(Object.keys(r.body).some((k) => ['state', 'seats', 'coup', 'shoe'].includes(k)), false, 'replies carry no table state');
-  r = await call({ action: 'sit', game: 'crapless' });
-  assert.deepEqual([r.statusCode, r.body.error.code], [400, 'TABLE_NOT_OPEN']);
-  r = await call({ action: 'roll', game: 'craps' });
-  assert.equal(r.body.error.code, 'TABLE_NOT_OPEN');
+  r = await call({ action: 'sit', game: 'roulette' });
+  assert.deepEqual([r.statusCode, r.body.error.code], [400, 'BAD_GAME']);
+  r = await call({ action: 'roll', game: 'baccarat' });
+  assert.equal(r.body.error.code, 'UNKNOWN_ACTION');
   r = await call({ action: 'hit', game: 'baccarat' });
   assert.deepEqual([r.statusCode, r.body.error.code], [400, 'UNKNOWN_ACTION']);
   r = await call({ action: 'sit', game: 'poker' });

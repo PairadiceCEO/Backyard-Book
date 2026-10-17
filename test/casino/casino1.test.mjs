@@ -209,10 +209,9 @@ test('/api/casino: sign-in required, disabled refused, spin works, tables not op
   r.body.stops.forEach((s) => assert.ok(Number.isInteger(s) && s >= 0 && s < 32));
   assert.ok(Number.isFinite(r.body.serverNow));
   assert.equal(store.get('users/u1').balanceCents, 10000 - 100 + r.body.winCents);
-  const sit = await call('mike-token', { action: 'sit', game: 'craps', seat: 0 });
+  const sit = await call('mike-token', { action: 'sit', game: 'roulette', seat: 0 });
   assert.equal(sit.statusCode, 400);
-  assert.equal(sit.body.error.code, 'TABLE_NOT_OPEN');
-  assert.match(sit.body.error.message, /phase 4/);
+  assert.equal(sit.body.error.code, 'BAD_GAME', 'every table is open; unknown games are refused');
   const unknown = await call('mike-token', { action: 'cheat' });
   assert.equal(unknown.body.error.code, 'UNKNOWN_ACTION');
 });
