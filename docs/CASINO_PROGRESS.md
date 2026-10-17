@@ -17,7 +17,7 @@ the `casino-phase4` branch until it's tested, then it's merged.
 ### Phase 4 checklist
 
 - [x] Branch, this file, casino server tests moved into `test/casino/` (`npm run test:casino`)
-- [ ] `shared/casino/diceVariants.js` (the only place Craps and Crapless differ) + `shared/casino/dice.js` (pure roll/settle) + `test/dice.test.js`
+- [x] `shared/casino/diceVariants.js` (the only place Craps and Crapless differ) + `shared/casino/dice.js` (pure roll/settle) + `test/dice.test.js`
 - [ ] `server/casino/crapsTable.js` (one engine, two variants) wired in `server/casino/tables.js`; `test/casino/casino4.test.mjs`
 - [ ] Phone UI `src/pages/casino/CrapsPage.jsx`, lobby labels, CSS; phone check at 320/375/414
 - [ ] Full regression, README section, merge to `main`, push, report to Will
