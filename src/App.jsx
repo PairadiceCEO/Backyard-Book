@@ -12,6 +12,9 @@ import MyBetsPage from './pages/MyBetsPage.jsx';
 import LeaderboardPage from './pages/LeaderboardPage.jsx';
 import ShopPage from './pages/ShopPage.jsx';
 import AdminPage from './pages/admin/AdminPage.jsx';
+import CasinoLobby from './pages/casino/CasinoLobby.jsx';
+import SlotsPage from './pages/casino/SlotsPage.jsx';
+import CasinoTablePage from './pages/casino/CasinoTablePage.jsx';
 
 export default function App() {
   if (missingFirebaseConfig.length > 0) {
@@ -35,6 +38,9 @@ export default function App() {
       >
         <Route path="/sportsbook" element={<SportsbookPage />} />
         <Route path="/sportsbook/:league/:gameId" element={<GameDetailPage />} />
+        <Route path="/casino" element={<CasinoLobby />} />
+        <Route path="/casino/slots" element={<SlotsPage />} />
+        <Route path="/casino/:game" element={<CasinoTablePage />} />
         <Route path="/my-bets" element={<MyBetsPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/shop" element={<ShopPage />} />

@@ -11,6 +11,14 @@ service cloud.firestore {
     match /ledger/{entryId}  { allow read: if isAdmin() || owns(resource.data); allow write: if false; }
     match /customGames/{id}  { allow read: if signedIn();                      allow write: if false; }
 
+    // Casino tables: anyone signed in can watch; only the server writes.
+    match /casinoTables/{game} {
+      allow read: if signedIn();
+      allow write: if false;
+      // private/shoe (the shoe and the hole card) and presence/{uid}: no client may read or write, ever.
+      match /{sub=**} { allow read, write: if false; }
+    }
+
     // usernames, cache, meta and anything not listed: server only.
     match /{document=**}     { allow read, write: if false; }
   }

@@ -3,12 +3,22 @@
 
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useWalletDisplay } from '../context/WalletDisplayContext.jsx';
 import { formatMoney } from '../lib/format.js';
 import { APP_NAME } from '../../shared/constants.js';
 
 const ICONS = {
   book: (
     <path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6V7Zm9-2v14" />
+  ),
+  casino: (
+    <>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <circle cx="9" cy="9" r="1.2" fill="currentColor" />
+      <circle cx="15" cy="15" r="1.2" fill="currentColor" />
+      <circle cx="15" cy="9" r="1.2" fill="currentColor" />
+      <circle cx="9" cy="15" r="1.2" fill="currentColor" />
+    </>
   ),
   bets: <path d="M7 3h10a1 1 0 0 1 1 1v17l-3-2-3 2-3-2-3 2V4a1 1 0 0 1 1-1Zm2 5h6M9 12h6M9 16h3" />,
   leaders: <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Zm0 2H4v2a3 3 0 0 0 3 3m10-5h3v2a3 3 0 0 1-3 3" />,
@@ -20,6 +30,7 @@ const ICONS = {
 
 const TABS = [
   { to: '/sportsbook', label: 'Sportsbook', short: 'Book', icon: 'book' },
+  { to: '/casino', label: 'Casino', short: 'Casino', icon: 'casino' },
   { to: '/my-bets', label: 'My Bets', short: 'My Bets', icon: 'bets' },
   { to: '/leaderboard', label: 'Leaderboard', short: 'Leaders', icon: 'leaders' },
   { to: '/shop', label: 'Shop', short: 'Shop', icon: 'shop' },
@@ -36,6 +47,8 @@ function bottomClass({ isActive }) {
 
 export default function NavBar() {
   const { profile, isAdmin, signOut } = useAuth();
+  const { heldCents } = useWalletDisplay();
+  const shownCents = heldCents ?? profile?.balanceCents ?? 0;
   const tabs = isAdmin ? [...TABS, ADMIN_TAB] : TABS;
 
   return (
@@ -45,7 +58,7 @@ export default function NavBar() {
           <span className="brand">{APP_NAME}</span>
           <div className="navbar-account">
             <span className="wallet" title="Wallet balance">
-              {formatMoney(profile?.balanceCents ?? 0)}
+              {formatMoney(shownCents)}
             </span>
             <span className="muted small account-name">{profile?.displayName || profile?.username}</span>
             <button type="button" className="btn btn-ghost small" onClick={() => signOut()}>

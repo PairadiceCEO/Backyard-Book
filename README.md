@@ -73,3 +73,10 @@ Bets settle by ESPN game id once ESPN marks the game final (custom games once th
 - On phones the tabs move to a bottom bar and the bet slip is a drawer above it (tap the green bar to open it).
 - **iPhone (Safari):** Share → **Add to Home Screen**. **Android (Chrome):** ⋮ menu → **Add to Home screen** / **Install app**. It opens full-screen as "Backyard Book" with its own icon.
 - Checking the daily settlement cron: Vercel project → **Settings → Cron Jobs** lists `/api/settle` at `0 11 * * *` (6 AM CDT / 5 AM CST); **Run** triggers it now, and **Logs** (filter by `/api/settle`) shows each run's result.
+
+## Casino (casino phase 1: lobby + 7s slot)
+
+- **One-time step:** Firebase console → Firestore Database → **Rules** → replace everything with the updated `firestore.rules` → **Publish**. It adds the casino tables (anyone signed in can watch; their shoe and presence docs are server-only).
+- **Casino** tab → lobby with the 7s slot (open) and the four table games (opening in later casino phases).
+- Every spin is one `/api/casino` call: the server debits the bet, picks the three reel stops with `crypto.randomInt`, and credits any win in one transaction, with `casino_bet` / `casino_payout` ledger entries. A retried spin (same request id) replays the same result and is charged once.
+- The slot's return to player is exactly 29,493 / 32,768 = 90.0055%; `npm test` checks it by enumerating every stop combination.

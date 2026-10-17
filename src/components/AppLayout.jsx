@@ -4,6 +4,7 @@ import NavBar from './NavBar.jsx';
 import BetSlip from './BetSlip.jsx';
 import { ErrorBoundary, OfflineBanner } from './StatusViews.jsx';
 import { BetSlipProvider } from '../context/BetSlipContext.jsx';
+import { WalletDisplayProvider } from '../context/WalletDisplayContext.jsx';
 import { requestSettlement } from '../lib/settle.js';
 
 export default function AppLayout() {
@@ -17,16 +18,18 @@ export default function AppLayout() {
 
   return (
     <BetSlipProvider>
-      <div className={onSportsbook ? 'app-shell has-slip' : 'app-shell'}>
-        <NavBar />
-        <OfflineBanner />
-        <main className="app-main">
-          <ErrorBoundary resetKey={location.pathname}>
-            <Outlet />
-          </ErrorBoundary>
-        </main>
-        {onSportsbook ? <BetSlip /> : null}
-      </div>
+      <WalletDisplayProvider>
+        <div className={onSportsbook ? 'app-shell has-slip' : 'app-shell'}>
+          <NavBar />
+          <OfflineBanner />
+          <main className="app-main">
+            <ErrorBoundary resetKey={location.pathname}>
+              <Outlet />
+            </ErrorBoundary>
+          </main>
+          {onSportsbook ? <BetSlip /> : null}
+        </div>
+      </WalletDisplayProvider>
     </BetSlipProvider>
   );
 }
