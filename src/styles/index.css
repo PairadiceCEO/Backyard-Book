@@ -2470,43 +2470,6 @@ body.no-scroll {
   text-align: center;
 }
 
-.bac-history {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-}
-
-.bead {
-  width: 1.45rem;
-  height: 1.45rem;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.68rem;
-  font-weight: 800;
-  color: #0b0f13;
-}
-
-.bead-P {
-  background: #6fb2ff;
-}
-
-.bead-B {
-  background: #ff7d7d;
-}
-
-.bead-T {
-  background: #6fd492;
-}
-
-.history-empty {
-  margin: 0;
-}
-
 .bac-controls {
   display: flex;
   flex-direction: column;
@@ -2608,4 +2571,223 @@ body.no-scroll {
   .seat-name {
     font-size: 0.7rem;
   }
+}
+
+/* ===================== Baccarat scoreboard (roads) ===================== */
+
+.scoreboard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.score-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.score-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.3rem 0.2rem;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.score-pill strong {
+  font-size: 1.05rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.score-pill.banker strong {
+  color: #ff7d7d;
+}
+
+.score-pill.player strong {
+  color: #6fb2ff;
+}
+
+.score-pill.tie strong {
+  color: #6fd492;
+}
+
+.road-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.road-tab {
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.road-tab.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(47, 191, 113, 0.08);
+}
+
+.road-empty,
+.road-key {
+  margin: 0;
+}
+
+.road {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.road-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.road-label {
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.road-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #f4f4ef;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.road-grid {
+  position: relative;
+  background-image:
+    linear-gradient(to right, #d6d6cf 1px, transparent 1px),
+    linear-gradient(to bottom, #d6d6cf 1px, transparent 1px);
+  background-size: var(--cell) var(--cell);
+}
+
+.road-cell {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Bead Plate: solid circles with the letter */
+.bead-dot::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 999px;
+}
+
+.bead-dot {
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 800;
+  z-index: 0;
+}
+
+.bead-dot::before {
+  z-index: -1;
+}
+
+.bead-B::before {
+  background: #d93838;
+}
+
+.bead-P::before {
+  background: #2f6fd6;
+}
+
+.bead-T::before {
+  background: #219a52;
+}
+
+/* Big Road: hollow rings, green slash for ties */
+.big-ring::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 999px;
+  border: 2.5px solid currentColor;
+}
+
+.ring-B {
+  color: #d93838;
+}
+
+.ring-P {
+  color: #2f6fd6;
+}
+
+.tie-slash {
+  position: absolute;
+  width: 2.5px;
+  height: 120%;
+  background: #219a52;
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+
+.tie-count {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  font-size: 0.55rem;
+  font-weight: 900;
+  color: #156b38;
+  line-height: 1;
+}
+
+/* Derived roads (half-size cells): red = repeating, blue = choppy */
+.derived-R {
+  color: #d93838;
+}
+
+.derived-B {
+  color: #2f6fd6;
+}
+
+.derived-ring::before {
+  content: '';
+  position: absolute;
+  inset: 1.5px;
+  border-radius: 999px;
+  border: 1.5px solid currentColor;
+}
+
+.derived-dot::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.derived-slash::before {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 80%;
+  background: currentColor;
+  transform: rotate(45deg);
+  border-radius: 1px;
 }

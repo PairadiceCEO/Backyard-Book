@@ -7,7 +7,7 @@ import { winningsCents } from './constants.js';
 export const BACCARAT_DECKS = 8;
 export const BACCARAT_SHOE_CARDS = 52 * BACCARAT_DECKS; // 416
 export const BACCARAT_RESHUFFLE_AT = 354; // reshuffle before a round once 85% of the shoe is dealt
-export const BACCARAT_HISTORY_LENGTH = 20;
+export const BACCARAT_MAX_SHOE_RESULTS = 200; // a shoe is ~80 hands; this is only a safety cap
 export const BACCARAT_CARD_REVEAL_MS = 700; // phones turn the cards over one by one, this far apart
 
 export const BACCARAT_SPOTS = ['player', 'banker', 'tie'];

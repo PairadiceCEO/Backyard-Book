@@ -4,12 +4,12 @@
 //             `bet` sets a seat's three spots (each $0 or $1–$10); a change charges or refunds the
 //             difference. `confirm` locks the seat's bets.
 //   Deal      when betting closes, in the same transaction: draw from the private shoe, play the coup,
-//             pay every seat (one ledger entry per player), add to the history strip.
+//             pay every seat (one ledger entry per player), add the winner to the shoe's results.
 //   Results   up until 5 s after the last card turns over on the phones; then the next round opens
 //             and seats whose player left or went quiet are freed.
 //
 // Public doc (casinoTables/baccarat): phase, deadline, roundNo/roundId, seats, coup (face-up cards,
-// totals, winner), history, shoe counts. The shoe itself is only in private/shoe.
+// totals, winner), shoeResults (every winner this shoe, e.g. "BPPTB", for the scoreboard), shoe counts. The shoe itself is only in private/shoe.
 
 import { HttpError } from '../http.js';
 import { requirePhase, requireSeat } from './tableRunner.js';
@@ -26,7 +26,7 @@ import {
 } from '../../shared/casino/constants.js';
 import {
   BACCARAT_DECKS,
-  BACCARAT_HISTORY_LENGTH,
+  BACCARAT_MAX_SHOE_RESULTS,
   BACCARAT_RESHUFFLE_AT,
   BACCARAT_SPOTS,
   SPOT_LABELS,
@@ -55,7 +55,7 @@ function createTable(now) {
     deadline: null,
     seats: Array.from({ length: CASINO_SEATS }, () => null),
     coup: null,
-    history: [],
+    shoeResults: '',
     shoe: { remaining: BACCARAT_DECKS * 52, total: BACCARAT_DECKS * 52, shuffles: 0 },
     version: 0,
     createdAt: now,
@@ -206,7 +206,10 @@ async function closeBetting(ctx) {
   }
 
   state.coup = { ...coup, dealtAt: ctx.now, reshuffled };
-  state.history = [...(state.history ?? []), { w: WINNER_LETTER[coup.winner], p: coup.playerTotal, b: coup.bankerTotal }].slice(-BACCARAT_HISTORY_LENGTH);
+  // The scoreboard: every winner since the last shuffle. A new shoe starts it over.
+  const previous = !reshuffled && typeof state.shoeResults === 'string' ? state.shoeResults : '';
+  state.shoeResults = `${previous}${WINNER_LETTER[coup.winner]}`.slice(-BACCARAT_MAX_SHOE_RESULTS);
+  delete state.history; // the old 20-hand strip (tables created before the scoreboard)
   state.phase = 'results';
   state.deadline = ctx.now + revealMs(cardCount) + RESULTS_SECONDS * 1000;
   ctx.changed = true;

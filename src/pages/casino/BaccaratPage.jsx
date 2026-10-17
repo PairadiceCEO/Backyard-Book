@@ -1,9 +1,10 @@
 // Baccarat table. Everything on screen comes from one live doc, casinoTables/baccarat; every tap is a
-// call to /api/casino. Top to bottom: status and countdown, the cards, the five seats, the history
-// strip, then (when seated) your bets and buttons, just above the tab bar.
+// call to /api/casino. Top to bottom: status and countdown, the cards, the five seats, the scoreboard
+// (roads), then (when seated) your bets and buttons, just above the tab bar.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import BaccaratScoreboard from '../../components/casino/BaccaratScoreboard.jsx';
 import PlayingCard from '../../components/casino/PlayingCard.jsx';
 import TableSeats from '../../components/casino/TableSeats.jsx';
 import { ErrorState, LoadingState, friendlyError } from '../../components/StatusViews.jsx';
@@ -34,19 +35,6 @@ function signedMoney(cents) {
   if (cents > 0) return `+${formatMoney(cents)}`;
   if (cents < 0) return `−${formatMoney(-cents)}`;
   return formatMoney(0);
-}
-
-function HistoryStrip({ history }) {
-  if (!history?.length) return <p className="muted small history-empty">No hands yet this shoe.</p>;
-  return (
-    <ol className="bac-history" aria-label="Last hands, oldest first">
-      {history.map((h, i) => (
-        <li key={i} className={`bead bead-${h.w}`} title={`${h.w === 'T' ? 'Tie' : h.w === 'P' ? 'Player' : 'Banker'} ${h.p}–${h.b}`}>
-          {h.w}
-        </li>
-      ))}
-    </ol>
-  );
 }
 
 function Hand({ label, cards, visibleCount, total, winner, freshFrom }) {
@@ -236,6 +224,9 @@ export default function BaccaratPage() {
   if (error) return <ErrorState title="Couldn't open the table" message={error} />;
 
   const myResult = mySeat?.result && phase === 'results' && !revealing ? mySeat.result : null;
+  // The newest hand joins the roads once its last card is face up.
+  const shoeResults = typeof table?.shoeResults === 'string' ? table.shoeResults : '';
+  const scoreboardResults = revealing ? shoeResults.slice(0, -1) : shoeResults;
   const tableFull = seats.every(Boolean);
 
   return (
@@ -284,10 +275,6 @@ export default function BaccaratPage() {
         detail={seatDetail}
       />
 
-      <div className="card">
-        <h3 className="small-heading">Last {table?.history?.length || 0} hands</h3>
-        <HistoryStrip history={table?.history} />
-      </div>
 
       {mySeat ? (
         <div className="card bac-controls">
@@ -365,6 +352,8 @@ export default function BaccaratPage() {
           {actionError}
         </p>
       ) : null}
+
+      <BaccaratScoreboard results={scoreboardResults} />
 
       <p className="muted small table-rules">
         Player pays 1:1, Banker 0.95:1 (5% commission), Tie 8:1; a Tie pushes Player and Banker bets. 8 decks, standard
