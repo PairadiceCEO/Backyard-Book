@@ -86,7 +86,7 @@ export default function BaccaratPage() {
     tableAction(GAME, 'tick').catch(() => {});
   }, []);
 
-  // ---- the deal: cards turn over at the server's times (0.5 s apart, 1 s before a third card) ----
+  // ---- the deal: cards turn over at the server's times (gaps from shared/casino/timing.js) ----
   const coup = phase === 'results' ? table?.coup ?? null : null;
   const order = coup ? revealOrder(coup.player, coup.banker) : [];
   const shown = useTimedReveal(coup?.dealtAt ?? null, coup ? coupRevealTimes(coup.player, coup.banker) : []);

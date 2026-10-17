@@ -140,7 +140,8 @@ async function draw(ctx) {
 }
 
 // Cards dealt in one write turn over one by one on the phones: each card carries t, its offset in ms
-// from lastDeal.at (the server's time of the write). Opening cards are 0.5 s apart, later cards 1 s.
+// from lastDeal.at (the server's time of the write). Opening cards are BLACKJACK_INITIAL_GAP_MS apart,
+// every later card BLACKJACK_LATER_GAP_MS (shared/casino/timing.js).
 function logDeal(ctx, to, index) {
   if (!ctx.dealLog) {
     ctx.dealLog = { at: ctx.now, cards: [] };

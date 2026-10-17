@@ -135,6 +135,8 @@ export function useHeartbeat(game, seated) {
 // `at` (the server's time of the deal), so every phone shows the same card at the same moment and a
 // phone that arrives late shows the cards already dealt. A layout effect, so a fresh deal never
 // flashes every card face up for one frame.
+const MAX_EARLY_MS = 2000;
+
 export function useTimedReveal(at, offsets) {
   const key = offsets.join(',');
   const count = offsets.length;
@@ -146,7 +148,9 @@ export function useTimedReveal(at, offsets) {
       setShown(times.length);
       return undefined;
     }
-    const elapsed = Math.max(0, serverNow() - at);
+    // If this phone's clock reads a little before the deal time, the first card waits for the deal time
+    // instead of the whole sequence starting early (at most 2 s, so a badly-set clock can't stall it).
+    const elapsed = Math.max(serverNow() - at, -MAX_EARLY_MS);
     const already = times.filter((t) => t <= elapsed).length;
     setShown(already);
     const timers = [];

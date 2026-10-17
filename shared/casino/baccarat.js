@@ -1,6 +1,7 @@
 // Baccarat (punto banco) rules, shared by the server (dealing, settling) and the phone (totals, labels).
 // Pure functions: no Firestore, no clock, and cards come from whatever `draw` function is passed in.
 
+import { BACCARAT_OPENING_GAP_MS, BACCARAT_SETTLE_MS, BACCARAT_THIRD_CARD_GAP_MS } from './timing.js';
 import { cardRank } from './cards.js';
 import { winningsCents } from './constants.js';
 
@@ -131,11 +132,9 @@ export function emptyBets() {
   return { player: 0, banker: 0, tie: 0 };
 }
 
-// When each card of a coup turns over, in ms from the deal (in revealOrder): the four opening cards
-// 0.5 s apart, then 1 s before each third card. Every phone uses the server's deal time.
-export const BACCARAT_OPENING_GAP_MS = 500;
-export const BACCARAT_THIRD_CARD_GAP_MS = 1000;
-export const BACCARAT_SETTLE_MS = 700;
+// When each card of a coup turns over, in ms from the deal (in revealOrder: Player, Banker, Player,
+// Banker, then the third cards): gaps from timing.js. Every phone uses the server's deal time.
+export { BACCARAT_OPENING_GAP_MS, BACCARAT_THIRD_CARD_GAP_MS, BACCARAT_SETTLE_MS };
 
 export function coupRevealTimes(player = [], banker = []) {
   const order = revealOrder(player, banker);

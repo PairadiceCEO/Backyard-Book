@@ -5,13 +5,11 @@ export const CASINO_MAX_BET_DOLLARS = 10;
 export const CASINO_SEATS = 5;
 
 // Table timers. Deadlines are server milliseconds; phones count down against the server's clock.
-export const TURN_SECONDS = 15; // betting closes this long after the first bet; turn timers
-export const RESULTS_SECONDS = 5; // results stay up this long (after the last card turns over)
+// Turn / results / dice / card-dealing timings live in timing.js (one file to tweak them all).
+export { TURN_SECONDS, RESULTS_SECONDS, TICK_JITTER_MS, DICE_ANIMATION_MS } from './timing.js';
 export const HEARTBEAT_SECONDS = 20; // a seated phone says "still here" this often while visible
 export const PRESENCE_WRITE_SECONDS = 30; // the server writes presence at most this often per player
 export const SEAT_TIMEOUT_SECONDS = 60; // no heartbeat for this long → the seat frees at round end
-export const TICK_JITTER_MS = 800; // phones wait 0–800 ms after zero before sending tick
-export const DICE_ANIMATION_MS = 1000; // phones tumble the dice this long; the point-phase clock starts after it
 
 export const CASINO_LEDGER_TYPES = ['casino_bet', 'casino_payout', 'casino_refund'];
 
