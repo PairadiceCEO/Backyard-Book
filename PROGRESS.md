@@ -138,17 +138,19 @@ Battles in My Bets, admin Battles tab (disputed first) with edit log.
   edits already logged (Phase B). Placed bets keep their odds (they're stored on the leg).
 
 ### Checklist
-- [ ] C1 shared/challenges.js; betRules: 'challenge' market (selections o1–o6, no line)
-- [ ] C2 server/challenges.js + routing (postChallenge, admin actions) + firestore.rules
-- [ ] C3 betting: pricing, placeBet (posterBet, betCount, posterBets), gameResults, grading, cashout
-- [ ] C4 custom-game edit log (update / final / cancel) + normalizeCustomGame carries `edits`
-- [ ] C5 tests test/challenges/*.test.mjs (incl. Will's poster-bet test)
+- [x] C1 shared/challenges.js; betRules: 'challenge' market (selections o1–o6, no line)
+- [x] C2 server/challenges.js + routing (postChallenge, admin actions) + firestore.rules
+- [x] C3 betting: pricing, placeBet (posterBet, betCount, posterBets), gameResults, grading, cashout
+- [x] C4 custom-game edit log (update / final / cancel) + normalizeCustomGame carries `edits`
+- [x] C5 tests test/challenges/challenges.test.mjs, 11 tests incl. Will's poster-bet test (`npm run test:challenges`,
+      in test:all); mutation-checked (poster flag, close checks in pricing and in the transaction, grading, approval)
 - [ ] C6 phones: Custom tab Challenges, Post a Challenge, Challenge page, slip picks, "Poster's bet" tags
       (My Bets, Challenge page, admin Challenges + Bets), admin Challenges tab, custom-game edit logs
 - [ ] C7 full suite, build, lint, phone check, merge, report (Will publishes firestore.rules again)
 
 ## Next
-C1.
+C6: phone screens. Start with src/pages/battles/CustomBoard.jsx (add the Challenges section), then the
+Post a Challenge page, Challenge detail page, slip picks, "Poster's bet" tags, admin Challenges tab, edit logs.
 
 ## Open questions
 None.
