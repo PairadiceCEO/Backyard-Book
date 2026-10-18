@@ -32,6 +32,7 @@ import { NO_CASHOUT_REASON, cashoutEligible, combinedDecimal, payoutCents } from
 import { challengeDocId, isChallengeLeg } from '../shared/challenges.js';
 import { resultFromChallenge } from './challenges.js';
 import { CRYPTO_CUTOFF_MS, eventTickerOf, isCryptoLeg, seriesOfEventTicker } from '../shared/crypto/coins.js';
+import { propBelongsToGame } from '../shared/props.js';
 
 export const CASHOUT_NUMERATOR = 9n; // 0.90 = 9 / 10
 export const CASHOUT_DENOMINATOR = 10n;
@@ -267,6 +268,21 @@ async function legBid(leg, state, ctx) {
   }
 
   const mapping = await ctx.kalshiMapping(leg.league, String(leg.gameId));
+  // A player prop: its own market, only if it belongs to the winner event this game is mapped to (same ticker suffix).
+  if (leg.marketType === 'prop') {
+    const ticker = leg.sourceRef?.ticker;
+    const side = leg.sourceRef?.side;
+    if (!ticker || (side !== 'yes' && side !== 'no') || !propBelongsToGame(ticker, { league: leg.league, gameEventTicker: mapping?.gameEvent })) {
+      return { bid: null, noBid: 'No matching Kalshi market for this prop.' };
+    }
+    const market = await ctx.kalshiMarket(ticker);
+    if (market && market.ticker !== ticker) return { bid: null, noBid: 'No matching Kalshi market for this prop.' };
+    const bid = bidFromMarket(market, side);
+    if (bid === null) return { bid: null, noBid: UNAVAILABLE_NOW };
+    const ask = num(side === 'yes' ? market.yes_ask_dollars : market.no_ask_dollars);
+    if (ask === null || ask - bid > MAX_BID_ASK_GAP + 1e-9) return { bid: null, noBid: 'The Kalshi price is too wide to cash out right now.' };
+    return { bid, noBid: null };
+  }
   const eventTicker = mappedEventTicker(mapping, leg.marketType);
   if (!eventTicker) return { bid: null, noBid: 'No matching Kalshi market for this line.' };
 

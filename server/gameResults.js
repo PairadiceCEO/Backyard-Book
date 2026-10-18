@@ -19,10 +19,13 @@ import { CHALLENGE_PREFIX } from '../shared/challenges.js';
 import { CRYPTO_PREFIX } from '../shared/crypto/coins.js';
 import { fetchMarket } from './sources/kalshi.js';
 import { resultFromCryptoMarket } from './crypto.js';
+import { resultFromPropMarket } from './props.js';
 
 // A crypto event holds many markets (one per strike), each with its own result, so a crypto leg's key is its market.
+// A player prop is graded by its own Kalshi market too (not the game's score).
 export function gameKey(leg) {
   if (String(leg.gameId).startsWith(CRYPTO_PREFIX)) return `${leg.league}|${leg.gameId}|${leg.sourceRef?.ticker ?? ''}`;
+  if (leg.marketType === 'prop') return `${leg.league}|${leg.gameId}|prop|${leg.sourceRef?.ticker ?? ''}`;
   return `${leg.league}|${leg.gameId}`;
 }
 
@@ -43,7 +46,7 @@ export async function loadGameResults(legs, { now = new Date(), fetchImpl = fetc
       results.set(key, overrides.get(key));
       continue;
     }
-    if (!games.has(key)) games.set(key, { league: leg.league, gameId: String(leg.gameId), start: startMs(leg), ticker: leg.sourceRef?.ticker ?? null });
+    if (!games.has(key)) games.set(key, { league: leg.league, gameId: String(leg.gameId), start: startMs(leg), ticker: leg.sourceRef?.ticker ?? null, prop: leg.marketType === 'prop' });
   }
 
   const scoreboards = new Map(); // `${league}|${yyyymmdd}` → Promise<Map(eventId → raw event) | null>
@@ -66,6 +69,22 @@ export async function loadGameResults(legs, { now = new Date(), fetchImpl = fetc
 
   const work = [];
   for (const [key, g] of games) {
+    // Player props: Kalshi's own result for the leg's market.
+    if (g.prop) {
+      if (!g.ticker) {
+        results.set(key, resultFromPropMarket(null));
+        continue;
+      }
+      work.push(
+        fetchMarket(g.ticker, fetchImpl)
+          .then((market) => results.set(key, resultFromPropMarket(market)))
+          .catch((err) => {
+            results.set(key, { ...resultFromPropMarket(null), reason: "Kalshi didn't answer." });
+            console.error(`settlement: Kalshi prop ${g.ticker} failed:`, err.message);
+          }),
+      );
+      continue;
+    }
     // Crypto: Kalshi's own result for the leg's market (never our chart).
     if (g.gameId.startsWith(CRYPTO_PREFIX)) {
       if (!g.ticker) {

@@ -29,13 +29,37 @@ stop dev/harness servers at the end.
       drawn for them on the chart. Targets and scrubber unchanged; the held minute moves to the oldest point once it
       rolls off (nearest point). Tests: window, exact Coinbase request, 10 s memory, rolls after 3 min. interact.mjs
       scrubber check now also rolls the window 10 min and expects the oldest point. Fixtures use the rolling window.
-- [ ] 3 Player props (Kalshi, pre-game only): series discovery (Sports list read to the end) → checked-in config
-      (series → league, stat label), included/left-out list here; matching only by the mapped winner event's ticker
-      suffix; pre-game rule ('pre' and server clock < startTime); pricing (configured series, mapped event, active,
-      pre-game, price checks, ask); leg marketType 'prop'; labels; LINE_CHANGED / ODDS_CHANGED; parlays (no same-game
-      with a prop); cash out (pre-game stake × 0.9, after start bid formula); settlement by Kalshi result (non-yes/no
-      → void); /api/board &game=&props=1 with 30 s memory cache, no Firestore. Tests + mutation (pre-game cutoff,
-      suffix check). CLAUDE.md props line.
+- [x] 3 Player props (server). Series discovery (2026-10-18 ~17:35Z): GET /series?category=Sports is cut off by the
+      fetch tool at ~119k characters (also per tag: Basketball/Baseball/Hockey/Football), has no cursor and comes
+      back in a different order each time, so it could NOT be read to the end (spec item impossible as written).
+      Safest option taken: sampled the list (whole and per tag) and probed every plausible player-stat ticker
+      directly (open per-game events, min_close_ts now); included only verified series with "Player: N+" markets,
+      strike_type greater, a floor_strike, no cap, one event per game. Config: shared/props.js `PROP_SERIES`.
+      Included (24): NFL KXNFLPASSYDS, KXNFLRSHYDS, KXNFLRECYDS, KXNFLREC, KXNFLTD · MLB KXMLBHR, KXMLBHIT, KXMLBKS,
+      KXMLBTB, KXMLBRBI, KXMLBHRR, KXMLBSB · NHL KXNHLGOAL, KXNHLPTS, KXNHLAST, KXNHLSAVE · NBA KXNBAPTS, KXNBAREB,
+      KXNBAAST, KXNBA3PT, KXNBASTL, KXNBABLK, KXNBASTOCK (Stl+Blk), KXNBAPRA (Pts+Reb+Ast).
+      Left out: KXNHLSAVES (named in the spec; no events — the live series is KXNHLSAVE, used instead), KXNHLSOG,
+      KXNHLBLK, KXNFLPASSTD, KXMLBRUN, KXMLBWALK, KXNCAAFPASSYDS/RSHYDS/RECYDS/TD (no open events); KXNFLLADDERRSHYDS
+      (scalar ladder, no floor_strike), KXNBAONE3PT (season-long), KXNFLLONGESTREC, KXNFLMOSTRECYDS,
+      KXNFLWEEKMOST*, KXNBAH2HPTS, KXNBAFIRSTBASKET, KXNHLFIRSTGOAL, season/leader/award series (not per player per
+      threshold per game). No college-football or college-basketball prop series found.
+      Matching: `propBelongsToGame` — configured series of the game's league AND ticker suffix = the mapped winner
+      event's suffix (so the playoff game-number rule carries over); prop event ticker = `{series}-{suffix}`; no
+      mapped winner → no props. Pre-game: `propsOpen` (ESPN 'pre' and server clock < startTime). server/props.js:
+      loadGameProps (one /events/{ticker} per configured series, 30 s memory, never Firestore; tabs per stat; players
+      sorted away team, home team, then most-traded; thresholds whose price fails the checks hidden, players with none
+      hidden; main = YES ask nearest $0.50), pricePropLeg (configured series, mapped event, fresh market active and
+      prop-shaped, pre-game, price checks, ask; LINE_CHANGED on another strike; ODDS_CHANGED as usual),
+      resultFromPropMarket (finalized yes/no → graded; voided or final non-yes/no → void). Leg marketType 'prop',
+      gameId = ESPN id, `prop` {series, stat, player, team, threshold, anytime}; labels "Derrick Henry 50+ Rush Yds" /
+      "… Under 50 …", TD/HR at 1: "1+ TD" / "No TD". Bet rules: conflictKey one pick per player per stat; legId
+      includes the ticker; `hasPropSameGame` → PROP_PARLAY_MESSAGE. Cash out: generic pre-game × 0.90; live bid from
+      the prop's own market (suffix-checked) with the gap check. Settlement: gameKey per prop market; Kalshi result.
+      /api/board &game={id}&props=1 → getGameDetail(…, { props: true }); the normal game detail adds `propsCount`
+      (pre-game only). Team of a player: ticker code prefix = the game's Kalshi team code (`teamCodeOf`).
+      Tests: test/props/props.test.mjs (9, `npm run test:props`, in test:all). Mutation-checked: clock cutoff (2 fail),
+      state check (2), suffix helper (2), bet-time suffix check (1), same-game parlay rule (1), non-yes/no → void (2),
+      cash out gap (1). CLAUDE.md props line.
 - [ ] 4 LineWheel (src/components/LineWheel.jsx): scroll-snap chips, centered = selected, two bet buttons, starts on
       the main line, arrows + keys, aria labels, slip dot, keeps its line across refreshes, IntersectionObserver /
       debounced scroll end (no setState per frame), pan-x, ≥ 44 px chips. Used for alt spreads + totals and each
@@ -216,7 +240,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.14.0: item 3 (player props), then 4, checks.
+0.14.0: item 4 (LineWheel; alt-lines page; props page + game-page button), then checks.
 
 ## Open questions
 None open.
