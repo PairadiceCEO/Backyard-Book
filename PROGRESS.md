@@ -61,8 +61,9 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       Tests: test/sportsbook/phase11b.test.mjs (board filter, Custom filter, Live tab, quota, cash out refusals);
       mutation-checked (no list filter, canceled kept, live includes pre, always 30 s, no server check, Challenge
       prefix dropped: each fails a test).
-- [ ] 6 package-lock.json committed; build passes
-- [ ] 7 CLAUDE.md "Deliberate decisions": cash out line, craps clocks, Kalshi matching
+- [x] 6 package-lock.json committed (lockfileVersion 3, from `npm install`); `npm ci` + production build pass
+- [x] 7 CLAUDE.md "Deliberate decisions": cash out line replaced, craps clocks and Kalshi matching added; a note
+      that the lockfile is committed
 - [ ] 8 Checks (test:all, build, lint, phone check 320/375/414) → merge wip → main as 0.11.0
 
 ## Phase 2 — crypto markets (0.12.0) — PLANNED (starts after Phase 1 is merged)

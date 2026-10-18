@@ -34,6 +34,8 @@ Vercel deploys the live site from `main`.
   (`/api/settle` runs once a day; players' visits trigger the rest).
 - Firebase Auth + Firestore on the Spark plan (50k reads / 20k writes a day): keep reads and writes lean.
 - Data: ESPN (scores, DraftKings lines) and Kalshi (live prices) public APIs.
+- `package-lock.json` is committed: Vercel installs exactly those versions. Change dependencies with `npm install`
+  and commit the updated lockfile.
 
 ## Code rules
 - Deliver complete, runnable files. No placeholders like `// add logic here`.
@@ -55,11 +57,15 @@ Vercel deploys the live site from `main`.
 
 ## Deliberate decisions — do NOT "fix" these
 - Hard ways pay 6:1 (Hard 4 and 10) and 8:1 (Hard 6 and 8).
+- Craps/Crapless: no shooter clock with 1 player at the table; 30 s clocks with 2 or more.
 - Crapless 2/12 Odds pay 5:1.
 - The $60 craps table total includes Odds.
 - Payouts round down to the cent.
-- Cash out: pre-game = stake × 0.90; live = potential payout × Kalshi bid(s) × 0.90.
+- Cash out: pre-game = stake × 0.90; live = potential payout × Kalshi bid(s) × 0.90. Never on a bet containing a
+  custom-game, Challenge or crypto leg; Battles have no cash out.
 - Kalshi matching picks the closest date; settlement finds games by ESPN game id, never by team names.
+- Kalshi matching: playoff games match by series game number; a live game never uses a Kalshi market that hasn't
+  updated since the game started; when unsure, no price.
 - A line change returns LINE_CHANGED (the player must accept); a price change on the same line is
   accepted automatically.
 - Win rate = won ÷ (won + lost). Pushes, voids, cash outs and Battles don't count; Challenge bets do.
