@@ -42,6 +42,7 @@ async function routeApi(page, mode) {
       return json(route, 200, { ok: true, quotes: {
         b1: { available: true, valueCents: mode.quoteCents ?? 2147, mode: 'live' },
         b2: { available: false, valueCents: null, reason: 'Cash out closes once a custom game starts.' },
+        b9: { available: true, valueCents: 1116, mode: 'live' },
       } });
     }
     if (u.pathname === '/api/bets' && body?.action === 'cashout') {

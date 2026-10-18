@@ -74,6 +74,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 
 - **Before any game in the bet starts:** stake × 0.90.
 - **Once a game has started:** potential payout × the Kalshi bid for every undecided leg × 0.90 (legs already won count as 1; pushed/voided legs drop out of the payout). DraftKings lines use the Kalshi market at the same line; with no exact match or no bid, it shows "Cash out unavailable right now".
+- **Crypto bets:** potential payout × the fresh Kalshi bid for your side × 0.90 (no pre-game mode); not in the last 60 s, with no bid, a wide price, or once Kalshi has a result.
 - No cash out once a leg has lost, or when every game is final (settlement pays it). Never on a bet with a custom-game or Challenge leg (singles or parlays, before or after the start); My Bets shows no cash out row on those. Battles have no cash out.
 - Playoff games are matched to Kalshi by series game number (a postponed game keeps its own markets); when the match is unclear, the game gets no Kalshi price.
 
@@ -129,7 +130,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 
 - **Crypto tab** on the Sportsbook (after the leagues, before Custom): one card per coin with the live Coinbase price, Kalshi's 15-minute **Up / Down** market (target, countdown) and the hourly **Above / Below** main strike (the strike whose YES price is nearest $0.50). Tap a card for the coin's page: big price, this hour's 1-minute chart (hand-built SVG) with the 15-min target and hourly strike drawn in and both close times marked, the Up/Down buttons and every hourly strike.
 - Coins and series live in `shared/crypto/coins.js` (BTC, ETH, SOL, XRP, DOGE, BNB, HYPE with both kinds; NEAR and ZEC 15-minute only). Range/bracket and daily series are left out.
-- Betting: singles only; priced at the Kalshi ask fetched fresh at bet time; closes 60 s before each market's close; no cash out. Kalshi's own result settles the bet (voided → stake back) in the normal settlement runs.
+- Betting: singles only; priced at the Kalshi ask fetched fresh at bet time; closes 60 s before each market's close. Cash out (0.14.0): potential payout × the fresh Kalshi bid for your side × 0.90, any time from the market's open until 60 s before its close. Kalshi's own result settles the bet (voided → stake back) in the normal settlement runs.
 - Crypto data is cached in function memory for 10 s and never written to Firestore.
 
 ## Challenges (batch C)

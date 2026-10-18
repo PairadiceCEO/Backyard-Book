@@ -153,12 +153,13 @@ export function pickLabel({ marketType, selection, line, homeName, awayName, out
 }
 
 // ---------- Cash out eligibility ----------
-// Cash out exists only for bets whose every leg is a real game with a market price. A bet with any leg on a
-// custom game ("custom:"), a Challenge ("challenge:") or a crypto market ("crypto:") can never be cashed out,
-// before or after the start, singles and parlays alike. Battles have no cash out at all. Shared by the server
-// (authoritative) and the phone (which then shows no cash out row and asks for no quote).
-export const NO_CASHOUT_PREFIXES = ['custom:', 'challenge:', 'crypto:'];
-export const NO_CASHOUT_REASON = 'No cash out on bets with a custom game, Challenge or crypto pick.';
+// Cash out exists only for bets whose every leg has a market price. A bet with any leg on a custom game
+// ("custom:") or a Challenge ("challenge:") can never be cashed out, before or after the start, singles and
+// parlays alike. Battles have no cash out at all. Crypto singles can (0.14.0): live only, from the fresh Kalshi bid
+// (server/cashout.js quoteCryptoCashout). Shared by the server (authoritative) and the phone (which shows no cash
+// out row and asks for no quote on a bet that can never be cashed out).
+export const NO_CASHOUT_PREFIXES = ['custom:', 'challenge:'];
+export const NO_CASHOUT_REASON = 'No cash out on bets with a custom game or Challenge pick.';
 
 export function legBlocksCashout(leg) {
   const gameId = String(leg?.gameId ?? '');

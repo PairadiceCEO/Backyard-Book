@@ -3,7 +3,9 @@
 // Value (cents, always rounded DOWN):
 //   pre-game (no leg's game has started) → stake × 0.90
 //   live     (any leg's game has started) → potential payout × P × 0.90
-//   never    a bet with any custom-game, Challenge or crypto leg (shared/betRules.js cashoutEligible)
+//   crypto   (a crypto single, once its market has opened) → potential payout × the fresh Kalshi bid × 0.90; never in
+//            the last 60 s, with no bid, with a bid-ask gap over MAX_BID_ASK_GAP, or once the market has a result
+//   never    a bet with any custom-game or Challenge leg (shared/betRules.js cashoutEligible)
 //     potential payout = stake × product of the decimals of every leg that hasn't pushed/voided
 //     P = product of the Kalshi BID of every undecided leg (won legs count as 1)
 // Unavailable when a leg lost, when every leg is decided (settlement pays it), when a leg's game
@@ -25,10 +27,11 @@ import { buildBoard, normalizeCustomGame } from './board.js';
 import { gameKey, loadGameResults } from './gameResults.js';
 import { decideBet, gradeLeg, resultFromCustomGame, resultFromEspnGame } from './grading.js';
 import { fetchLeagueGames } from './sources/espn.js';
-import { fetchEvent, fetchMarket, mappedEventTicker } from './sources/kalshi.js';
+import { MAX_BID_ASK_GAP, fetchEvent, fetchMarket, isActive as kalshiActive, mappedEventTicker } from './sources/kalshi.js';
 import { NO_CASHOUT_REASON, cashoutEligible, combinedDecimal, payoutCents } from '../shared/betRules.js';
 import { challengeDocId, isChallengeLeg } from '../shared/challenges.js';
 import { resultFromChallenge } from './challenges.js';
+import { CRYPTO_CUTOFF_MS, eventTickerOf, isCryptoLeg, seriesOfEventTicker } from '../shared/crypto/coins.js';
 
 export const CASHOUT_NUMERATOR = 9n; // 0.90 = 9 / 10
 export const CASHOUT_DENOMINATOR = 10n;
@@ -284,11 +287,72 @@ async function legBid(leg, state, ctx) {
   return bid === null ? { bid: null, noBid: UNAVAILABLE_NOW } : { bid, noBid: null };
 }
 
+// ---------- crypto ----------
+// A crypto single: always "live" once its market has opened (there is no pre-game stake × 0.90 mode). The market is
+// fetched fresh every time (estimates too: ctx.freshKalshiMarket never reuses a cached answer) and must be the exact
+// ticker stored on the leg, of a configured crypto series.
+function msOf(value) {
+  const t = Date.parse(value ?? '');
+  return Number.isFinite(t) ? t : null;
+}
+
+export function cryptoCashoutProblem(market, side, nowMs) {
+  if (!market) return 'This crypto market is no longer offered.';
+  if (String(market.result ?? '') !== '' || ['determined', 'settled', 'finalized'].includes(String(market.status ?? ''))) {
+    return 'Kalshi has settled this market; the bet settles shortly.';
+  }
+  if (!kalshiActive(market)) return 'This crypto market is closed.';
+  const openMs = msOf(market.open_time);
+  const closeMs = msOf(market.close_time);
+  if (openMs === null || closeMs === null) return 'This crypto market is closed.';
+  if (openMs > nowMs) return 'Cash out opens when the market opens.';
+  if (closeMs - nowMs <= CRYPTO_CUTOFF_MS) return 'No cash out in the last 60 seconds before the market closes.';
+  const bid = bidFromMarket(market, side);
+  if (bid === null) return 'Nobody is bidding on this side right now.';
+  const ask = num(side === 'yes' ? market.yes_ask_dollars : market.no_ask_dollars);
+  if (ask === null || ask - bid > MAX_BID_ASK_GAP + 1e-9) return 'The Kalshi price is too wide to cash out right now.';
+  return null;
+}
+
+async function quoteCryptoCashout(bet, ctx) {
+  const legs = Array.isArray(bet.legs) ? bet.legs : [];
+  if (legs.length !== 1) return unavailable(UNAVAILABLE_NOW); // crypto picks are singles only
+  const leg = legs[0];
+  if (leg.result && leg.result !== 'pending') return unavailable('This bet is settling now.');
+  const eventTicker = eventTickerOf(leg.gameId);
+  const series = seriesOfEventTicker(eventTicker);
+  const ticker = leg.sourceRef?.ticker;
+  const side = leg.selection;
+  if (!series || typeof ticker !== 'string' || !ticker.startsWith(`${eventTicker}-`) || (side !== 'yes' && side !== 'no') || leg.sourceRef?.side !== side) {
+    return unavailable('This crypto market is not offered.');
+  }
+  const market = await ctx.freshKalshiMarket(ticker);
+  if (market && (market.ticker !== ticker || (market.event_ticker && market.event_ticker !== eventTicker))) {
+    return unavailable('This crypto market is not offered.');
+  }
+  const problem = cryptoCashoutProblem(market, side, ctx.now.getTime());
+  if (problem) return unavailable(problem);
+  const stake = Number(bet.stakeCents) || 0;
+  const potentialCents = Number.isInteger(bet.potentialPayoutCents) ? bet.potentialPayoutCents : payoutCents(stake, Number(leg.decimalOdds));
+  const bid = bidFromMarket(market, side);
+  const valueCents = liveValueCents(potentialCents, [bid]);
+  if (valueCents < 1) return unavailable(UNAVAILABLE_NOW);
+  return { available: true, valueCents, mode: 'live', potentialCents, probability: bid, reason: null };
+}
+
 // Full quote for a stored bet. ctx: see createCashoutContext.
-// A bet with a custom-game, Challenge or crypto leg is never cashable: refused before anything is fetched.
+// A bet with a custom-game or Challenge leg is never cashable: refused before anything is fetched.
 export async function quoteCashout(bet, ctx) {
   if (!bet || bet.status !== 'open') return unavailable('This bet is no longer open.');
   if (!cashoutEligible(bet)) return unavailable(NO_CASHOUT_REASON);
+  if ((bet.legs ?? []).some(isCryptoLeg)) {
+    try {
+      return await quoteCryptoCashout(bet, ctx);
+    } catch (err) {
+      console.error('cashout: Kalshi crypto lookup failed:', err.message);
+      return unavailable(UNAVAILABLE_NOW);
+    }
+  }
   const legs = Array.isArray(bet.legs) ? bet.legs : [];
   let states;
   try {
@@ -400,6 +464,10 @@ export function createCashoutContext({ now = new Date(), fetchImpl = fetch, fres
     kalshiMarket(ticker) {
       const load = () => fetchMarket(ticker, fetchImpl);
       return once(`market:${ticker}`, () => (fresh ? load() : cached(`market:${ticker}`, ESTIMATE_TTL_MS, nowMs, load)));
+    },
+    // Always a fresh Kalshi answer (crypto cash out never uses a cached bid), shared only within this request.
+    freshKalshiMarket(ticker) {
+      return once(`freshMarket:${ticker}`, () => fetchMarket(ticker, fetchImpl));
     },
     kalshiEvent(eventTicker) {
       const load = () => fetchEvent(eventTicker, fetchImpl);

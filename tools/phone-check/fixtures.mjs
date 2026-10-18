@@ -117,6 +117,8 @@ export const bets = [
       leg({ gameId: '403', marketType: 'moneyline', selection: 'home', label: 'Eagles ML', gameLabel: 'Panthers @ Eagles', americanOdds: -150 }),
       leg({ gameId: '402', marketType: 'spread', selection: 'away', line: 6.5, label: 'Ravens +6.5', gameLabel: 'Ravens @ Browns', americanOdds: 150 }),
     ] },
+  { id: 'b9', uid: 'u1', username: 'mike', type: 'single', status: 'open', stakeCents: 1000, potentialPayoutCents: 2000, payoutCents: 0, combinedAmerican: 100, placedAt: iso(now - 5 * 60000), version: 0,
+    legs: [leg({ gameId: 'crypto:KXBTC15M-26OCT181930', league: 'crypto', marketType: 'crypto', selection: 'yes', line: 81909.14, label: 'BTC Up (≥ $81,909.14, 7:30 PM)', gameLabel: 'Bitcoin · 15 min · closes 7:30 PM', americanOdds: 100, source: 'kalshi' })] },
   { id: 'b8', uid: 'u1', username: 'mike', type: 'single', status: 'open', stakeCents: 1800, potentialPayoutCents: 2800, payoutCents: 0, combinedAmerican: -180, placedAt: iso(now - 3 * H), version: 0, posterBet: true,
     legs: [leg({ league: 'challenge', gameId: 'challenge:c-open', marketType: 'challenge', selection: 'o2', label: 'No', gameLabel: 'Will Mike run a 5K under 25 minutes?', americanOdds: -180, decimalOdds: 1.5556, source: 'challenge', startTime: iso(now + 5 * H) })] },
   { id: 'b5', uid: 'u2', username: 'dan', type: 'single', status: 'push', stakeCents: 2000, potentialPayoutCents: 3818, payoutCents: 2000, combinedAmerican: -110, placedAt: iso(now - 8 * H), settledAt: iso(now - 2 * H), version: 1,

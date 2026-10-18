@@ -1,7 +1,7 @@
 // npm run test:crypto  (or: node --experimental-test-module-mocks --test test/crypto/crypto.test.mjs)
 // 0.12.0 crypto markets: the series config, the board and coin page (memory-only cache), pricing at bet time
 // (configured series, open, opened, target set, > 60 s before close, price checks), singles only, settlement from
-// Kalshi's own result, no cash out.
+// Kalshi's own result, cash out from the fresh Kalshi bid (0.14.0).
 import { test, mock, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -346,12 +346,98 @@ test('settlement runs settle crypto bets from Kalshi (each strike its own market
   assert.equal(fake.get('users/mike').balanceCents, balance + 700);
 });
 
-test('no cash out on crypto bets', async () => {
-  const b = (await placeBets(caller('mike'), { mode: 'singles', clientRequestId: rid(), legs: [{ ...leg15('yes'), stakeCents: 1000 }] }, { now: NOW, fetchImpl })).bets[0];
-  assert.equal(rules.cashoutEligible(fake.get(`bets/${b.id}`)), false);
-  const calls = world.calls.length;
-  const q = await cashout.quoteBets(caller('mike'), { betIds: [b.id] }, { now: NOW, fetchImpl });
-  assert.deepEqual(q.quotes[b.id], { available: false, valueCents: null, reason: rules.NO_CASHOUT_REASON });
-  await assert.rejects(cashout.cashOutBet(caller('mike'), { betId: b.id, expectedCents: 900 }, { now: NOW, fetchImpl }), (e) => e.code === 'CASHOUT_UNAVAILABLE');
-  assert.equal(world.calls.length, calls, 'nothing fetched');
+// A $10 crypto single at +100 (potential $20) on the open 15-min market, written straight into Firestore.
+function putCryptoBet(id, side, { ticker = 'KXBTC15M-26OCT172030-30', gameId = 'crypto:KXBTC15M-26OCT172030', status = 'open', result = 'pending' } = {}) {
+  fake.write(`bets/${id}`, {
+    uid: 'mike', username: 'mike', status, type: 'single', stakeCents: 1000, potentialPayoutCents: 2000, payoutCents: 0, version: 0,
+    placedAt: iso(-MIN), requestId: id, combinedDecimal: 2, combinedAmerican: 100,
+    legs: [{ legId: `l-${id}`, league: 'crypto', gameId, marketType: 'crypto', selection: side, line: 81931.55, americanOdds: 100, decimalOdds: 2,
+      startTime: iso(10 * MIN), source: 'kalshi', sourceRef: { provider: 'Kalshi', ticker, side, price: 0.5 }, result }],
+  });
+}
+const T15 = 'KXBTC15M-26OCT172030-30';
+const setBook = (fields) => Object.assign(world.markets[T15], fields);
+const quoteOf = async (id, at = NOW) => (await cashout.quoteBets(caller('mike'), { betIds: [id] }, { now: at, fetchImpl })).quotes[id];
+
+test('crypto cash out: potential × fresh bid for the bet\'s side × 0.90, floored; always live (no pre-game mode)', async () => {
+  setBook({ yes_bid_dollars: '0.6200', yes_ask_dollars: '0.6400', no_bid_dollars: '0.3600', no_ask_dollars: '0.3800' });
+  putCryptoBet('cy', 'yes');
+  putCryptoBet('cn', 'no');
+  assert.equal(rules.cashoutEligible(fake.get('bets/cy')), true, 'crypto bets can be cashed out now');
+  assert.deepEqual(await quoteOf('cy'), { available: true, valueCents: 1116, mode: 'live' }, '$20 × 0.62 × 0.9 = $11.16');
+  assert.deepEqual(await quoteOf('cn'), { available: true, valueCents: 648, mode: 'live' }, '$20 × 0.36 × 0.9 = $6.48');
+
+  // Every quote reads the market fresh (never a cached bid): the bid moves, the next quote follows at once.
+  setBook({ yes_bid_dollars: '0.7000', yes_ask_dollars: '0.7100' });
+  assert.equal((await quoteOf('cy')).valueCents, 1260);
+
+  // Confirm pays exactly once: same transaction and cashout_{betId} ledger id as every cash out.
+  const before = fake.get('users/mike').balanceCents;
+  const paid = await cashout.cashOutBet(caller('mike'), { betId: 'cy', expectedCents: 1260 }, { now: NOW, fetchImpl });
+  assert.equal(paid.cashoutCents, 1260);
+  const again = await cashout.cashOutBet(caller('mike'), { betId: 'cy', expectedCents: 1260 }, { now: NOW, fetchImpl });
+  assert.equal(again.duplicate, true);
+  assert.equal(fake.get('users/mike').balanceCents, before + 1260, 'paid once');
+  assert.equal(fake.get('ledger/cashout_cy').amountCents, 1260);
+  assert.equal(fake.get('bets/cy').status, 'cashed_out');
+
+  // A value that moved before the confirm is refused with the new value (never paid silently).
+  setBook({ no_bid_dollars: '0.3000', no_ask_dollars: '0.3100' });
+  await assert.rejects(cashout.cashOutBet(caller('mike'), { betId: 'cn', expectedCents: 648 }, { now: NOW, fetchImpl }), (e) => e.code === 'CASHOUT_CHANGED' && e.extra.valueCents === 540);
+});
+
+test('crypto cash out refusals: last 60 s, no bid, wide gap, not active, settled, ticker not on the leg / not configured', async () => {
+  const base = { ...world.markets[T15], yes_bid_dollars: '0.6200', yes_ask_dollars: '0.6400' };
+  const reset = () => { world.markets[T15] = { ...base }; };
+  putCryptoBet('r1', 'yes');
+  const refused = async (re, at = NOW, id = 'r1') => {
+    const q = await quoteOf(id, at);
+    assert.equal(q.available, false, JSON.stringify(q));
+    assert.match(q.reason, re);
+  };
+  reset();
+  assert.equal((await quoteOf('r1', new Date(nowMs + 10 * MIN - 61e3))).available, true, '61 s before close: still open');
+  for (const s of [60, 30, 0]) await refused(/last 60 seconds|closed/, new Date(nowMs + 10 * MIN - s * 1000));
+  setBook({ yes_bid_dollars: '0.0000' });
+  await refused(/Nobody is bidding/);
+  reset();
+  setBook({ yes_bid_dollars: null });
+  await refused(/Nobody is bidding/);
+  reset();
+  setBook({ yes_bid_dollars: '0.4000', yes_ask_dollars: '0.6400' });
+  await refused(/too wide/);
+  reset();
+  setBook({ status: 'closed' });
+  await refused(/closed/);
+  reset();
+  setBook({ status: 'finalized', result: 'yes' });
+  await refused(/settled/);
+  reset();
+  setBook({ status: 'active', result: 'no' });
+  await refused(/settled/, NOW);
+  reset();
+  // Settled on our side already (leg graded) → nothing to cash out.
+  putCryptoBet('r2', 'yes', { result: 'win' });
+  await refused(/settling/, NOW, 'r2');
+  // The ticker must be the one on the leg, of this event, of a configured series.
+  putCryptoBet('r3', 'yes', { ticker: 'KXBTCD-26OCT1720-T81999.99' }); // another event's market
+  await refused(/not offered/, NOW, 'r3');
+  world.markets['KXBTC-26OCT1720-B81950'] = { ...base, ticker: 'KXBTC-26OCT1720-B81950', event_ticker: 'KXBTC-26OCT1720' };
+  putCryptoBet('r4', 'yes', { ticker: 'KXBTC-26OCT1720-B81950', gameId: 'crypto:KXBTC-26OCT1720' }); // range series, not configured
+  await refused(/not offered/, NOW, 'r4');
+  // A ticker of another event, even when Kalshi's answer doesn't say which event it belongs to.
+  world.markets['KXBTC15M-26OCT172045-30'] = { ...base, ticker: 'KXBTC15M-26OCT172045-30', event_ticker: undefined };
+  putCryptoBet('r5', 'yes', { ticker: 'KXBTC15M-26OCT172045-30' });
+  await refused(/not offered/, NOW, 'r5');
+  // Kalshi answers with a different market than the stored ticker → refused.
+  world.markets[T15] = { ...base, ticker: 'KXBTC15M-26OCT172030-99' };
+  await refused(/not offered/);
+  reset();
+  await assert.rejects(cashout.cashOutBet(caller('mike'), { betId: 'r3', expectedCents: 100 }, { now: NOW, fetchImpl }), (e) => e.code === 'CASHOUT_UNAVAILABLE');
+});
+
+test('custom-game and Challenge bets still never cash out', () => {
+  assert.equal(rules.cashoutEligible({ legs: [{ gameId: 'custom:x' }] }), false);
+  assert.equal(rules.cashoutEligible({ legs: [{ gameId: 'challenge:x' }] }), false);
+  assert.equal(rules.cashoutEligible({ legs: [{ gameId: 'crypto:KXBTC15M-26OCT172030' }] }), true);
 });

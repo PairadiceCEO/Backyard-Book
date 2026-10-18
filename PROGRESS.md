@@ -10,11 +10,18 @@ Spec: Will's attachment of 2026-10-18 12:25. One phase on a fresh wip off main; 
 stop dev/harness servers at the end.
 
 ### Checklist
-- [ ] 1 Crypto cash out: live only once the market has opened (no pre-game mode); value = potential × fresh bid for
-      the bet's side × 0.90, floored; unavailable when not active, < 60 s to close, bid missing/0, bid-ask gap >
-      MAX_BID_ASK_GAP, or the market has a result; exact stored ticker of a configured series; same transaction /
-      `cashout_{betId}`. My Bets shows it. Custom games, Challenges, Battles still never. Tests + mutation (0.90, 60 s).
-      CLAUDE.md cash out line.
+- [x] 1 Crypto cash out: `quoteCryptoCashout` in server/cashout.js (crypto bets take this path; singles only). Always
+      "live" once the market has opened; value = `liveValueCents(potential, [bid])` (× 0.90, floored). The market
+      is fetched fresh every time — estimates too (`ctx.freshKalshiMarket`, memoized only within one request), so a
+      cached bid is never used. `cryptoCashoutProblem`: result set / settled → no; not active; not yet open; ≤ 60 s
+      to close (same cutoff as betting); bid missing or 0; ask − bid > MAX_BID_ASK_GAP; ticker must be the leg's
+      stored ticker, of the leg's event, of a configured series (and Kalshi's answer must be that ticker). Same
+      cashOutBet transaction / `cashout_{betId}`. `NO_CASHOUT_PREFIXES` is now custom + Challenge only, so My Bets
+      quotes crypto bets and shows the "Live cash out value" button. Tests (test/crypto): YES $20 × 0.62 × 0.9 =
+      $11.16, NO $6.48, fresh bid each quote, double cash out pays once, CASHOUT_CHANGED; refusals (60/30/0 s, bid 0 /
+      missing, wide gap, closed, settled, result set, leg graded, another event's ticker incl. Kalshi answer without
+      event_ticker, unconfigured series, wrong ticker answered). Mutation-checked: 0.90 → 0.95, 0.90 dropped, 60 s
+      cutoff, ticker check, gap check — each fails a test. CLAUDE.md + README cash out lines; phone fixture b9.
 - [ ] 2 Crypto chart: rolling last 60 minutes ending now (candles request = that window), close times as text above
       the chart with live countdowns, target lines + scrubber kept (held minute; once it scrolls off → oldest point).
       Phone check coin screens updated.
@@ -205,7 +212,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.14.0: item 1 (crypto cash out), then 2, 3, 4, checks.
+0.14.0: item 2 (rolling chart), then 3, 4, checks.
 
 ## Open questions
 None open.
