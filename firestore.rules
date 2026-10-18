@@ -11,6 +11,13 @@ service cloud.firestore {
     match /ledger/{entryId}  { allow read: if isAdmin() || owns(resource.data); allow write: if false; }
     match /customGames/{id}  { allow read: if signedIn();                      allow write: if false; }
 
+    // Battles: the admin and the Battle's own players. My Battles are read with a query on
+    // participantUids array-contains my uid, which these rules allow.
+    match /battles/{id} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid in resource.data.participantUids);
+      allow write: if false;
+    }
+
     // Casino tables: anyone signed in can watch; only the server writes.
     match /casinoTables/{game} {
       allow read: if signedIn();

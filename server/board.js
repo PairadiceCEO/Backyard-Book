@@ -1,5 +1,6 @@
-// Builds one league's board: ESPN games priced from ESPN and Kalshi, plus the admin's custom games,
-// sorted by start time.
+// Builds one league's board: ESPN games priced from ESPN and Kalshi, sorted by start time.
+// The admin's custom games (every league) have their own board, the Sportsbook's "Custom" tab:
+// buildCustomBoard(), cached as CUSTOM_BOARD_KEY.
 //
 // Price order per market:
 //   pre-game → ESPN line, else Kalshi main strike
@@ -151,8 +152,11 @@ export function normalizeCustomGame(id, data, now) {
   };
 }
 
-async function loadCustomGames(leagueId, now) {
-  const snap = await adminDb().collection('customGames').where('league', '==', leagueId).get();
+export const CUSTOM_BOARD_ID = 'custom';
+export const CUSTOM_BOARD_KEY = 'board_custom';
+
+async function loadCustomGames(now) {
+  const snap = await adminDb().collection('customGames').get();
   const games = [];
   snap.forEach((doc) => {
     const game = normalizeCustomGame(doc.id, doc.data(), now);
@@ -174,12 +178,8 @@ export async function buildBoard(leagueId, { now = new Date(), fetchImpl = fetch
   const league = getLeague(leagueId);
   if (!league) throw new Error(`Unknown league ${leagueId}`);
 
-  const [espn, custom, kalshi] = await Promise.all([
+  const [espn, kalshi] = await Promise.all([
     fetchLeagueGames(league, { now, fetchImpl }),
-    loadCustomGames(leagueId, now).catch((err) => {
-      console.error(`custom games for ${leagueId} failed:`, err.message);
-      return [];
-    }),
     fetchLeagueKalshi(league, { now, fetchImpl }).catch((err) => {
       console.error(`Kalshi for ${leagueId} failed:`, err.message);
       return { gameEvents: [], spreadEvents: [], totalEvents: [], status: 'failed' };
@@ -205,7 +205,7 @@ export async function buildBoard(leagueId, { now = new Date(), fetchImpl = fetch
   });
 
   const board = {
-    games: sortGames([...espnGames, ...custom]),
+    games: sortGames(espnGames),
     partial: espn.partial,
     kalshiStatus: kalshi.status,
     alts,
@@ -220,4 +220,10 @@ export async function buildBoard(leagueId, { now = new Date(), fetchImpl = fetch
   }
 
   return board;
+}
+
+// The Custom tab: every league's custom games (finished ones stay a day), priced from their docs.
+export async function buildCustomBoard({ now = new Date() } = {}) {
+  const games = await loadCustomGames(now);
+  return { games: sortGames(games), partial: false, kalshiStatus: 'ok', alts: {}, altsDropped: false };
 }

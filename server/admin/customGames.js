@@ -15,6 +15,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from '../firebaseAdmin.js';
 import { HttpError } from '../http.js';
 import { invalidateCache } from '../cache.js';
+import { CUSTOM_BOARD_KEY } from '../board.js';
 import { getLeague } from '../leagues.js';
 import { normalizeCustomGame } from '../board.js';
 import { resultFromCustomGame } from '../grading.js';
@@ -142,7 +143,7 @@ export async function createCustomGame(body, caller) {
     updatedAt: now,
     createdBy: caller.uid,
   });
-  await invalidateCache(`board_${league}`);
+  await invalidateCache(CUSTOM_BOARD_KEY);
   return { ok: true, gameId: `custom:${ref.id}` };
 }
 
@@ -171,8 +172,7 @@ export async function updateCustomGame(body) {
     return game;
   });
 
-  await invalidateCache(`board_${league}`);
-  if (before.league !== league) await invalidateCache(`board_${before.league}`);
+  await invalidateCache(CUSTOM_BOARD_KEY);
   const nowMs = Date.now();
   return { ok: true, gameId: `custom:${docId}`, bettingOpen: fields.startTime.toMillis() > nowMs };
 }
@@ -231,7 +231,7 @@ async function closeOut(body, caller, kind) {
         : { status: 'canceled', finalScore: null, finishedAt: now, finishedBy: caller.uid, updatedAt: now },
     );
   });
-  await invalidateCache(`board_${game.league}`);
+  await invalidateCache(CUSTOM_BOARD_KEY);
 
   const settlement = await settleOpenBets({ trigger: 'admin', force: true, betFilter: onThisGame });
   return { ok: true, gameId, kind, scores, settlement };
@@ -262,6 +262,6 @@ export async function deleteCustomGame(body) {
     tx.delete(ref);
     return game.league;
   });
-  await invalidateCache(`board_${league}`);
+  await invalidateCache(CUSTOM_BOARD_KEY);
   return { ok: true, gameId: `custom:${docId}` };
 }

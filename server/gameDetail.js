@@ -5,7 +5,7 @@
 
 import { HttpError } from './http.js';
 import { getOrRefresh } from './cache.js';
-import { buildBoard } from './board.js';
+import { CUSTOM_BOARD_ID, CUSTOM_BOARD_KEY, buildBoard, buildCustomBoard } from './board.js';
 import { buildLadders, compactFromEvents, fetchEvent } from './sources/kalshi.js';
 
 const TTL_MS = 30 * 1000;
@@ -15,7 +15,10 @@ function emptyLadders() {
 }
 
 export async function getGameDetail(leagueId, gameId, { fetchImpl = fetch, now = () => new Date() } = {}) {
-  const boardResult = await getOrRefresh(`board_${leagueId}`, TTL_MS, () => buildBoard(leagueId, { now: now(), fetchImpl }));
+  const boardResult =
+    leagueId === CUSTOM_BOARD_ID
+      ? await getOrRefresh(CUSTOM_BOARD_KEY, TTL_MS, () => buildCustomBoard({ now: now() }))
+      : await getOrRefresh(`board_${leagueId}`, TTL_MS, () => buildBoard(leagueId, { now: now(), fetchImpl }));
   const board = boardResult.value;
   const game = board.games.find((g) => g.id === String(gameId));
   if (!game) throw new HttpError(404, 'GAME_NOT_FOUND', 'That game is no longer on the board.');

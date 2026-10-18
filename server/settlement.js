@@ -11,6 +11,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from './firebaseAdmin.js';
 import { gameKey, loadGameResults } from './gameResults.js';
 import { gradeBet } from './grading.js';
+import { sweepExpiredBattles } from './battles.js';
 
 export const THROTTLE_MS = 60 * 1000;
 export const REVIEW_AFTER_MS = 72 * 60 * 60 * 1000;
@@ -295,6 +296,14 @@ export async function settleOpenBets({
         }
       }
     }
+  }
+
+  // Battles still waiting for players after 48 h are cancelled and every stake refunded.
+  try {
+    summary.battlesExpired = await sweepExpiredBattles({ now, db });
+  } catch (err) {
+    summary.errors += 1;
+    console.error('settlement: Battle expiry sweep failed:', err.message);
   }
   return summary;
 }

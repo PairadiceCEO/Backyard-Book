@@ -10,7 +10,9 @@
     "test": "node --test test/*.test.js",
     "test:casino": "node --experimental-test-module-mocks --test test/casino/*.test.mjs",
     "test:cashout": "node --experimental-test-module-mocks --test test/cashout/*.test.mjs",
-    "test:all": "npm test && npm run test:casino && npm run test:cashout"
+    "test:all": "npm test && npm run test:casino && npm run test:cashout && npm run test:sportsbook && npm run test:battles",
+    "test:sportsbook": "node --experimental-test-module-mocks --test test/sportsbook/*.test.mjs",
+    "test:battles": "node --experimental-test-module-mocks --test test/battles/*.test.mjs"
   },
   "dependencies": {
     "firebase": "^10.14.1",

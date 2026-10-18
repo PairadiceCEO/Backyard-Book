@@ -98,15 +98,18 @@ Battles in My Bets, admin Battles tab (disputed first) with edit log.
 - Disputes: any participant, within 48 h of the result, with a note (1–300 chars), once each.
 
 ### Checklist
-- [ ] B1 shared/battles.js (validation, places → payouts, ties, leftover) 
-- [ ] B2 server/battles.js + api/battles.js + admin actions + expiry sweep in settlement + firestore.rules
-- [ ] B3 Custom board: custom games off league boards → `/api/board?league=custom`; game links/detail
+- [x] B1 shared/battles.js (validation, places → payouts, ties, leftover)
+- [x] B2 server/battles.js + api/battles.js (7th function) + admin battleSetResult/SetPayout/Void + expiry sweep
+      at the end of settleOpenBets + firestore.rules battles block
+- [x] B3 Custom board: buildCustomBoard / CUSTOM_BOARD_KEY in server/board.js; league boards ESPN only;
+      /api/board?league=custom; gameDetail; GameCard gamePath → /sportsbook/custom/{id}; admin edits
+      invalidate board_custom
 - [ ] B4 Tests test/battles/*.test.mjs (+ move the sportsbook server suites into test/sportsbook)
 - [ ] B5 Phones: Custom tab, New Battle, Battle detail, badge, My Bets, admin Battles tab
 - [ ] B6 Full suite, build, lint, phone check, merge, live test steps (incl. console rules step)
 
 ## Next
-B1.
+B4: test/battles/battles.test.mjs (sportsbook suites already moved: test/sportsbook, npm run test:sportsbook, 84 pass).
 
 ## Open questions
 None.
