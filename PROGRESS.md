@@ -5,6 +5,64 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Batch (Will, 2026-10-18): Phase 1 fixes (0.11.0), then Phase 2 crypto markets (0.12.0)
+Spec: Will's message of 2026-10-18 00:03 CT. Two phases, each merged to main on its own, in order.
+Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after Phase 1 is merged.
+
+## Phase 1 — fixes (0.11.0) — IN PROGRESS
+
+### Checklist
+- [ ] 1 URGENT (own commit): live games priced from the wrong Kalshi game (ALCS G4 postponed → matched G5 events).
+  - [ ] a) series game number: ESPN `competitions[0].notes[].headline` ("ALCS - Game 5") → `gameNumber` on the
+        normalized game; Kalshi winner title "Game 5: …"; spread/total inherit from the winner event with the same
+        ticker suffix. Numbered ESPN game: only same-number events (any ticker date in the window, teams match);
+        different/unknown number rejected. Unnumbered: date + time matching as before.
+  - [ ] b) stale-market guard for live games: market `updated_time` must be ≥ ESPN start, else no price (board
+        "Live prices unavailable", bet closed, no live cash out). updated_time carried in compactEvent rows and the
+        board cache (quote ref). At bet time the fresh market decides.
+  - [ ] c) unsure → no price: two equally close candidate events (or a number in two slots) → the game gets no Kalshi
+        markets; never a nearby event.
+  - [ ] guards applied in buildBoard, alternate ladders, gameDetail, priceLeg (incl. leg.kalshiTicker), cash out bids
+  - [ ] tests (test/sportsbook/phase11.test.mjs): repro, normal series, regular season unchanged, stale live market
+        (no board quote, priceLeg closed incl. kalshiTicker, cash out unavailable); mutation-check both guards
+- [ ] 2 Craps/Crapless shooter timer: 1 player → no clock (deadline null, no auto-roll, no pass, no countdown);
+      2+ → 30 s for every craps clock (CRAPS_TURN_SECONDS); 2→1 clears; 1→2 with a point on → now + 30 s;
+      onDeadline re-checks the count. Tests incl. Blackjack/Baccarat still 15 s.
+- [ ] 3 Slots: remove the "Return to player 90.0%…" line from SlotsPage.jsx (math unchanged)
+- [ ] 4 Board: league + Custom tabs show only unfinished games (filtered in /api/board's response, not the cache);
+      new "Live" tab first (every ESPN game in progress, grouped by league in app order, sorted by start;
+      /api/board?league=live built from the five cached boards via getOrRefresh; 30 s poll; saved tab accepts
+      'live'); phone check with and without live games
+- [ ] 5 No cash out on any bet with a custom-game or Challenge leg (server refuses without fetching; phone shows no
+      cash out row and asks for no quote). Tests: custom single, Challenge single, MLB + custom parlay, pre and live.
+- [ ] 6 package-lock.json committed; build passes
+- [ ] 7 CLAUDE.md "Deliberate decisions": cash out line, craps clocks, Kalshi matching
+- [ ] 8 Checks (test:all, build, lint, phone check 320/375/414) → merge wip → main as 0.11.0
+
+## Phase 2 — crypto markets (0.12.0) — PLANNED (starts after Phase 1 is merged)
+
+### Checklist
+- [ ] P2-1 Discover Kalshi crypto series (category=Crypto): keep 15-min "Up or Down" (fifteen_min) and hourly
+      above/below (hourly, greater / greater_or_equal, floor_strike only); drop ranges (cap_strike) and daily+.
+      Verify each coin's Coinbase product "{SYMBOL}-USD" is online. Checked-in config `shared/crypto/coins.js`
+      (series → coin, symbol, product, kind). Record included / left-out coins below.
+- [ ] P2-2 Server data: `server/crypto.js` — soonest open 15-min event with a floor_strike that has opened; soonest
+      open hourly event; Coinbase ticker + 1-min candles. In-memory only (10 s TTL), never the Firestore cache.
+      Served by /api/board (league=crypto, league=crypto&game={coin}); no new function.
+- [ ] P2-3 Betting: leg { league 'crypto', gameId 'crypto:{eventTicker}', marketType 'crypto', selection yes|no,
+      kalshiTicker, line floor_strike }; fresh market at bet time (configured series, active, opened, > 60 s before
+      close, MIN/MAX price + gap); price = ask; LINE_CHANGED on another strike; singles only; no cash out.
+- [ ] P2-4 Settlement: Kalshi result yes/no grades; voided/cancelled → void; unsettled → pending; hooked into
+      gameResults/grading so every settlement run settles crypto bets (same ledger ids).
+- [ ] P2-5 Screens: Crypto tab (Live, leagues, Crypto, Custom), coin cards (price, 15-min target + countdown +
+      Up/Down, hourly main strike + Above/Below + countdown, Closed / Next market opens soon); coin page
+      /sportsbook/crypto/{coin} with hand-built SVG chart (1-min candles for the current hour, 10 s refresh, target and
+      main-strike lines, close-time marks, big current price, "Chart unavailable" fallback), 15-min buttons and the
+      full hourly ladder.
+- [ ] P2-6 Tests (config, pricing refusals, parlay refused, grading, no cash out, mutation-check 60 s cutoff and
+      series check) + phone check (Crypto tab, coin page)
+- [ ] P2-7 Checks → merge as 0.12.0
+
 ## Batch (Will, 2026-10-17): casino seats + craps, Battles, Challenges
 Spec: Will's attachment "Backyard Book — Next batch". **A** casino (done, merged) · **B** Battles (done, merged) ·
 **C** Challenges + section 6 admin odds edits (done, merged). The batch is complete. B/C plan APPROVED 2026-10-17 18:54 with changes (below).
@@ -156,7 +214,21 @@ Battles in My Bets, admin Battles tab (disputed first) with edit log.
       screens × 320/375/414 clean; merged wip → main as 0.10.0. Will must publish firestore.rules (challenges).
 
 ## Next
-Nothing queued: the batch (A, B, C) is merged. Wait for Will's test results or the next spec.
+Phase 1 item 1 (Kalshi guards), then items 2–7, checks, merge 0.11.0; then Phase 2.
 
 ## Open questions
-None.
+- Q1 (2026-10-18, Phase 1 item 1b): Kalshi's `updated_time` does NOT move when a market trades. Checked against the
+  real API on 2026-10-18 ~05:10Z:
+  - KXBTC15M-26OCT180115-15: ask moved 0.48 → 0.45 and ~500k contracts traded, `updated_time` stayed at
+    05:00:00.596Z (the open time).
+  - KXNCAAFGAME-26OCT17NEBORE-ORE (Nebraska at Oregon, in progress): trades at 05:11Z, price 0.47 → 0.70,
+    `updated_time` 2026-10-11T19:06Z (when the market was created).
+  - KXMLBSPREAD-26OCT161800TBCLE: `updated_time` jumped to 03:22Z only when the markets finalized.
+  So `updated_time` changes on status/metadata changes (created, rescheduled, closed, settled), not on prices.
+  Consequence of the guard as specified: almost every live game's market predates the first pitch / kickoff, so live
+  Kalshi prices, live betting and live cash out become unavailable nearly everywhere.
+  Safest option taken: implemented exactly as specified (a live game never uses a market whose updated_time is before
+  the start). Guard (a) alone already fixes the ALCS exploit. Will to choose: keep it; or drop guard (b); or replace
+  updated_time with "latest trade at or after the start" (Kalshi /markets/trades; one extra request per market,
+  workable at bet time and cash out, too many requests for the board on a busy Saturday). The freshness test is one
+  function, `freshForLive()` in server/sources/kalshi.js.
