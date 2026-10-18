@@ -137,7 +137,7 @@ function AdminBattleCard({ battle, busy, onPreview }) {
     <article className={battle.disputed ? 'card admin-battle disputed' : 'card admin-battle'}>
       <header className="bet-card-head">
         <strong>{battle.title}</strong>
-        <span className={`battle-status status-${battle.status}`}>{battle.disputed ? 'Disputed' : BATTLE_STATUS_LABELS[battle.status]}</span>
+        <span className={`battle-status status-${battle.disputed ? 'disputed' : battle.status}`}>{battle.disputed ? 'Disputed' : BATTLE_STATUS_LABELS[battle.status]}</span>
       </header>
       <div className="muted small">
         {FORMAT_LABELS[battle.format]} · by {battle.creatorName} · {formatMoney(battle.stakeCents)} each · pot {formatMoney(battle.potCents)} · payout{' '}

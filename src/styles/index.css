@@ -3717,7 +3717,8 @@ body.no-scroll {
   white-space: nowrap;
 }
 
-.battle-status.status-pending {
+.battle-status.status-pending,
+.battle-status.status-disputed {
   color: var(--gold);
   border-color: var(--gold);
 }

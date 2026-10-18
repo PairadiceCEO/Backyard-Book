@@ -107,12 +107,14 @@ Battles in My Bets, admin Battles tab (disputed first) with edit log.
 - [x] B4 test/battles/battles.test.mjs (15 tests: payout math incl. ties/teams/rounding, validation, create/
       accept/decline/cancel/expiry/result/dispute, admin result/payout/void, races, API). Mutation-checked (10
       mutations, each caught). Sportsbook suites moved to test/sportsbook (84). fakeFirestore: where/get queries.
-- [ ] B5 Phones: Custom tab, New Battle, Battle detail, badge, My Bets, admin Battles tab
+- [x] B5 Phones: BattlesContext (one listener), Custom tab (LeagueTabs + badge; CustomBoard), NewBattlePage,
+      BattleDetailPage (accept/decline/keep/withdraw/cancel/result/dispute, logs), BattleCard in My Bets, admin
+      Battles tab (filters, disputed first, result/payout/void previews via MoneyConfirmModal), nav badge.
+      Harness: battle fixtures + 11 scenarios; firestore mock supports array-contains.
 - [ ] B6 Full suite, build, lint, phone check, merge, live test steps (incl. console rules step)
 
 ## Next
-B5 phones: BattlesContext (one listener: battles array-contains my uid), Custom tab in LeagueTabs (+ badge),
-CustomBoard (Battles + custom games), /battles/new, /battles/:id, My Bets Battles, admin Battles tab.
+B6: full suite, build, lint, phone check, merge, report (tell Will to publish firestore.rules).
 
 ## Open questions
 None.

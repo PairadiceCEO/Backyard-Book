@@ -19,6 +19,7 @@ function rows(target) {
   let list = (src || []).map((d) => ({ ...d }));
   for (const c of target.constraints || []) {
     if (c.type === 'where' && c.op === '==') list = list.filter((d) => d[c.field] === c.value);
+    if (c.type === 'where' && c.op === 'array-contains') list = list.filter((d) => Array.isArray(d[c.field]) && d[c.field].includes(c.value));
     if (c.type === 'orderBy') list.sort((a, b) => (a[c.field] < b[c.field] ? -1 : a[c.field] > b[c.field] ? 1 : 0) * (c.dir === 'desc' ? -1 : 1));
     if (c.type === 'limit') list = list.slice(0, c.n);
   }
