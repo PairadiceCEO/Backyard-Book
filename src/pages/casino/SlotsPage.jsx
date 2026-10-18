@@ -246,7 +246,6 @@ export default function SlotsPage() {
             </li>
           ))}
         </ul>
-        <p className="muted small">Return to player 90.0%. Every spin is decided on the server before the reels move.</p>
       </div>
 
       {history.length > 0 ? (

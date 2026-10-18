@@ -6,7 +6,7 @@ export const CASINO_SEATS = 5;
 
 // Table timers. Deadlines are server milliseconds; phones count down against the server's clock.
 // Turn / results / dice / card-dealing timings live in timing.js (one file to tweak them all).
-export { TURN_SECONDS, RESULTS_SECONDS, TICK_JITTER_MS, DICE_ANIMATION_MS } from './timing.js';
+export { TURN_SECONDS, RESULTS_SECONDS, TICK_JITTER_MS, DICE_ANIMATION_MS, CRAPS_TURN_SECONDS } from './timing.js';
 export const HEARTBEAT_SECONDS = 20; // a seated phone says "still here" this often while visible
 export const PRESENCE_WRITE_SECONDS = 30; // the server writes presence at most this often per player
 export const SEAT_TIMEOUT_SECONDS = 60; // no heartbeat for this long → the seat frees at round end

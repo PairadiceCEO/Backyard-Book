@@ -12,11 +12,16 @@
 //              refused (STALE) only if a roll already happened; other players' bets never block it.
 //              Dice come from crypto.randomInt; every bet the roll decides is settled in the same
 //              transaction, one payout entry per player per roll.
-//   Timers     come-out: the 15 s clock starts at the first bet after the last roll; with a point on, it
-//              starts right after each roll. At zero the server rolls for the shooter. On a come-out
-//              with no line bet from the shooter, the dice pass to the next seat and the clock restarts;
-//              after a full lap with no shooter willing, the table waits (no clock) until someone bets
-//              a line, and that player gets the dice.
+//   Timers     only with 2 or more players at the table (seated, not leaving), every clock is 30 s
+//              (CRAPS_TURN_SECONDS). Come-out: the clock starts at the first bet after the last roll; with
+//              a point on, it starts right after each roll (after the dice animation). At zero the server
+//              rolls for the shooter. On a come-out with no line bet from the shooter, the dice pass to the
+//              next seat and the clock restarts; after a full lap with no shooter willing, the table waits
+//              (no clock) until someone bets a line, and that player gets the dice.
+//              With 1 player there is no clock at all: no auto-roll, no passing; the dice roll only when the
+//              shooter taps Roll. 2+ → 1 clears the clock; 1 → 2+ with a point on starts a 30 s clock then (on
+//              a come-out it starts at the next bet). One exception keeps a clock: a shooter who left with
+//              bets still in play can't tap Roll, so their dice still roll themselves.
 //   Seven-out  the dice go to the next occupied seat, clockwise.
 //   Seats      one per player. After every roll, a seat whose player left or has been gone 60 s:
 //              line bets, Come bets and every Odds keep working until they resolve; once none are left
@@ -27,7 +32,7 @@ import { requireSeat } from './tableRunner.js';
 import { seatIsStale } from './seats.js';
 import { formatDollars } from './money.js';
 import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
-import { CASINO_SEATS, DICE_ANIMATION_MS, TURN_SECONDS, isValidCasinoBet } from '../../shared/casino/constants.js';
+import { CASINO_SEATS, CRAPS_TURN_SECONDS, DICE_ANIMATION_MS, isValidCasinoBet } from '../../shared/casino/constants.js';
 import { DICE_VARIANTS } from '../../shared/casino/diceVariants.js';
 import {
   BET_KINDS,
@@ -47,7 +52,7 @@ import {
 } from '../../shared/casino/dice.js';
 
 export { DICE_ANIMATION_MS };
-const TURN_MS = TURN_SECONDS * 1000;
+const TURN_MS = CRAPS_TURN_SECONDS * 1000;
 const ROLL_HISTORY = 20;
 const RECENT_REQUESTS = 8;
 const KIND_TEXT = { natural: 'winner', craps: 'craps', point: 'point set', pointMade: 'point made', sevenOut: 'seven out', roll: '' };
@@ -68,8 +73,17 @@ function nextShooter(state, from) {
   return null;
 }
 
+// Players at the table: seated seats whose player is not leaving.
 function seatedCount(state) {
   return state.seats.filter((s) => s && !s.leaving).length;
+}
+
+// Whether the table runs shooter clocks: 2 or more players, or a shooter who left with bets in play (nobody
+// will tap Roll for them, so their dice keep rolling themselves).
+export function clocksOn(state) {
+  if (seatedCount(state) >= 2) return true;
+  const shooter = state.shooter === null || state.shooter === undefined ? null : state.seats[state.shooter];
+  return Boolean(shooter?.leaving);
 }
 
 export function makeDiceEngine(variantId) {
@@ -135,13 +149,17 @@ export function makeDiceEngine(variantId) {
   }
 
   // Keep the dice with a seated player; with nobody seated the table stops its clock.
+  // Then the clock follows the player count: 2+ → 1 clears it; 1 → 2+ with a point on starts 30 s from now
+  // (on a come-out it starts at the next bet, as usual).
   async function afterSeatsChanged(ctx) {
     const { state } = ctx;
+    const wasOn = typeof state.clocksOn === 'boolean' ? state.clocksOn : Boolean(state.deadline);
     if (seatedCount(state) === 0 && !state.seats.some((s) => s && hasLineAction(s.bets))) {
       state.shooter = null;
       state.deadline = null;
       state.waiting = false;
       state.lap = 0;
+      state.clocksOn = false;
       return;
     }
     const current = state.shooter === null ? null : state.seats[state.shooter];
@@ -149,6 +167,14 @@ export function makeDiceEngine(variantId) {
       state.shooter = nextShooter(state, state.shooter ?? -1);
       state.lap = 0;
     }
+    const on = clocksOn(state);
+    if (!on) {
+      state.deadline = null;
+      state.waiting = false; // nobody to pass the dice to
+    } else if (!wasOn && state.point !== null && state.shooter !== null) {
+      state.deadline = ctx.now + TURN_MS;
+    }
+    state.clocksOn = on;
   }
 
   // ---------- actions ----------
@@ -218,9 +244,12 @@ export function makeDiceEngine(variantId) {
   }
 
   // A chip went down: start the come-out clock, or hand the dice to whoever bets a line while waiting.
+  // With 1 player there is no clock: the shooter rolls when they tap Roll.
   function afterChipDown(ctx, index, kinds) {
     const { state } = ctx;
     if (state.shooter === null) state.shooter = nextShooter(state, -1);
+    const on = clocksOn(state);
+    state.clocksOn = on;
     if (state.point !== null) return;
     if (state.waiting) {
       if (kinds.some((k) => k === 'pass' || k === 'dontPass')) {
@@ -228,9 +257,9 @@ export function makeDiceEngine(variantId) {
         state.shooter = index;
         state.waiting = false;
         state.lap = 0;
-        state.deadline = ctx.now + TURN_MS;
+        state.deadline = on ? ctx.now + TURN_MS : null;
       }
-    } else if (!state.deadline) {
+    } else if (!state.deadline && on) {
       state.deadline = ctx.now + TURN_MS; // the first bet after the last roll starts the clock
     }
   }
@@ -368,8 +397,10 @@ export function makeDiceEngine(variantId) {
 
     state.waiting = false;
     state.lap = kind === 'sevenOut' ? 0 : state.lap;
-    if (state.point !== null && state.shooter !== null) state.deadline = ctx.now + DICE_ANIMATION_MS + TURN_MS;
-    else state.deadline = null; // a come-out: the clock waits for the first bet
+    const on = clocksOn(state);
+    state.clocksOn = on;
+    if (on && state.point !== null && state.shooter !== null) state.deadline = ctx.now + DICE_ANIMATION_MS + TURN_MS;
+    else state.deadline = null; // a come-out (the clock waits for the first bet), or a player alone (no clock)
     ctx.changed = true;
   }
 
@@ -397,6 +428,12 @@ export function makeDiceEngine(variantId) {
     if (state.shooter === null || !state.seats[state.shooter]) await afterSeatsChanged(ctx);
     if (state.shooter === null) {
       state.deadline = null;
+      return;
+    }
+    // The player count may have dropped since the clock started: a player alone gets no auto-roll and no pass.
+    if (!clocksOn(state)) {
+      state.deadline = null;
+      state.clocksOn = false;
       return;
     }
     if (state.point !== null || hasLine(state.seats[state.shooter])) {

@@ -35,10 +35,16 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
         `updated_time` after their game's start (they model live markets). Mutation-checked: guard a off (6 fail),
         guard b off (4), guard c off (1), spread number inheritance off (4), cash out mapping check off (1), pricing
         fresh check off (2), board-quote path off (1), cash out fresh check off (1), ladder guard off (1).
-- [ ] 2 Craps/Crapless shooter timer: 1 player → no clock (deadline null, no auto-roll, no pass, no countdown);
-      2+ → 30 s for every craps clock (CRAPS_TURN_SECONDS); 2→1 clears; 1→2 with a point on → now + 30 s;
-      onDeadline re-checks the count. Tests incl. Blackjack/Baccarat still 15 s.
-- [ ] 3 Slots: remove the "Return to player 90.0%…" line from SlotsPage.jsx (math unchanged)
+- [x] 2 Craps/Crapless shooter timer (server/casino/crapsTable.js, both variants): `clocksOn(state)` = 2+ players
+      (seated, not leaving); `CRAPS_TURN_SECONDS = 30` in shared/casino/timing.js (TURN_SECONDS 15 stays for
+      Blackjack/Baccarat). No deadline with 1 player (afterChipDown, doRoll, onDeadline re-check → no auto-roll, no
+      pass); afterSeatsChanged: 2+→1 clears the deadline (and `waiting`), 1→2+ with a point on → now + 30 s
+      (`state.clocksOn` remembers the last answer). Rules text on the Craps page updated. Decision: a shooter who
+      left with bets in play keeps the auto-roll (nobody can tap Roll for them; without it the remaining player
+      could never get the dice). Tests: test/casino/casino6.test.mjs (11); casino4 expectations 15 s → 30 s.
+      Mutation-checked (always on, no 2→1 clear, no 1→2 start, no onDeadline re-check, 15 s, no leaving-shooter
+      exception: each fails a test).
+- [x] 3 Slots: the "Return to player 90.0%…" line removed from SlotsPage.jsx (math unchanged)
 - [ ] 4 Board: league + Custom tabs show only unfinished games (filtered in /api/board's response, not the cache);
       new "Live" tab first (every ESPN game in progress, grouped by league in app order, sorted by start;
       /api/board?league=live built from the five cached boards via getOrRefresh; 30 s poll; saved tab accepts
