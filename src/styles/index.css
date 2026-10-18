@@ -4012,3 +4012,177 @@ fieldset.field legend {
 .small-btn.active {
   border-color: var(--accent);
 }
+
+/* Challenges (Phase C) */
+.challenge-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.challenge-card.state-open {
+  border-color: var(--accent);
+}
+
+.challenge-title {
+  color: var(--text);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.challenge-more {
+  align-self: flex-start;
+  color: var(--accent);
+  text-decoration: none;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.battle-status.status-open {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.battle-status.status-closed {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.battle-status.status-rejected {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.outcome-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.outcome-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  line-height: 1.2;
+}
+
+.outcome-cell .outcome-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.outcome-cell .odds-price {
+  flex: none;
+}
+
+.outcome-cell.winner {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.outcome-won {
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.outcome-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5.5rem auto;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.outcome-row input {
+  font: inherit;
+  font-size: 1rem;
+  min-height: 44px;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.outcome-row input:disabled {
+  opacity: 0.7;
+}
+
+.outcome-row .outcome-odds {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.outcome-row .btn-ghost {
+  min-height: 44px;
+}
+
+.outcome-hint {
+  grid-column: 1 / -1;
+  margin-top: -0.2rem;
+}
+
+.outcome-hint:empty {
+  display: none;
+}
+
+.close-time-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 0.6rem;
+}
+
+.close-time-row input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.tag {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.tag-poster {
+  color: var(--gold);
+  border: 1px solid var(--gold);
+}
+
+.poster-bet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+
+.poster-bet .tag {
+  margin-left: 0;
+}
+
+.admin-challenge.needs-review {
+  border-color: var(--gold);
+}
+
+.challenge-editor .outcome-row {
+  grid-template-columns: minmax(0, 1fr) 5.5rem;
+}

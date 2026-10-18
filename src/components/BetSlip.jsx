@@ -12,6 +12,7 @@ import {
   combinedAmerican,
   combinedDecimal,
   formatSignedLine,
+  marketHasLine,
   payoutCents,
   slipProblems,
   totalStakeCents,
@@ -31,7 +32,7 @@ function lineText(marketType, line) {
 // Admin test switch: shift lines by half a point and prices by 5 so the server's real
 // LINE_CHANGED / price-change handling can be exercised on demand.
 function staleCopy(leg) {
-  if (leg.marketType === 'moneyline') {
+  if (!marketHasLine(leg.marketType)) {
     return { line: null, quotedAmerican: leg.american > 0 ? leg.american + 5 : leg.american - 5 };
   }
   return { line: leg.line + 0.5, quotedAmerican: leg.american };

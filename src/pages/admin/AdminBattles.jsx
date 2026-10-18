@@ -9,6 +9,7 @@ import { adminAction } from '../../lib/api.js';
 import { formatCentralDateTime, formatMoney } from '../../lib/format.js';
 import { toMs } from '../../lib/battles.js';
 import MoneyConfirmModal from './MoneyConfirmModal.jsx';
+import EditLog from '../../components/EditLog.jsx';
 import { EmptyState, ErrorState, LoadingState } from '../../components/StatusViews.jsx';
 import { BATTLE_STATUS_LABELS, FORMAT_LABELS, bpsText, ordinal, payoutProblems, percentToBps, placeUnits, resultProblems } from '../../../shared/battles.js';
 
@@ -172,15 +173,7 @@ function AdminBattleCard({ battle, busy, onPreview }) {
           ))}
         </ul>
       ) : null}
-      {(battle.edits ?? []).length ? (
-        <ul className="battle-log">
-          {battle.edits.map((e, i) => (
-            <li key={i} className="muted small">
-              {e.what} · {e.byName} · {formatCentralDateTime(new Date(toMs(e.at) ?? 0))}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <EditLog edits={battle.edits} compact />
       <div className="button-row">
         {canResult ? (
           <button type="button" className={mode === 'result' ? 'btn small-btn active' : 'btn small-btn'} onClick={() => open('result')} disabled={busy}>

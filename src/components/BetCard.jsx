@@ -55,7 +55,10 @@ export default function BetCard({ bet, cashout = null, onCashOut = null }) {
   return (
     <article className={`bet-card status-${bet.status}`}>
       <header className="bet-card-head">
-        <strong>{bet.type === 'parlay' ? `Parlay · ${bet.legs.length} legs` : 'Single'}</strong>
+        <strong>
+          {bet.type === 'parlay' ? `Parlay · ${bet.legs.length} legs` : 'Single'}
+          {bet.posterBet ? <span className="tag tag-poster">Poster's bet</span> : null}
+        </strong>
         <span className={`bet-status status-${bet.status}`}>{STATUS_LABELS[bet.status] ?? bet.status}</span>
       </header>
 
