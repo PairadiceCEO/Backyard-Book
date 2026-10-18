@@ -118,6 +118,13 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
 
+## 0.13.0
+
+- **Odds changes:** if a pick's price moved 50 points or more from what you saw (−100 and +100 count as the same point), nothing is placed and a popup shows "Old → New" with **Accept new odds** / **Remove pick(s)**. Smaller moves are accepted at the new price as before.
+- **My Bets → Finished:** sorted by when each bet settled (newest first), with a sort menu, a **Filters** panel (result, date placed, category, bet type, market, live/pre-game, stake range, search, Poster's bets) and a summary line (bets, staked, returned, net, win rate). Covers every finished bet; sort and filters are remembered for the session.
+- **Crypto chart:** touch and drag (or hover with a mouse) to read any minute's time and price.
+- Live games price from their Kalshi markets again (the 0.11.0 freshness check is gone; playoff game-number matching stays).
+
 ## Crypto markets (0.12.0)
 
 - **Crypto tab** on the Sportsbook (after the leagues, before Custom): one card per coin with the live Coinbase price, Kalshi's 15-minute **Up / Down** market (target, countdown) and the hourly **Above / Below** main strike (the strike whose YES price is nearest $0.50). Tap a card for the coin's page: big price, this hour's 1-minute chart (hand-built SVG) with the 15-min target and hourly strike drawn in and both close times marked, the Up/Down buttons and every hourly strike.
