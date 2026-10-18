@@ -20,6 +20,8 @@ import {
   totalStakeCents,
 } from '../../shared/betRules.js';
 import BetConfirmModal from './BetConfirmModal.jsx';
+import OddsChangedModal from './OddsChangedModal.jsx';
+import { ODDS_CONFIRM_POINTS, oddsScale } from '../../shared/oddsMath.js';
 
 function stakeCents(input) {
   if (String(input ?? '').trim() === '') return null;
@@ -32,8 +34,14 @@ function lineText(marketType, line, leg) {
   return formatSignedLine(line);
 }
 
-// Admin test switch: shift lines by half a point and prices by 5 so the server's real
-// LINE_CHANGED / price-change handling can be exercised on demand.
+// Admin test switches: shift lines by half a point and prices by 5 so the server's real
+// LINE_CHANGED / price-change handling can be exercised on demand; or send odds 60 points off (on the scale where
+// −100 and +100 are the same point) to see ODDS_CHANGED.
+function shiftedOdds(american, points) {
+  const x = oddsScale(american) + points;
+  return x >= 0 ? x + 100 : x - 100;
+}
+
 function staleCopy(leg) {
   if (!marketHasLine(leg.marketType)) {
     return { line: null, quotedAmerican: leg.american > 0 ? leg.american + 5 : leg.american - 5 };
@@ -51,6 +59,8 @@ export default function BetSlip() {
   const [error, setError] = useState('');
   const [confirmation, setConfirmation] = useState(null);
   const [simulateStale, setSimulateStale] = useState(false);
+  const [simulateOdds, setSimulateOdds] = useState(false);
+  const [oddsChanges, setOddsChanges] = useState(null); // ODDS_CHANGED answer waiting for the player
 
   const balanceCents = profile?.balanceCents ?? 0;
   const flagged = legs.filter((l) => l.flag);
@@ -81,6 +91,7 @@ export default function BetSlip() {
     setSubmitting(true);
     setError('');
     const useStale = isAdmin && simulateStale;
+    const useOdds = isAdmin && simulateOdds && !useStale;
     try {
       const body = {
         mode,
@@ -98,17 +109,31 @@ export default function BetSlip() {
           quotedAmerican: l.american,
           stakeCents: mode === 'singles' ? l.stakeCents : undefined,
           ...(useStale ? staleCopy(l) : {}),
+          ...(useOdds ? { quotedAmerican: shiftedOdds(l.american, ODDS_CONFIRM_POINTS + 10) } : {}),
         })),
       };
       const result = await apiRequest('/api/bets', { method: 'POST', body });
       if (useStale) setSimulateStale(false);
+      if (useOdds) setSimulateOdds(false);
       setConfirmation(result);
       slip.clear();
       setOpen(false);
     } catch (err) {
       if (useStale) setSimulateStale(false);
+      if (useOdds) setSimulateOdds(false);
       if (err.status === 409 && (err.code === 'LINE_CHANGED' || err.code === 'MARKET_CLOSED')) {
         slip.serverRejected({ lineChanges: err.details?.lineChanges ?? [], closedLegs: err.details?.closedLegs ?? [] });
+      }
+      if (err.status === 409 && err.code === 'ODDS_CHANGED' && Array.isArray(err.details?.oddsChanges)) {
+        // The popup lists each moved pick with its label; nothing was placed.
+        const byId = new Map(legs.map((l) => [l.legId, l]));
+        setOddsChanges(
+          err.details.oddsChanges
+            .filter((c) => byId.has(c.legId))
+            .map((c) => ({ ...c, label: byId.get(c.legId).label, gameLabel: byId.get(c.legId).gameLabel })),
+        );
+        setError('');
+        return;
       }
       setError(err.message || 'Could not place the bet.');
     } finally {
@@ -117,6 +142,15 @@ export default function BetSlip() {
   }
 
   const closeConfirmation = useCallback(() => setConfirmation(null), []);
+  const closeOddsChanges = useCallback(() => setOddsChanges(null), []);
+  const acceptOddsChanges = useCallback(() => {
+    if (oddsChanges) slip.acceptOdds(oddsChanges);
+    setOddsChanges(null);
+  }, [oddsChanges, slip]);
+  const removeOddsChanged = useCallback(() => {
+    if (oddsChanges) slip.removeMany(oddsChanges.map((c) => c.legId));
+    setOddsChanges(null);
+  }, [oddsChanges, slip]);
   const isOpen = open && legs.length > 0;
 
   // While the drawer is open: Escape closes it and the page behind it doesn't scroll.
@@ -296,10 +330,16 @@ export default function BetSlip() {
               {error ? <p className="error-text small" role="alert">{error}</p> : null}
 
               {isAdmin ? (
-                <label className="test-switch small">
-                  <input type="checkbox" checked={simulateStale} onChange={(e) => setSimulateStale(e.target.checked)} />
-                  Admin test: submit with an outdated line / price (next submit only)
-                </label>
+                <>
+                  <label className="test-switch small">
+                    <input type="checkbox" checked={simulateStale} onChange={(e) => setSimulateStale(e.target.checked)} />
+                    Admin test: submit with an outdated line / price (next submit only)
+                  </label>
+                  <label className="test-switch small">
+                    <input type="checkbox" checked={simulateOdds} onChange={(e) => setSimulateOdds(e.target.checked)} />
+                    Admin test: submit with odds 60 points off, to see the odds-changed popup (next submit only)
+                  </label>
+                </>
               ) : null}
 
               <div className="slip-actions">
@@ -324,6 +364,9 @@ export default function BetSlip() {
       ) : null}
 
       {confirmation ? <BetConfirmModal result={confirmation} onClose={closeConfirmation} /> : null}
+      {oddsChanges && oddsChanges.length ? (
+        <OddsChangedModal changes={oddsChanges} onAccept={acceptOddsChanges} onRemove={removeOddsChanged} onClose={closeOddsChanges} />
+      ) : null}
     </>
   );
 }

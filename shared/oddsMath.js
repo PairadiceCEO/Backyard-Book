@@ -63,3 +63,24 @@ export function makeQuote(american, { line = null, source, ref = null }) {
     ref,
   };
 }
+
+// ---------- Odds-change confirmation ----------
+// A leg whose price moved this many points or more from the price the player saw is not placed: the server answers
+// ODDS_CHANGED and the player confirms the new odds. Measured on a continuous scale where −100 and +100 are the
+// same point, so −110 → +110 is 20 points and +100 → −150 is 50.
+export const ODDS_CONFIRM_POINTS = 50;
+
+// f(a) = a − 100 for a ≥ +100, a + 100 for a ≤ −100 (values strictly between are not American odds; they fall on
+// the matching side so the scale stays continuous).
+export function oddsScale(american) {
+  const a = Number(american);
+  return a >= 0 ? a - 100 : a + 100;
+}
+
+export function oddsDistance(oldAmerican, newAmerican) {
+  return Math.abs(oddsScale(oldAmerican) - oddsScale(newAmerican));
+}
+
+export function needsOddsConfirm(oldAmerican, newAmerican) {
+  return oddsDistance(oldAmerican, newAmerican) >= ODDS_CONFIRM_POINTS;
+}

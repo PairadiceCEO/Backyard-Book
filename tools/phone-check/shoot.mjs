@@ -34,6 +34,10 @@ async function routeApi(page, mode) {
       if (body?.action !== 'spin') return json(route, 200, { ok: true, applied: false, seat: 1, seated: true, serverNow: Date.now() });
       return json(route, 200, { ok: true, duplicate: false, stops: [14, 5, 4], symbols: ['R7', 'R7', 'R7'], line: { id: 'red7x3', label: 'Red 7 · Red 7 · Red 7', pays: 300 }, betCents: 200, winCents: 60000, balanceCents: 69440, serverNow: Date.now() });
     }
+    if (u.pathname === '/api/bets' && body?.mode && mode.oddsChanged) {
+      const changes = (body.legs ?? []).slice(0, 2).map((l, i) => ({ legId: l.legId, oldAmerican: l.quotedAmerican, newAmerican: i ? -175 : 165, quote: { american: i ? -175 : 165, decimal: i ? 1.5714 : 2.65, line: l.line ?? null, source: 'espn', ref: null } }));
+      return json(route, 409, { error: { code: 'ODDS_CHANGED', message: 'Some odds moved. Accept the new odds or remove the picks.', oddsChanges: changes, lineChanges: [], closedLegs: [] } });
+    }
     if (u.pathname === '/api/bets' && body?.action === 'cashoutQuote') {
       return json(route, 200, { ok: true, quotes: {
         b1: { available: true, valueCents: mode.quoteCents ?? 2147, mode: 'live' },
@@ -118,6 +122,7 @@ const scenarios = [
   S('sportsbook-slip-bar', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await clickPrices(p, 3); } }),
   S('sportsbook-slip-open', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await clickPrices(p, 3); await openSlip(p); } }),
   S('sportsbook-slip-parlay', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await clickPrices(p, 3); await openSlip(p); await p.getByRole('tab', { name: 'Parlay' }).click(); } }),
+  S('sportsbook-odds-changed', '/sportsbook', { admin: false, user: 'u1', oddsChanged: true, act: async (p) => { await clickPrices(p, 2); await openSlip(p); for (const input of await p.locator('.stake-field input').all()) await input.fill('5'); await p.getByRole('button', { name: /^Place/ }).click(); await p.waitForTimeout(400); } }),
   S('sportsbook-empty', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: 'NBA' }).click(); await p.waitForTimeout(300); } }),
   S('sportsbook-error', '/sportsbook', { admin: false, user: 'u1', apiDown: true }),
   S('game-detail', '/sportsbook/nfl/401', { admin: false, user: 'u1' }),

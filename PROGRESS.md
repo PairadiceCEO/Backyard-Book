@@ -17,12 +17,16 @@ Spec: Will's attachment of 2026-10-18 01:56. One phase on a fresh wip off main; 
       market is priced (board, ladder, bet time ±ticker, live cash out ±DK line)", "bet-time price is the fresh
       market", "old cached rows still build"; 0.11.0 fixture `updated_time` lines removed. Re-mutation-checked:
       cash out mapping (1 fail), game number (6), unsure (1). CLAUDE.md + README lines updated.
-- [ ] 2 ODDS_CHANGED: `oddsDistance()` + `ODDS_CONFIRM_POINTS = 50` in shared/oddsMath.js (f(a) = a − 100 for
-      a ≥ +100, a + 100 for a ≤ −100). placeBets refuses with 409 ODDS_CHANGED { oddsChanges: [{ legId,
-      oldAmerican, newAmerican, quote }] } when any leg moved ≥ 50 (every market type, each parlay leg);
-      LINE_CHANGED / MARKET_CLOSED first; under 50 unchanged. Phone popup "Old +100 → New +155", "Accept new odds"
-      / "Remove pick(s)". Tests incl. the examples, 50 vs 49, parlay refused with no wallet change, resubmit;
-      mutation-check the threshold. CLAUDE.md line.
+- [x] 2 ODDS_CHANGED: `ODDS_CONFIRM_POINTS = 50`, `oddsScale`, `oddsDistance`, `needsOddsConfirm` in
+      shared/oddsMath.js. placeBets checks after MARKET_CLOSED and LINE_CHANGED: any leg ≥ 50 → 409 ODDS_CHANGED
+      { oddsChanges: [{ legId, oldAmerican, newAmerican, quote }], lineChanges: [], closedLegs: [] }, nothing placed.
+      Phone: OddsChangedModal ("Old +100 → New +155", Accept new odds / Remove pick(s)); reducer actions
+      `acceptOdds` (new odds + decimal → payout recalculated) and `removeMany`. Admin test switch added: "submit with
+      odds 60 points off" (next submit only) to trigger the popup on purpose. Crypto settlement test fixture now
+      quotes what the board showed. Tests: test/sportsbook/phase13.test.mjs (5: the examples, 50 refused / 49
+      accepted incl. a Challenge leg, parlay with one leg 60 off refused with no wallet/ledger/bet change then
+      resubmitted, LINE_CHANGED/MARKET_CLOSED priority, slip actions). Mutation-checked: threshold 51, 49, strict >,
+      no −100=+100 scale, server check off — each fails. Phone check screen: sportsbook-odds-changed. CLAUDE.md line.
 - [ ] 3 My Bets → Finished: sort menu (settled newest default / oldest, placed newest, stake, profit); collapsible
       Filters panel (result, date placed incl. custom Central dates, category, bet type, market, live/pre-game,
       stake range, text search, poster's bets) with count badge + Clear all; summary line (bets, staked, returned,
@@ -148,7 +152,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.13.0 item 2 (ODDS_CHANGED).
+0.13.0 item 3 (My Bets sort and filters).
 
 ## Open questions
 None open.
