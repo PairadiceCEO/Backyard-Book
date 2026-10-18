@@ -3638,3 +3638,376 @@ body.no-scroll {
 .craps-hard .craps-spot .spot-odds {
   font-size: 0.68rem;
 }
+
+/* ===================== Battles ===================== */
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 0.3rem;
+  margin-left: 0.35rem;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.bottom-tab {
+  position: relative;
+}
+
+.bottom-tab .nav-badge {
+  position: absolute;
+  top: 0.25rem;
+  left: calc(50% + 0.4rem);
+  margin-left: 0;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.section-head .section-title {
+  margin: 0;
+}
+
+.battle-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.battle-card.needs-me {
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 1px var(--gold);
+}
+
+.battle-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.battle-title {
+  overflow-wrap: anywhere;
+}
+
+.battle-status {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.battle-status.status-pending {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.battle-status.status-live,
+.battle-status.status-settled {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.battle-status.status-void,
+.battle-status.status-cancelled {
+  color: var(--text);
+}
+
+.battle-me {
+  font-size: 0.9rem;
+}
+
+.battle-me.needs {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.battle-page .card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.battle-detail-title {
+  margin: 0;
+  font-size: 1.3rem;
+  overflow-wrap: anywhere;
+}
+
+.battle-description {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.battle-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0;
+}
+
+.battle-facts dt {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.battle-facts dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.notice-card {
+  border-color: var(--gold);
+}
+
+.notice-card p {
+  margin: 0;
+}
+
+.battle-players,
+.payout-preview,
+.battle-log,
+.pick-list,
+.team-assign,
+.payout-rows,
+.problem-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.battle-players li,
+.payout-preview li,
+.team-assign li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.battle-players li.mine .battle-player-name {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.battle-player-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.battle-place {
+  display: inline-block;
+  min-width: 2.2rem;
+  font-weight: 800;
+  color: var(--gold);
+}
+
+.battle-player-status {
+  flex: none;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.battle-player-status.accepted {
+  color: var(--accent);
+}
+
+.battle-players.compact li {
+  font-size: 0.9rem;
+}
+
+.form-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.field textarea,
+.field select,
+.team-assign select,
+.pct-input input {
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+fieldset.field {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+fieldset.field legend {
+  padding: 0;
+  margin-bottom: 0.3rem;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.seg {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.seg.active {
+  border-color: var(--accent);
+  background: rgba(47, 191, 113, 0.12);
+  color: var(--accent);
+}
+
+.pick-row {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick-row.on {
+  border-color: var(--accent);
+}
+
+.pick-row:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pick-check {
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--accent-ink);
+  font-weight: 800;
+}
+
+.pick-row.on .pick-check {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.team-assign select {
+  min-height: 44px;
+  max-width: 55%;
+}
+
+.payout-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.payout-place {
+  width: 2.6rem;
+  font-weight: 800;
+}
+
+.pct-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pct-input input {
+  width: 5.5rem;
+  min-height: 44px;
+  text-align: right;
+}
+
+.payout-amount {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.payout-row .btn-ghost {
+  min-height: 44px;
+}
+
+.confirm-card p {
+  margin: 0;
+}
+
+.btn-block {
+  width: 100%;
+  min-height: 48px;
+}
+
+.admin-battle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-battle.disputed {
+  border-color: var(--gold);
+}
+
+.admin-battle-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+}
+
+.small-btn.active {
+  border-color: var(--accent);
+}

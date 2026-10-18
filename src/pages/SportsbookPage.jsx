@@ -1,51 +1,37 @@
-// League tabs and the game board, refreshed every 30 seconds.
+// League tabs and the game board, refreshed every 30 seconds. The Custom tab has the admin's custom
+// games (every league) and Battles.
 
 import { useMemo, useState } from 'react';
-import LeagueTabs from '../components/LeagueTabs.jsx';
+import LeagueTabs, { CUSTOM_TAB } from '../components/LeagueTabs.jsx';
+import CustomBoard from './battles/CustomBoard.jsx';
+import { useBattles } from '../context/BattlesContext.jsx';
 import GameCard from '../components/GameCard.jsx';
 import UpdatedAgo from '../components/UpdatedAgo.jsx';
 import { EmptyState, ErrorState, LoadingState } from '../components/StatusViews.jsx';
 import { useBoard } from '../hooks/useBoard.js';
-import { formatCentralDay } from '../lib/format.js';
+import { groupByDay } from '../lib/board.js';
 import { LEAGUES } from '../../shared/constants.js';
-import { centralDateKey } from '../../shared/time.js';
 
 const LEAGUE_STORAGE_KEY = 'backyardbook.league';
 
 function readSavedLeague() {
   try {
     const saved = window.sessionStorage.getItem(LEAGUE_STORAGE_KEY);
-    if (LEAGUES.some((l) => l.id === saved)) return saved;
+    if (LEAGUES.some((l) => l.id === saved) || saved === CUSTOM_TAB.id) return saved;
   } catch {
     // Storage can be blocked; fall back to the first league.
   }
   return LEAGUES[0].id;
 }
 
-function groupByDay(games) {
-  const todayKey = centralDateKey(new Date());
-  const tomorrowKey = centralDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
-  const groups = [];
-  for (const game of games) {
-    const key = centralDateKey(game.startTime);
-    let group = groups[groups.length - 1];
-    if (!group || group.key !== key) {
-      let label = formatCentralDay(game.startTime);
-      if (key === todayKey) label = `Today · ${label}`;
-      else if (key === tomorrowKey) label = `Tomorrow · ${label}`;
-      group = { key, label, games: [] };
-      groups.push(group);
-    }
-    group.games.push(game);
-  }
-  return groups;
-}
-
 export default function SportsbookPage() {
   const [league, setLeague] = useState(readSavedLeague);
+  const { needsMeCount } = useBattles();
+  const custom = league === CUSTOM_TAB.id;
+  // The Custom tab loads its own board; league boards poll only while their tab is showing.
   const { games, fetchedAt, stale, partial, kalshiStatus, error, loading, retry } = useBoard(league);
 
-  const groups = useMemo(() => (games ? groupByDay(games) : []), [games]);
+  const groups = useMemo(() => (games && !custom ? groupByDay(games) : []), [games, custom]);
   const leagueLabel = LEAGUES.find((l) => l.id === league)?.label ?? '';
 
   function changeLeague(id) {
@@ -57,9 +43,18 @@ export default function SportsbookPage() {
     }
   }
 
+  if (custom) {
+    return (
+      <section className="page">
+        <LeagueTabs value={league} onChange={changeLeague} customBadge={needsMeCount} />
+        <CustomBoard board={{ games, fetchedAt, stale, error, loading, retry }} />
+      </section>
+    );
+  }
+
   return (
     <section className="page">
-      <LeagueTabs value={league} onChange={changeLeague} />
+      <LeagueTabs value={league} onChange={changeLeague} customBadge={needsMeCount} />
 
       <div className="board-status">
         <UpdatedAgo timestamp={fetchedAt} />

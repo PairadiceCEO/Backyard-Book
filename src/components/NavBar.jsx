@@ -4,6 +4,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useWalletDisplay } from '../context/WalletDisplayContext.jsx';
+import { useBattles } from '../context/BattlesContext.jsx';
 import { formatMoney } from '../lib/format.js';
 import { APP_NAME } from '../../shared/constants.js';
 
@@ -50,6 +51,14 @@ export default function NavBar() {
   const { displayCents } = useWalletDisplay();
   const shownCents = displayCents(Number(profile?.balanceCents) || 0);
   const tabs = isAdmin ? [...TABS, ADMIN_TAB] : TABS;
+  // Battle invites (and payout changes) waiting for me: a badge on the Sportsbook tab.
+  const { needsMeCount } = useBattles();
+  const badgeFor = (tab) =>
+    tab.to === '/sportsbook' && needsMeCount > 0 ? (
+      <span className="nav-badge" aria-label={`${needsMeCount} Battle${needsMeCount === 1 ? '' : 's'} waiting for you`}>
+        {needsMeCount}
+      </span>
+    ) : null;
 
   return (
     <>
@@ -70,6 +79,7 @@ export default function NavBar() {
           {tabs.map((tab) => (
             <NavLink key={tab.to} to={tab.to} className={tabClass}>
               {tab.label}
+              {badgeFor(tab)}
             </NavLink>
           ))}
         </nav>
@@ -82,6 +92,7 @@ export default function NavBar() {
               {ICONS[tab.icon]}
             </svg>
             <span>{tab.short}</span>
+            {badgeFor(tab)}
           </NavLink>
         ))}
       </nav>
