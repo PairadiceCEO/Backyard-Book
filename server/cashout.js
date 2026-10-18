@@ -3,11 +3,14 @@
 // Value (cents, always rounded DOWN):
 //   pre-game (no leg's game has started) → stake × 0.90
 //   live     (any leg's game has started) → potential payout × P × 0.90
+//   never    a bet with any custom-game, Challenge or crypto leg (shared/betRules.js cashoutEligible)
 //     potential payout = stake × product of the decimals of every leg that hasn't pushed/voided
 //     P = product of the Kalshi BID of every undecided leg (won legs count as 1)
 // Unavailable when a leg lost, when every leg is decided (settlement pays it), when a leg's game
 // ended without a gradable result, when an undecided leg of a live bet has no exact Kalshi market
 // with a bid, when a custom-game leg has started, or when the bet isn't open.
+// A live leg's bid only counts from a Kalshi market of the event the board maps to that game (playoff games
+// by series game number) that has updated since the game started (stale-market guard).
 //
 // Quotes shown on My Bets may reuse ESPN/Kalshi answers for a few seconds; the confirmation
 // (cashOutBet) always re-prices with fresh ESPN and Kalshi data, and pays in one transaction with a
@@ -22,8 +25,8 @@ import { buildBoard, normalizeCustomGame } from './board.js';
 import { gameKey, loadGameResults } from './gameResults.js';
 import { decideBet, gradeLeg, resultFromCustomGame, resultFromEspnGame } from './grading.js';
 import { fetchLeagueGames } from './sources/espn.js';
-import { fetchEvent, fetchMarket, mappedEventTicker } from './sources/kalshi.js';
-import { combinedDecimal, payoutCents } from '../shared/betRules.js';
+import { fetchEvent, fetchMarket, freshForLive, liveSinceMs, mappedEventTicker } from './sources/kalshi.js';
+import { NO_CASHOUT_REASON, cashoutEligible, combinedDecimal, payoutCents } from '../shared/betRules.js';
 import { challengeDocId, isChallengeLeg } from '../shared/challenges.js';
 import { resultFromChallenge } from './challenges.js';
 
@@ -36,6 +39,7 @@ const RESULT_TTL_MS = 60 * 1000; // ESPN scoreboard results reused by estimates
 export const MAX_QUOTE_BETS = 50;
 
 export const UNAVAILABLE_NOW = 'Cash out unavailable right now';
+export const STALE_LIVE = 'Live prices unavailable, so cash out is closed for now.';
 
 // ---------- pure helpers ----------
 
@@ -235,7 +239,7 @@ async function legGameState(leg, ctx) {
     const result = resultFromEspnGame(game);
     if (result.status === 'void') return { grade: 'void', started: false, blocked: null };
     if (game.state === 'pre') return { grade: 'pending', started: false, blocked: null };
-    if (game.state === 'in') return { grade: 'pending', started: true, blocked: null };
+    if (game.state === 'in') return { grade: 'pending', started: true, blocked: null, liveSince: liveSinceMs(game) };
     const grade = graded(leg, result);
     return { grade, started: true, blocked: grade === 'pending' ? 'Waiting for the final score.' : null };
   }
@@ -260,27 +264,35 @@ async function legBid(leg, state, ctx) {
     return { bid: null, noBid: state.started ? 'Cash out closes once a custom game starts.' : 'No live price for a custom game in this bet.' };
   }
 
+  const liveSince = state.liveSince ?? null;
+  const mapping = await ctx.kalshiMapping(leg.league, String(leg.gameId));
+  const eventTicker = mappedEventTicker(mapping, leg.marketType);
+  if (!eventTicker) return { bid: null, noBid: 'No matching Kalshi market for this line.' };
+
   const ref = leg.sourceRef;
   if (ref?.ticker && (ref.side === 'yes' || ref.side === 'no')) {
+    // Only a market of the event this game is mapped to now (never another game's event).
+    if (!String(ref.ticker).startsWith(`${eventTicker}-`)) return { bid: null, noBid: 'No matching Kalshi market for this line.' };
     const market = await ctx.kalshiMarket(ref.ticker);
+    if (market && !freshForLive(market, liveSince)) return { bid: null, noBid: STALE_LIVE };
     const bid = bidFromMarket(market, ref.side);
     return bid === null ? { bid: null, noBid: UNAVAILABLE_NOW } : { bid, noBid: null };
   }
 
   // A DraftKings line: the Kalshi market at the same line.
-  const mapping = await ctx.kalshiMapping(leg.league, String(leg.gameId));
-  const eventTicker = mappedEventTicker(mapping, leg.marketType);
-  if (!eventTicker) return { bid: null, noBid: 'No matching Kalshi market for this line.' };
   const event = await ctx.kalshiEvent(eventTicker);
   const match = findKalshiMatch(event, mapping, leg);
   if (!match) return { bid: null, noBid: 'No matching Kalshi market for this line.' };
+  if (!freshForLive(match.market, liveSince)) return { bid: null, noBid: STALE_LIVE };
   const bid = bidFromMarket(match.market, match.side);
   return bid === null ? { bid: null, noBid: UNAVAILABLE_NOW } : { bid, noBid: null };
 }
 
 // Full quote for a stored bet. ctx: see createCashoutContext.
+// A bet with a custom-game, Challenge or crypto leg is never cashable: refused before anything is fetched.
 export async function quoteCashout(bet, ctx) {
   if (!bet || bet.status !== 'open') return unavailable('This bet is no longer open.');
+  if (!cashoutEligible(bet)) return unavailable(NO_CASHOUT_REASON);
   const legs = Array.isArray(bet.legs) ? bet.legs : [];
   let states;
   try {
@@ -471,6 +483,8 @@ export async function cashOutBet(caller, body, { now = new Date(), fetchImpl = f
   const bet = betSnap.data();
   if (bet.status === 'cashed_out') return alreadyDone(bet);
   if (bet.status !== 'open') throw new HttpError(409, 'CASHOUT_UNAVAILABLE', 'This bet has already been settled.', { reason: 'This bet has already been settled.' });
+  // Custom-game, Challenge and crypto legs: never, and nothing is fetched to say so.
+  if (!cashoutEligible(bet)) throw new HttpError(409, 'CASHOUT_UNAVAILABLE', NO_CASHOUT_REASON, { reason: NO_CASHOUT_REASON });
 
   // Fresh prices, never the board cache.
   const quote = await quoteCashout(bet, makeContext({ now, fetchImpl, fresh: true, db }));

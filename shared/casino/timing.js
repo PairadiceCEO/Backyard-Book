@@ -30,3 +30,6 @@ export const TICK_JITTER_MS = 800; // phones wait 0–800 ms after a deadline be
 
 // ---------- Dice ----------
 export const DICE_ANIMATION_MS = 1000; // phones tumble the dice this long; the point-phase clock starts after it
+// Craps and Crapless shooter clocks (come-out after the first bet, point-phase auto-roll, after the dice pass).
+// Only with 2 or more players at the table; a player alone has no clock and rolls when they tap Roll.
+export const CRAPS_TURN_SECONDS = 30;

@@ -6,7 +6,7 @@
 import { HttpError } from './http.js';
 import { getOrRefresh } from './cache.js';
 import { CUSTOM_BOARD_ID, CUSTOM_BOARD_KEY, buildBoard, buildCustomBoard } from './board.js';
-import { buildLadders, compactFromEvents, fetchEvent } from './sources/kalshi.js';
+import { buildLadders, compactFromEvents, fetchEvent, liveSinceMs } from './sources/kalshi.js';
 
 const TTL_MS = 30 * 1000;
 
@@ -45,7 +45,8 @@ export async function getGameDetail(leagueId, gameId, { fetchImpl = fetch, now =
         t: compact.t && compact.t.e === game.kalshi.totalEvent ? compact.t : null,
       };
     }
-    ladders = buildLadders(compact, game.kalshi.sideByCode);
+    // A game in progress shows only markets updated since its start (stale-market guard).
+    ladders = buildLadders(compact, game.kalshi.sideByCode, liveSinceMs(game));
   }
 
   return {

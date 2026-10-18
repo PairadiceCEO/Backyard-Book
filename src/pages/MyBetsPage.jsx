@@ -13,6 +13,7 @@ import { usePolling } from '../hooks/usePolling.js';
 import { apiRequest } from '../lib/api.js';
 import { formatMoney } from '../lib/format.js';
 import { requestSettlement } from '../lib/settle.js';
+import { cashoutEligible } from '../../shared/betRules.js';
 
 const SETTLE_CHECK_MS = 60 * 1000;
 
@@ -36,8 +37,9 @@ export default function MyBetsPage() {
     [bets],
   );
 
-  // Cash out: estimates for every open bet, then confirm → server re-prices → pay (or CASHOUT_CHANGED).
-  const activeIds = useMemo(() => active.map((b) => b.id), [active]);
+  // Cash out: estimates for every open bet that can be cashed out (never one with a custom-game, Challenge or
+  // crypto leg), then confirm → server re-prices → pay (or CASHOUT_CHANGED).
+  const activeIds = useMemo(() => active.filter(cashoutEligible).map((b) => b.id), [active]);
   const { quotes, setQuote, refresh: refreshQuotes } = useCashoutQuotes(activeIds);
   const [cashout, setCashout] = useState(null); // { bet, valueCents, previousCents, busy, error, unavailable }
   const [cashedNote, setCashedNote] = useState('');
@@ -123,7 +125,7 @@ export default function MyBetsPage() {
         </p>
       ) : null}
       {active.map((bet) => (
-        <BetCard key={bet.id} bet={bet} cashout={quotes[bet.id] ?? null} onCashOut={startCashout} />
+        <BetCard key={bet.id} bet={bet} cashout={quotes[bet.id] ?? null} onCashOut={cashoutEligible(bet) ? startCashout : null} />
       ))}
 
       {activeBattles.length ? <h3 className="day-label">Battles</h3> : null}

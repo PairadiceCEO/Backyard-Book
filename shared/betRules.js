@@ -141,3 +141,21 @@ export function pickLabel({ marketType, selection, line, homeName, awayName, out
   if (marketType === 'spread') return `${team} ${formatSignedLine(line)}`;
   return `${team} moneyline`;
 }
+
+// ---------- Cash out eligibility ----------
+// Cash out exists only for bets whose every leg is a real game with a market price. A bet with any leg on a
+// custom game ("custom:"), a Challenge ("challenge:") or a crypto market ("crypto:") can never be cashed out,
+// before or after the start, singles and parlays alike. Battles have no cash out at all. Shared by the server
+// (authoritative) and the phone (which then shows no cash out row and asks for no quote).
+export const NO_CASHOUT_PREFIXES = ['custom:', 'challenge:', 'crypto:'];
+export const NO_CASHOUT_REASON = 'No cash out on bets with a custom game, Challenge or crypto pick.';
+
+export function legBlocksCashout(leg) {
+  const gameId = String(leg?.gameId ?? '');
+  return NO_CASHOUT_PREFIXES.some((p) => gameId.startsWith(p));
+}
+
+export function cashoutEligible(bet) {
+  const legs = Array.isArray(bet?.legs) ? bet.legs : [];
+  return legs.length > 0 && !legs.some(legBlocksCashout);
+}

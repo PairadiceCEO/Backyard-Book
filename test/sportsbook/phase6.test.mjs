@@ -65,7 +65,8 @@ function game(id, state, markets = emptyMarkets(), extra = {}) {
 }
 function marketsWith(fn) { const m = emptyMarkets(); fn(m); return m; }
 function kalshiMarket(ticker, strike, yesAsk, noAsk, status = 'active') {
-  return { ticker, status, floor_strike: strike, yes_ask_dollars: yesAsk.toFixed(4), no_ask_dollars: noAsk.toFixed(4), yes_bid_dollars: (yesAsk - 0.01).toFixed(4), no_bid_dollars: (noAsk - 0.01).toFixed(4) };
+  // updated_time after the games' 17:00Z start: a live market (stale-market guard)
+  return { ticker, status, floor_strike: strike, yes_ask_dollars: yesAsk.toFixed(4), no_ask_dollars: noAsk.toFixed(4), yes_bid_dollars: (yesAsk - 0.01).toFixed(4), no_bid_dollars: (noAsk - 0.01).toFixed(4), updated_time: '2026-10-18T17:30:00Z' };
 }
 function fakeCtx({ fresh = [], board = [], kalshiForGames = new Map(), markets = {}, custom = {}, now = new Date('2026-10-16T20:00:00Z') } = {}) {
   return {

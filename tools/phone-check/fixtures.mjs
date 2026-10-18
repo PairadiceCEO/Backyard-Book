@@ -55,9 +55,28 @@ export const nflGames = [
   },
 ];
 
+// League tabs list only games that haven't finished (the server drops final / canceled / postponed ones).
 export function board(league) {
-  const games = league === 'nba' ? [] : nflGames.map((g) => ({ ...g, league }));
+  if (league === 'live') return liveBoard();
+  const games = league === 'nba' ? [] : nflGames.filter((g) => g.state !== 'post' && !g.canceled).map((g) => ({ ...g, league }));
   return { league, fetchedAt: new Date().toISOString(), stale: false, partial: false, kalshiStatus: 'ok', games };
+}
+
+// The Live tab: games in progress across leagues (each keeps its league), or none.
+const liveMlb = {
+  ...nflGames[1], id: '501', league: 'mlb', startTime: iso(now - 2 * H), statusText: 'Bot 7th',
+  home: team('CLE', 'Cleveland Guardians', 'Guardians', 2), away: team('TB', 'Tampa Bay Rays', 'Rays', 6),
+  markets: markets({ moneyline: { home: kq(900, null, 'KXMLBGAME-X-CLE', 'yes'), away: kq(-1900, null, 'KXMLBGAME-X-TB', 'yes') }, spread: { home: null, away: null }, total: { over: kq(-110, 9.5, 'KXMLBTOTAL-X-10', 'yes'), under: kq(-110, 9.5, 'KXMLBTOTAL-X-10', 'no') } }),
+  partialNote: 'Some live prices unavailable',
+};
+const liveNhl = {
+  ...nflGames[1], id: '601', league: 'nhl', startTime: iso(now - 0.5 * H), statusText: '2nd 11:20',
+  home: team('PIT', 'Pittsburgh Penguins', 'Penguins', 1), away: team('VGK', 'Vegas Golden Knights', 'Golden Knights', 1),
+  markets: markets(), oddsNote: 'Live prices unavailable',
+};
+export function liveBoard(empty = false) {
+  const games = empty ? [] : [liveMlb, { ...nflGames[1], league: 'nfl' }, liveNhl];
+  return { league: 'live', fetchedAt: new Date().toISOString(), stale: false, partial: false, kalshiStatus: 'ok', games };
 }
 
 export function gameDetail(id) {

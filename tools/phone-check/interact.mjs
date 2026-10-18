@@ -62,7 +62,10 @@ await check('three quick taps on Player: chips show at once, one request carries
   const shownAt = Date.now();
   assert.match(await player.innerText(), /\$6\.00/, 'all three chips on the spot at once');
   assert.notEqual(await wallet(page), before);
-  assert.match(await wallet(page), /\$90\.40/, `wallet shows the $6 pending (shows ${await wallet(page)})`);
+  // The wallet re-renders a moment after the third tap (well before the 400 ms reply): give it up to 300 ms.
+  let shown = await wallet(page);
+  for (let i = 0; i < 6 && !/\$90\.40/.test(shown); i += 1) { await page.waitForTimeout(50); shown = await wallet(page); }
+  assert.match(shown, /\$90\.40/, `wallet shows the $6 pending (shows ${shown})`);
   assert.ok(Date.now() - shownAt < 200);
   await page.waitForTimeout(1200);
   assert.equal(bets.length, 1, `taps within 300 ms → one request (got ${bets.length})`);

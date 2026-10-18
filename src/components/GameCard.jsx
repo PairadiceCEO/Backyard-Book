@@ -158,6 +158,7 @@ export default function GameCard({ game, clickable = true }) {
           {!game.oddsNote && sourceLabel ? (
             <span>
               {game.state === 'in' ? 'Live odds' : 'Odds'}: {sourceLabel}
+              {game.partialNote ? ' · some unavailable' : ''}
             </span>
           ) : null}
           {game.source === 'custom' ? <span className="badge">custom</span> : null}

@@ -460,8 +460,8 @@ export default function CrapsPage({ game }) {
         Odds pay true odds{game === 'crapless' ? ' (2 and 12 at 5:1, 3 and 11 at 3:1)' : ''}, up to {variant.oddsMultiple}× their line bet
         {variant.dontPass ? '; Don’t Pass Odds pay the inverse' : ''}. Come bets work like a new Pass bet on the next roll, then on their number; Come
         Odds are off on the come-out. Place bets and Hard ways are off on the come-out; Hard 4 and 10 pay{' '}
-        {ratio(variant.hardWays[4])}, Hard 6 and 8 pay {ratio(variant.hardWays[6])} and stay up after a win. The shooter has 15 s to roll, then the
-        dice roll themselves. One seat per player.
+        {ratio(variant.hardWays[4])}, Hard 6 and 8 pay {ratio(variant.hardWays[6])} and stay up after a win. With 2 or more players the shooter has 30 s to roll, then the dice roll
+        themselves; a player alone rolls when they tap Roll. One seat per player.
       </p>
     </section>
   );

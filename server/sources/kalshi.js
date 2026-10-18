@@ -114,9 +114,34 @@ function isActive(market) {
   return market?.status === 'active' || market?.status === 'open';
 }
 
-// Price to buy `side` ('yes' | 'no') of a market, or null if it fails the board's checks.
-export function tradablePrice(market, side) {
+// ---------- Stale-market guard for games in progress ----------
+// A live game may only use a Kalshi market that has been updated since the game started: a market whose
+// updated_time is before the ESPN start time is treated as having no price (board "Live prices unavailable",
+// bet refused as closed, no live cash out). liveSinceMs is null for a game that isn't in progress (no check).
+
+export function marketUpdatedMs(market) {
+  const ms = Date.parse(market?.updated_time ?? '');
+  return Number.isFinite(ms) ? ms : null;
+}
+
+// The ESPN start (ms) when the game is in progress, else null.
+export function liveSinceMs(game) {
+  if (!game || game.state !== 'in') return null;
+  const ms = Date.parse(game.startTime ?? '');
+  return Number.isFinite(ms) ? ms : 0; // in progress with no usable start: every market must carry an updated_time
+}
+
+export function freshForLive(market, liveSince) {
+  if (liveSince === null || liveSince === undefined) return true;
+  const updated = marketUpdatedMs(market);
+  return updated !== null && updated >= liveSince;
+}
+
+// Price to buy `side` ('yes' | 'no') of a market, or null if it fails the board's checks
+// (or, for a game in progress, the market hasn't updated since the start).
+export function tradablePrice(market, side, liveSince = null) {
   if (!isActive(market)) return null;
+  if (!freshForLive(market, liveSince)) return null;
   const ask = num(side === 'yes' ? market.yes_ask_dollars : market.no_ask_dollars);
   // A YES bid is the same order as a NO ask at (1 − price), so a missing bid can be derived.
   const otherAsk = num(side === 'yes' ? market.no_ask_dollars : market.yes_ask_dollars);
@@ -128,19 +153,18 @@ export function tradablePrice(market, side) {
   return ask;
 }
 
-function kalshiQuote(market, side, line) {
-  const price = tradablePrice(market, side);
+function kalshiQuote(market, side, line, liveSince = null) {
+  const price = tradablePrice(market, side, liveSince);
   if (price === null) return null;
-  return makeQuote(probabilityToAmerican(price), {
-    line,
-    source: 'kalshi',
-    ref: { provider: 'Kalshi', ticker: market.ticker, side, price },
-  });
+  const ref = { provider: 'Kalshi', ticker: market.ticker, side, price };
+  if (market.updated_time) ref.updatedAt = String(market.updated_time); // kept in the board cache
+  return makeQuote(probabilityToAmerican(price), { line, source: 'kalshi', ref });
 }
 
 // Fresh quote for a stored leg (ticker + side), as placed at bet time. Line comes from the market itself:
 // spread YES = favorite −strike, spread NO = underdog +strike; total = strike; moneyline = none.
-export function quoteFromMarket(market, side, marketType) {
+// liveSince: the game's start (ms) when it is in progress (stale-market guard), else null.
+export function quoteFromMarket(market, side, marketType, liveSince = null) {
   if (!market) return null;
   const strike = num(market.floor_strike);
   let line = null;
@@ -151,7 +175,7 @@ export function quoteFromMarket(market, side, marketType) {
     if (strike === null) return null;
     line = strike;
   }
-  return kalshiQuote(market, side, line);
+  return kalshiQuote(market, side, line, liveSince);
 }
 
 // Team code at the end of a market ticker: "KXNFLSPREAD-26OCT18HOUJAC-JAC3" → "JAC"
@@ -165,7 +189,11 @@ function spreadLabel(market) {
 }
 
 // Quotes for one matched game. sideByCode maps Kalshi team codes to 'home' / 'away'.
-export function buildKalshiMarkets({ gameEvent, spreadEvent, totalEvent, sideByCode }) {
+// For a game in progress (entry.game.state 'in') every market must have updated since the start.
+export function buildKalshiMarkets({ gameEvent, spreadEvent, totalEvent, sideByCode, game = null }) {
+  const live = liveSinceMs(game);
+  const quote = (market, side, line) => kalshiQuote(market, side, line, live);
+  const price = (market, side) => tradablePrice(market, side, live);
   const markets = {
     moneyline: { home: null, away: null },
     spread: { home: null, away: null },
@@ -181,8 +209,8 @@ export function buildKalshiMarkets({ gameEvent, spreadEvent, totalEvent, sideByC
   for (const side of ['home', 'away']) {
     const other = side === 'home' ? 'away' : 'home';
     markets.moneyline[side] =
-      (winner[side] && kalshiQuote(winner[side], 'yes', null)) ||
-      (winner[other] && kalshiQuote(winner[other], 'no', null)) ||
+      (winner[side] && quote(winner[side], 'yes', null)) ||
+      (winner[other] && quote(winner[other], 'no', null)) ||
       null;
   }
 
@@ -195,15 +223,15 @@ export function buildKalshiMarkets({ gameEvent, spreadEvent, totalEvent, sideByC
       if (side && strike !== null && strike > 0) bySide[side].push({ market, strike });
     }
 
-    const homeWin = winner.home ? tradablePrice(winner.home, 'yes') : null;
-    const awayWin = winner.away ? tradablePrice(winner.away, 'yes') : null;
+    const homeWin = winner.home ? price(winner.home, 'yes') : null;
+    const awayWin = winner.away ? price(winner.away, 'yes') : null;
     let favorite = null;
     if (homeWin !== null && awayWin !== null && homeWin !== awayWin) favorite = homeWin > awayWin ? 'home' : 'away';
 
     const closest = (entries) => {
       let best = null;
       for (const entry of entries) {
-        const ask = tradablePrice(entry.market, 'yes');
+        const ask = price(entry.market, 'yes');
         if (ask === null) continue;
         const distance = Math.abs(ask - 0.5);
         if (!best || distance < best.distance) best = { ...entry, distance };
@@ -224,8 +252,8 @@ export function buildKalshiMarkets({ gameEvent, spreadEvent, totalEvent, sideByC
 
     if (pick) {
       const dog = pick.side === 'home' ? 'away' : 'home';
-      markets.spread[pick.side] = kalshiQuote(pick.market, 'yes', -pick.strike);
-      markets.spread[dog] = kalshiQuote(pick.market, 'no', pick.strike);
+      markets.spread[pick.side] = quote(pick.market, 'yes', -pick.strike);
+      markets.spread[dog] = quote(pick.market, 'no', pick.strike);
     }
   }
 
@@ -234,14 +262,14 @@ export function buildKalshiMarkets({ gameEvent, spreadEvent, totalEvent, sideByC
     let best = null;
     for (const market of totalEvent.markets ?? []) {
       const strike = num(market.floor_strike);
-      const ask = tradablePrice(market, 'yes');
+      const ask = price(market, 'yes');
       if (strike === null || strike <= 0 || ask === null) continue;
       const distance = Math.abs(ask - 0.5);
       if (!best || distance < best.distance) best = { market, strike, distance };
     }
     if (best) {
-      markets.total.over = kalshiQuote(best.market, 'yes', best.strike);
-      markets.total.under = kalshiQuote(best.market, 'no', best.strike);
+      markets.total.over = quote(best.market, 'yes', best.strike);
+      markets.total.under = quote(best.market, 'no', best.strike);
     }
   }
 
@@ -271,6 +299,7 @@ function eventSides(event, kind) {
 }
 
 // Matches every fetched event to an ESPN game and returns Map(gameId → Kalshi markets).
+// Each game's own state decides the stale-market guard (entry.game).
 export function attachKalshiToGames(params) {
   const result = new Map();
   for (const [gameId, entry] of matchKalshiEntries(params)) {
@@ -279,17 +308,47 @@ export function attachKalshiToGames(params) {
   return result;
 }
 
+// Playoff series game number from a Kalshi winner-event title: "Game 5: Tampa Bay vs Cleveland" → 5.
+export function kalshiGameNumber(title) {
+  const match = /^\s*Game\s+(\d{1,2})\s*:/i.exec(String(title ?? ''));
+  if (!match) return null;
+  const n = Number(match[1]);
+  return n >= 1 && n <= 9 ? n : null;
+}
+
+// Ticker suffix → game number, from the winner events. Spread and total titles don't carry the number
+// ("Tampa Bay vs Cleveland: Spread"), so they inherit it from the winner event with the same suffix.
+function numbersBySuffix(gameEvents) {
+  const bySuffix = new Map();
+  for (const event of gameEvents ?? []) {
+    const suffix = event?.parsed?.suffix;
+    if (!suffix) continue;
+    const n = kalshiGameNumber(event.title);
+    if (bySuffix.has(suffix) && bySuffix.get(suffix) !== n) bySuffix.set(suffix, null); // conflicting → unknown
+    else bySuffix.set(suffix, n);
+  }
+  return bySuffix;
+}
+
 // Matches every fetched event to an ESPN game. Returns Map(gameId → { game, sideByCode, gameEvent, spreadEvent, totalEvent }).
 //
 // Each event is matched on its own (never by sharing a ticker suffix with another event):
 //   1. Events with no active market (finished games still listed) are skipped, so they can't win a match.
-//   2. Each event picks the ESPN game whose teams fit and whose date is closest (exact date beats the
-//      ±1-day time-zone fallback; for MLB the ticker's start time breaks ties, e.g. doubleheaders).
-//   3. Each game keeps, per kind (winner / spread / total), only its closest event, and all kinds must
-//      be from the same game slot (date + start time) as the closest one, so a game can never mix days.
+//   2. Each event picks the ESPN game whose teams fit:
+//      - a game with a playoff series number (ESPN "ALCS - Game 5") takes only events with that same number
+//        (winner title "Game 5: …", spread/total inherit it by ticker suffix), whatever the ticker date: Kalshi
+//        keeps a postponed game under its original date. Another number, or no known number, never matches it.
+//      - a game without a number takes the closest date (exact date beats the ±1-day time-zone fallback; for MLB
+//        the ticker's start time breaks ties, e.g. doubleheaders).
+//   3. Each game keeps, per kind (winner / spread / total), only its closest event, and all kinds must be from the
+//      same game slot (date + start time) as the closest one, so a game can never mix days.
+//   4. When unsure, no price: if the closest events are in two different slots, or two different events of one
+//      kind are equally close, the game gets no Kalshi markets at all. Never a nearby event instead.
 export function matchKalshiEntries({ league, games, gameEvents, spreadEvents, totalEvents }) {
   const espnGames = games.filter((g) => g.source === 'espn');
   const lists = { game: gameEvents ?? [], spread: spreadEvents ?? [], total: totalEvents ?? [] };
+  const numbers = numbersBySuffix(lists.game);
+  const numberOf = (kind, event) => (kind === 'game' ? kalshiGameNumber(event.title) : numbers.get(event.parsed.suffix) ?? null);
 
   // 1–2. Every live event picks one game.
   const picks = new Map(); // gameId → { game, candidates: [{ kind, event, sides, sideOf, distance }] }
@@ -302,8 +361,8 @@ export function matchKalshiEntries({ league, games, gameEvents, spreadEvents, to
         if (kind === 'spread') orphans.push(event);
         continue;
       }
-      const match = matchTeamsToGame(sides, event.parsed, espnGames, league);
-      if (!match) continue; // not a board game (e.g. FCS), names didn't line up, or ambiguous
+      const match = matchTeamsToGame(sides, event.parsed, espnGames, league, numberOf(kind, event));
+      if (!match) continue; // not a board game (e.g. FCS), names didn't line up, wrong game number, or ambiguous
       let bucket = picks.get(match.game.id);
       if (!bucket) {
         bucket = { game: match.game, candidates: [] };
@@ -313,9 +372,10 @@ export function matchKalshiEntries({ league, games, gameEvents, spreadEvents, to
     }
   }
 
-  // 3. Per game: the closest event sets the slot; each kind keeps its closest event in that slot.
+  // 3–4. Per game: the closest event sets the slot; each kind keeps its closest event in that slot.
   const result = new Map();
   for (const [gameId, { game, candidates }] of picks) {
+    if (isAmbiguous(candidates)) continue;
     const anchor = closestCandidate(candidates);
     const entry = { game, sideByCode: {}, gameEvent: null, spreadEvent: null, totalEvent: null };
 
@@ -333,7 +393,8 @@ export function matchKalshiEntries({ league, games, gameEvents, spreadEvents, to
     if (entry.gameEvent || entry.spreadEvent || entry.totalEvent) result.set(gameId, entry);
   }
 
-  // One-team spread events: attach to the game whose winner event has the same ticker suffix (same game slot).
+  // One-team spread events: attach to the game whose winner event has the same ticker suffix (same game slot,
+  // and so the same game number).
   for (const event of orphans) {
     for (const entry of result.values()) {
       if (entry.spreadEvent || !entry.gameEvent || entry.gameEvent.parsed?.suffix !== event.parsed.suffix) continue;
@@ -355,6 +416,22 @@ export function matchKalshiEntries({ league, games, gameEvents, spreadEvents, to
   }
 
   return result;
+}
+
+// The matcher can't decide: the closest candidates are different events in two slots (or two events in one
+// slot, e.g. a second listing of the same game), or two different events of one kind are equally close
+// within the chosen slot.
+function isAmbiguous(candidates) {
+  const anchor = closestCandidate(candidates);
+  const closest = candidates.filter((c) => c.distance === anchor.distance);
+  if (closest.some((c) => c.event.parsed.suffix !== anchor.event.parsed.suffix)) return true;
+  for (const kind of KINDS) {
+    const inSlot = candidates.filter((c) => c.kind === kind && sameSlot(c.event.parsed, anchor.event.parsed));
+    if (inSlot.length < 2) continue;
+    const min = Math.min(...inSlot.map((c) => c.distance));
+    if (new Set(inSlot.filter((c) => c.distance === min).map((c) => c.event.event_ticker)).size > 1) return true;
+  }
+  return false;
 }
 
 const KINDS = ['game', 'spread', 'total'];
@@ -415,7 +492,8 @@ export function kalshiMapping(entry) {
   };
 }
 
-// Compact copy of one event's active markets: [tickerSuffix, strike, yesAsk, yesBid, noAsk, noBid].
+// Compact copy of one event's active markets:
+// [tickerSuffix, strike, yesAsk, yesBid, noAsk, noBid, updatedMs] (updatedMs = the market's updated_time).
 function compactEvent(event) {
   if (!event) return null;
   const rows = [];
@@ -425,7 +503,7 @@ function compactEvent(event) {
     if (strike === null || strike <= 0) continue;
     const suffix = String(m.ticker ?? '').slice(String(event.event_ticker).length + 1);
     if (!suffix) continue;
-    rows.push([suffix, strike, num(m.yes_ask_dollars), num(m.yes_bid_dollars), num(m.no_ask_dollars), num(m.no_bid_dollars)]);
+    rows.push([suffix, strike, num(m.yes_ask_dollars), num(m.yes_bid_dollars), num(m.no_ask_dollars), num(m.no_bid_dollars), marketUpdatedMs(m)]);
   }
   return { e: event.event_ticker, m: rows };
 }
@@ -444,10 +522,12 @@ export function compactFromEvents(spreadEvent, totalEvent) {
 }
 
 function expandRow(eventTicker, row) {
-  const [suffix, strike, yesAsk, yesBid, noAsk, noBid] = row;
+  const [suffix, strike, yesAsk, yesBid, noAsk, noBid, updatedMs] = row;
   return {
     ticker: `${eventTicker}-${suffix}`,
     status: 'active',
+    // A row cached before updated_time was kept has none, so a game in progress never uses it.
+    updated_time: Number.isFinite(updatedMs) ? new Date(updatedMs).toISOString() : null,
     floor_strike: strike,
     yes_ask_dollars: yesAsk,
     yes_bid_dollars: yesBid,
@@ -460,7 +540,8 @@ function expandRow(eventTicker, row) {
 // Every posted, tradable spread and total line for a game. Never computes a line Kalshi didn't post.
 // Spreads: team X at −N = YES on "X wins by over N"; X's opponent at +N = NO on that same market.
 // Totals: over = YES on "Over N", under = NO.
-export function buildLadders(compact, sideByCode) {
+// liveSince: the game's start (ms) when it is in progress, so a market not updated since then is left out.
+export function buildLadders(compact, sideByCode, liveSince = null) {
   const ladders = { spreads: { home: [], away: [] }, totals: [] };
   if (!compact) return ladders;
 
@@ -470,8 +551,8 @@ export function buildLadders(compact, sideByCode) {
       const side = sideByCode?.[market.suffix.replace(/\d+$/, '')];
       if (side !== 'home' && side !== 'away') continue;
       const other = side === 'home' ? 'away' : 'home';
-      const fav = quoteFromMarket(market, 'yes', 'spread');
-      const dog = quoteFromMarket(market, 'no', 'spread');
+      const fav = quoteFromMarket(market, 'yes', 'spread', liveSince);
+      const dog = quoteFromMarket(market, 'no', 'spread', liveSince);
       if (fav) ladders.spreads[side].push(fav);
       if (dog) ladders.spreads[other].push(dog);
     }
@@ -482,8 +563,8 @@ export function buildLadders(compact, sideByCode) {
     const byLine = new Map();
     for (const row of compact.t.m) {
       const market = expandRow(compact.t.e, row);
-      const over = quoteFromMarket(market, 'yes', 'total');
-      const under = quoteFromMarket(market, 'no', 'total');
+      const over = quoteFromMarket(market, 'yes', 'total', liveSince);
+      const under = quoteFromMarket(market, 'no', 'total', liveSince);
       if (!over && !under) continue;
       byLine.set(market.floor_strike, { line: market.floor_strike, over, under });
     }

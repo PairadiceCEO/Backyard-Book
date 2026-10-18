@@ -23,6 +23,7 @@ const { settleOpenBets } = await import(url('server/settlement.js'));
 const { quoteBets, createCashoutContext, clearEstimateCache } = await import(url('server/cashout.js'));
 const customAdmin = await import(url('server/admin/customGames.js'));
 const { buildCustomBoard } = await import(url('server/board.js'));
+const { NO_CASHOUT_REASON } = await import(url('shared/betRules.js'));
 
 // Saturday 2026-10-18 10:00 CDT. Betting closes 7:00 PM CDT (= 2026-10-19 00:00 UTC).
 const T0 = new Date('2026-10-18T15:00:00.000Z');
@@ -240,17 +241,16 @@ test('settle: a preview shows every wallet change; void refunds every leg and le
   assert.ok(no);
 });
 
-test('cash out on a Challenge bet: stake × 0.9 before the close, none after (no market price)', async () => {
+test('cash out on a Challenge bet (0.11.0): never, before or after the close', async () => {
   const id = await post();
   await approve(id);
   const r = await single('dan', [leg(id, 'o1', 150)], 1000);
   const betId = r.bets[0].id;
   const q1 = await quoteBets(caller('dan'), { betIds: [betId] }, { now: later(H), makeContext: (o) => createCashoutContext({ ...o, getBoard: async () => ({ games: [] }) }) });
-  assert.deepEqual(q1.quotes[betId], { available: true, valueCents: 900, mode: 'pregame' });
+  assert.deepEqual(q1.quotes[betId], { available: false, valueCents: null, reason: NO_CASHOUT_REASON });
   clearEstimateCache();
   const q2 = await quoteBets(caller('dan'), { betIds: [betId] }, { now: new Date(CLOSE_MS + 60e3), makeContext: (o) => createCashoutContext({ ...o, getBoard: async () => ({ games: [] }) }) });
-  assert.equal(q2.quotes[betId].available, false);
-  assert.match(q2.quotes[betId].reason, /Challenge closes/);
+  assert.deepEqual(q2.quotes[betId], { available: false, valueCents: null, reason: NO_CASHOUT_REASON });
 });
 
 test('settlement grades Challenge legs from the doc; an unsettled Challenge stays open', async () => {

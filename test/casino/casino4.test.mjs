@@ -68,14 +68,14 @@ test('the first player to sit gets the dice; rolling needs the dice and a line b
   await err(roll('p1'), 'NEED_LINE_BET');
   await err(roll('p2'), 'NOT_SHOOTER');
   await bet('p2', 'field', 1, {}, T0 + 1000);
-  assert.equal(table().deadline, T0 + 1000 + 15_000, 'the first bet after the last roll starts the clock');
+  assert.equal(table().deadline, T0 + 1000 + 30_000, 'the first bet after the last roll starts the (30 s, two players) clock');
   await bet('p1', 'pass', 5, {}, T0 + 3000);
-  assert.equal(table().deadline, T0 + 16_000, 'later bets do not move it');
+  assert.equal(table().deadline, T0 + 31_000, 'later bets do not move it');
   rollAs(3, 3);
   await roll('p1', T0 + 4000);
   t = table();
   assert.deepEqual([t.point, t.rollSeq, t.lastRoll.dice, t.lastRoll.kind], [6, 1, [3, 3], 'point']);
-  assert.equal(t.deadline, T0 + 4000 + DICE_ANIMATION_MS + 15_000, 'with a point on, the clock restarts right after each roll');
+  assert.equal(t.deadline, T0 + 4000 + DICE_ANIMATION_MS + 30_000, 'with a point on, the clock restarts right after each roll');
   assert.equal(wallet('p2'), 10000 - 100, 'Field lost on a 6');
 });
 
@@ -274,7 +274,7 @@ test('come-out with no line bet from the shooter: the dice pass on; after a full
   await act('p3', 'tick', {}, t.deadline);
   t = table();
   assert.deepEqual([t.shooter, t.rollSeq, t.waiting], [1, 0, false], 'dice to seat 2, no roll');
-  assert.ok(t.deadline > T0 + 15_000, 'the clock restarted');
+  assert.ok(t.deadline > T0 + 30_000, 'the clock restarted');
   await act('p3', 'tick', {}, t.deadline);
   await act('p3', 'tick', {}, table().deadline);
   t = table();

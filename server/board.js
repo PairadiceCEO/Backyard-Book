@@ -8,7 +8,9 @@
 //   final    → none
 
 import { adminDb } from './firebaseAdmin.js';
+import { getOrRefresh } from './cache.js';
 import { getLeague } from './leagues.js';
+import { LEAGUES } from '../shared/constants.js';
 import { emptyMarkets, fetchLeagueGames } from './sources/espn.js';
 import {
   buildKalshiMarkets,
@@ -33,7 +35,8 @@ function anyQuote(markets) {
   return MARKET_KEYS.some((key) => marketHasQuote(markets[key]));
 }
 
-// Applies the price order to one ESPN game. kalshiMarkets may be undefined.
+// Applies the price order to one ESPN game. kalshiMarkets may be undefined. For a game in progress they were
+// built with the stale-market guard (buildKalshiMarkets: no market older than the start).
 export function mergeGameMarkets(game, kalshiMarkets) {
   if (game.source !== 'espn') return game;
   if (game.state === 'post' || game.canceled) {
@@ -52,8 +55,11 @@ export function mergeGameMarkets(game, kalshiMarkets) {
 
   let oddsNote = null;
   if (!anyQuote(markets)) oddsNote = game.state === 'in' ? 'Live prices unavailable' : 'Odds unavailable';
+  // Live game with some markets priced and others not (e.g. a market that hasn't updated since the start).
+  const someMissing = MARKET_KEYS.some((key) => Object.values(markets[key]).some((q) => q === null));
+  const partialNote = game.state === 'in' && !oddsNote && someMissing ? 'Some live prices unavailable' : null;
 
-  return { ...game, markets, oddsNote };
+  return { ...game, markets, oddsNote, partialNote };
 }
 
 const CUSTOM_FINAL_VISIBLE_MS = 24 * 60 * 60 * 1000; // finished custom games stay on the board for a day
@@ -222,6 +228,76 @@ export async function buildBoard(leagueId, { now = new Date(), fetchImpl = fetch
   }
 
   return board;
+}
+
+const BOARD_TTL_MS = 30 * 1000;
+// The Live tab re-reads a league whose cached board shows nothing live or about to start at most every 5 minutes,
+// so an open Live tab doesn't rebuild (and rewrite to Firestore) five boards every 30 seconds (Spark quota).
+const LIVE_IDLE_TTL_MS = 5 * 60 * 1000;
+
+// ---------- What the board tabs list ----------
+// The cache keeps every game (settlement, pricing and game pages need finished ones too); the board tabs
+// list only games that haven't finished: no ESPN game that is final, canceled or postponed, and no custom game
+// that is final or canceled.
+export function isListedGame(game) {
+  if (!game) return false;
+  if (game.state === 'post' || game.canceled) return false;
+  return true;
+}
+
+export function listedGames(games) {
+  return (games ?? []).filter(isListedGame);
+}
+
+export const LIVE_BOARD_ID = 'live';
+
+// The Live tab: every ESPN game in progress across the leagues, in the app's league order, each league by start
+// time. Built from the leagues' cached boards (getBoardResult(leagueId) → getOrRefresh result), so it adds no
+// ESPN or Kalshi requests of its own. A league that can't be loaded is skipped and the board marked partial.
+export async function buildLiveBoard(leagueIds, getBoardResult) {
+  const results = await Promise.allSettled(leagueIds.map((id) => getBoardResult(id)));
+  const games = [];
+  let fetchedAtMs = null;
+  let stale = false;
+  let partial = false;
+  let kalshiFailed = false;
+  results.forEach((r, i) => {
+    if (r.status !== 'fulfilled' || !r.value?.value) {
+      partial = true;
+      if (r.status === 'rejected') console.error(`live board: ${leagueIds[i]} failed:`, r.reason?.message);
+      return;
+    }
+    const { value, fetchedAtMs: at, stale: wasStale } = r.value;
+    if (wasStale) stale = true;
+    if (value.partial) partial = true;
+    if (value.kalshiStatus === 'failed') kalshiFailed = true;
+    if (Number.isFinite(at)) fetchedAtMs = fetchedAtMs === null ? at : Math.min(fetchedAtMs, at);
+    const live = (value.games ?? []).filter((g) => g.source === 'espn' && g.state === 'in' && !g.canceled);
+    for (const g of sortGames(live)) games.push({ ...g, league: g.league || leagueIds[i] });
+  });
+  return { games, fetchedAtMs: fetchedAtMs ?? Date.now(), stale, partial, kalshiStatus: kalshiFailed ? 'failed' : 'ok' };
+}
+
+function hasLiveOrStarting(board, nowMs) {
+  return (board?.games ?? []).some(
+    (g) => g.source === 'espn' && !g.canceled && (g.state === 'in' || (g.state === 'pre' && Date.parse(g.startTime) <= nowMs + BOARD_TTL_MS)),
+  );
+}
+
+// One league's cached board for the Live tab: the 30-second board when it has a game in progress or starting now,
+// otherwise any copy up to 5 minutes old. Same cache key as the league tab, so it never fetches anything extra.
+export async function liveLeagueBoard(leagueId, { nowMs = Date.now(), fetchImpl = fetch } = {}) {
+  const build = () => buildBoard(leagueId, { now: new Date(nowMs), fetchImpl });
+  const relaxed = await getOrRefresh(`board_${leagueId}`, LIVE_IDLE_TTL_MS, build, { now: () => nowMs });
+  if (!hasLiveOrStarting(relaxed.value, nowMs)) return relaxed;
+  return getOrRefresh(`board_${leagueId}`, BOARD_TTL_MS, build, { now: () => nowMs });
+}
+
+export async function getLiveBoard({ nowMs = Date.now(), fetchImpl = fetch } = {}) {
+  return buildLiveBoard(
+    LEAGUES.map((l) => l.id),
+    (id) => liveLeagueBoard(id, { nowMs, fetchImpl }),
+  );
 }
 
 // The Custom tab: every league's custom games (finished ones stay a day), priced from their docs.
