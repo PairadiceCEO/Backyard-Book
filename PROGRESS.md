@@ -5,7 +5,7 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.13.0 (Will, 2026-10-18 01:56 CT) — IN PROGRESS
+## Phase 0.13.0 (Will, 2026-10-18 01:56 CT; re-sent 11:31) — COMPLETE (2026-10-18), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-18 01:56. One phase on a fresh wip off main; merge after every CLAUDE.md check.
 
 ### Checklist
@@ -57,7 +57,9 @@ Spec: Will's attachment of 2026-10-18 01:56. One phase on a fresh wip off main; 
       inside. interact.mjs check (touch drag, target, flip, refresh that drops the held minute, lift, mouse hover/leave);
       mutation-checked (no timestamp hold, no flip, no target line, no hide on lift: each fails). Phone screen
       crypto-coin-scrub.
-- [ ] 5 Checks (test:all, lint, build, interact.mjs, dealcheck.mjs, phone check) → merge as 0.13.0; stop servers.
+- [x] 5 Checks: test:all (31 + 97 + 21 + 104 + 15 + 11 + 9 = 288), lint, build, interact.mjs (incl. My Bets history and
+      the chart scrubber), dealcheck.mjs, phone check 108 screens × 320/375/414 clean. Version 0.13.0. Merged wip → main.
+      No firestore.rules change and no new index. Harness server stopped.
 
 ## Batch (Will, 2026-10-18): Phase 1 fixes (0.11.0), then Phase 2 crypto markets (0.12.0)
 Spec: Will's message of 2026-10-18 00:03 CT. Two phases, each merged to main on its own, in order.
@@ -175,7 +177,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.13.0 checks and merge.
+Nothing queued: 0.13.0 is merged. Wait for Will's test results.
 
 ## Open questions
 None open.
