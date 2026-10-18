@@ -5,6 +5,34 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.14.0 (Will, 2026-10-18 12:25 CT) — IN PROGRESS
+Spec: Will's attachment of 2026-10-18 12:25. One phase on a fresh wip off main; merge after every CLAUDE.md check;
+stop dev/harness servers at the end.
+
+### Checklist
+- [ ] 1 Crypto cash out: live only once the market has opened (no pre-game mode); value = potential × fresh bid for
+      the bet's side × 0.90, floored; unavailable when not active, < 60 s to close, bid missing/0, bid-ask gap >
+      MAX_BID_ASK_GAP, or the market has a result; exact stored ticker of a configured series; same transaction /
+      `cashout_{betId}`. My Bets shows it. Custom games, Challenges, Battles still never. Tests + mutation (0.90, 60 s).
+      CLAUDE.md cash out line.
+- [ ] 2 Crypto chart: rolling last 60 minutes ending now (candles request = that window), close times as text above
+      the chart with live countdowns, target lines + scrubber kept (held minute; once it scrolls off → oldest point).
+      Phone check coin screens updated.
+- [ ] 3 Player props (Kalshi, pre-game only): series discovery (Sports list read to the end) → checked-in config
+      (series → league, stat label), included/left-out list here; matching only by the mapped winner event's ticker
+      suffix; pre-game rule ('pre' and server clock < startTime); pricing (configured series, mapped event, active,
+      pre-game, price checks, ask); leg marketType 'prop'; labels; LINE_CHANGED / ODDS_CHANGED; parlays (no same-game
+      with a prop); cash out (pre-game stake × 0.9, after start bid formula); settlement by Kalshi result (non-yes/no
+      → void); /api/board &game=&props=1 with 30 s memory cache, no Firestore. Tests + mutation (pre-game cutoff,
+      suffix check). CLAUDE.md props line.
+- [ ] 4 LineWheel (src/components/LineWheel.jsx): scroll-snap chips, centered = selected, two bet buttons, starts on
+      the main line, arrows + keys, aria labels, slip dot, keeps its line across refreshes, IntersectionObserver /
+      debounced scroll end (no setState per frame), pan-x, ≥ 44 px chips. Used for alt spreads + totals and each
+      props player row. Props page /sportsbook/{league}/{gameId}/props (stat tabs, player rows sorted by team then
+      most-traded, search, single-threshold rows without a wheel); game page "Player props" button when pre-game with
+      a tradable prop. Phone check: wheels (main, non-main, pick in slip), props page with and without props.
+- [ ] 5 Checks (test:all, lint, build, interact.mjs, dealcheck.mjs, phone check) → merge as 0.14.0; stop servers.
+
 ## Phase 0.13.0 (Will, 2026-10-18 01:56 CT; re-sent 11:31) — COMPLETE (2026-10-18), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-18 01:56. One phase on a fresh wip off main; merge after every CLAUDE.md check.
 
@@ -177,7 +205,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.13.0 is merged. Wait for Will's test results.
+0.14.0: item 1 (crypto cash out), then 2, 3, 4, checks.
 
 ## Open questions
 None open.
