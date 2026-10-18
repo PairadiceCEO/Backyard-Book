@@ -32,7 +32,7 @@ come from Will's live testing.
 - Field: any time, one roll: 3, 4, 9, 10, 11 pay 1:1; 2 and 12 pay 2:1; 5–8 lose.
 - Craps: come-out 7/11 win, 2/3/12 lose; Don't Pass wins 2/3, pushes 12. Crapless: come-out 7 wins, every other number is a point.
 - Roll: shooter only, needs a line bet, carries `rollSeq`; refused only if a roll already happened (another seat's bet in between never blocks it).
-- Timers: come-out clock starts at the first bet after the last roll; point phase clock starts right after each roll; 15 s; at zero the server rolls for the shooter (or, on a come-out with no line bet, passes the dice; after a full lap with no line bet the table waits with no timer).
+- Timers (0.11.0: none with 1 player at the table; 30 s with 2 or more): come-out clock starts at the first bet after the last roll; point phase clock starts right after each roll; at zero the server rolls for the shooter (or, on a come-out with no line bet, passes the dice; after a full lap with no line bet the table waits with no timer).
 - Seven-out: dice to the next occupied seat clockwise.
 - Leaving / gone 60 s: Pass, Don't Pass, Odds keep working until resolved; Place and Field are refunded (casino_refund) when the seat frees. Presence is checked after every roll.
 - Ledger: bet `cbet_{uid}_{requestId}`, one payout per player per roll `cpay_{game}_{epoch}-{roll}_{uid}`, refunds `cref_{game}_{epoch}_{uid}_{n}`.

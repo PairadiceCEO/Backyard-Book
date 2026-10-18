@@ -9,7 +9,7 @@ Battles (0.9.0), Challenges (0.10.0).
 Spec: Will's message of 2026-10-18 00:03 CT. Two phases, each merged to main on its own, in order.
 Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after Phase 1 is merged.
 
-## Phase 1 — fixes (0.11.0) — IN PROGRESS
+## Phase 1 — fixes (0.11.0) — COMPLETE (2026-10-18), merged to main, ready for Will to test
 
 ### Checklist
 - [x] 1 URGENT (own commit): live games priced from the wrong Kalshi game (ALCS G4 postponed → matched G5 events).
@@ -64,7 +64,11 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
 - [x] 6 package-lock.json committed (lockfileVersion 3, from `npm install`); `npm ci` + production build pass
 - [x] 7 CLAUDE.md "Deliberate decisions": cash out line replaced, craps clocks and Kalshi matching added; a note
       that the lockfile is committed
-- [ ] 8 Checks (test:all, build, lint, phone check 320/375/414) → merge wip → main as 0.11.0
+- [x] 8 Checks: test:all (26 + 97 + 21 + 100 + 15 + 11 = 270), lint, build, interact.mjs, dealcheck.mjs, phone
+      check 96 screens × 320/375/414 clean (new: sportsbook-live, sportsbook-live-empty, cr-solo; fixtures' league
+      boards now drop finished games like the server). interact.mjs's "three quick taps" check read the wallet in
+      the instant before it re-rendered (failed on main too in this environment); it now waits up to 300 ms.
+      Merged wip → main as 0.11.0. No firestore.rules change.
 
 ## Phase 2 — crypto markets (0.12.0) — PLANNED (starts after Phase 1 is merged)
 
@@ -241,7 +245,7 @@ Battles in My Bets, admin Battles tab (disputed first) with edit log.
       screens × 320/375/414 clean; merged wip → main as 0.10.0. Will must publish firestore.rules (challenges).
 
 ## Next
-Phase 1 item 1 (Kalshi guards), then items 2–7, checks, merge 0.11.0; then Phase 2.
+Phase 2 (crypto markets), from a fresh wip off main: start at P2-1.
 
 ## Open questions
 - Q1 (2026-10-18, Phase 1 item 1b): Kalshi's `updated_time` does NOT move when a market trades. Checked against the

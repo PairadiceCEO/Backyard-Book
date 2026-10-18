@@ -21,6 +21,7 @@ async function routeApi(page, mode) {
     if (u.pathname === '/api/board') {
       if (u.searchParams.get('game')) return json(route, 200, F.gameDetail(u.searchParams.get('game')));
       if (u.searchParams.get('league') === 'custom') return json(route, 200, F.customBoard());
+      if (u.searchParams.get('league') === 'live') return json(route, 200, F.liveBoard(Boolean(mode.noLive)));
       return json(route, 200, F.board(u.searchParams.get('league')));
     }
     if (u.pathname === '/api/settle') return json(route, 200, body?.preview || body?.force ? F.settlePreview : { ran: false });
@@ -101,6 +102,8 @@ const bjTwo = {
 };
 const bacTwo = () => bacTable({ deadline: Date.now() + 12000, seats: [seat('u0', 'Will', { bets: { player: 500, banker: 0, tie: 0 }, ready: true }), seat('u1', 'Mike', { bets: { player: 0, banker: 300, tie: 100 } }), null, seat('u1', 'Mike', { bets: { player: 1000, banker: 0, tie: 0 } }), null] });
 const crNew = () => crTable('craps', { point: 6, deadline: Date.now() + 9000, lastRoll: { dice: [5, 1], total: 6, at: Date.now() - 60000, kind: 'point', pointBefore: null, seq: 57, shooter: 1 }, seats: [crSeat('u0', 'Will', { dontPass: 500, dontOdds: 1000 }), crSeat('u1', 'Mike', { pass: 1000, odds: 2000, come: 500, comeOn: { 5: { bet: 500, odds: 1000 }, 9: { bet: 300, odds: 0 } }, hard: { 6: 200, 8: 200 }, place: { 8: 600 }, field: 100 }), null, crSeat('u2', 'Dan', { place: { 4: 500 } }), null] });
+// One player at the table: no shooter clock (deadline null), even with a point on.
+const crSolo = () => crTable('craps', { point: 8, deadline: null, shooter: 1, seats: [null, crSeat('u1', 'Mike', { pass: 500, odds: 1000 }), null, null, null] });
 const crDont = () => crTable('craps', { point: 4, deadline: Date.now() + 9000, seats: [null, crSeat('u1', 'Mike', { dontPass: 1000, dontOdds: 500 }), null, null, null] });
 
 
@@ -165,6 +168,9 @@ const scenarios = [
   S('bac-two-seats-tab2', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(bacTwo), act: async (p) => { await p.getByRole('tab', { name: /Seat 4/ }).click(); await p.waitForTimeout(150); } }),
   S('cr-come-hard', '/casino/craps', { admin: false, user: 'u1', fs: withTable(crNew) }),
   S('cr-dont-odds', '/casino/craps', { admin: false, user: 'u1', fs: withTable(crDont) }),
+  S('sportsbook-live', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: 'Live' }).click(); await p.waitForTimeout(400); } }),
+  S('sportsbook-live-empty', '/sportsbook', { admin: false, user: 'u1', noLive: true, act: async (p) => { await p.getByRole('tab', { name: 'Live' }).click(); await p.waitForTimeout(400); } }),
+  S('cr-solo', '/casino/craps', { admin: false, user: 'u1', fs: withTable(crSolo) }),
   S('sportsbook-custom', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: /^Custom/ }).click(); await p.waitForTimeout(400); } }),
   S('battle-new', '/sportsbook/battles/new', { admin: false, user: 'u1', act: async (p) => { await p.getByLabel('Title').fill('Saturday golf'); await p.getByRole('button', { name: 'Dan' }).click(); await p.getByRole('button', { name: 'Ann' }).click(); await p.getByRole('button', { name: '70 / 30' }).click(); await p.waitForTimeout(150); } }),
   S('battle-new-teams', '/sportsbook/battles/new', { admin: false, user: 'u1', act: async (p) => { await p.getByLabel('Title').fill('Cornhole'); await p.getByRole('radio', { name: 'Teams' }).click(); for (const n of ['Dan', 'Ann', 'Bo']) await p.getByRole('button', { name: n }).click(); await p.waitForTimeout(150); } }),
