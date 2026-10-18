@@ -23,7 +23,7 @@ export const MAX_BID_ASK_GAP = 0.15;
 
 const MONTHS = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12 };
 
-async function kalshiGet(path, params, fetchImpl) {
+export async function kalshiGet(path, params, fetchImpl) {
   let lastError = null;
   for (const base of KALSHI_BASES) {
     const url = new URL(`${base}${path}`);
@@ -110,7 +110,7 @@ function num(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-function isActive(market) {
+export function isActive(market) {
   return market?.status === 'active' || market?.status === 'open';
 }
 

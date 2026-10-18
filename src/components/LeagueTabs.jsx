@@ -1,10 +1,11 @@
 import { LEAGUES } from '../../shared/constants.js';
 
-// The Live tab (every game in progress), the league tabs, then the Custom tab (custom games, Battles and
-// Challenges). customBadge: a count shown on Custom.
+// The Live tab (every game in progress), the league tabs, the Crypto tab (Kalshi crypto markets), then the Custom
+// tab (custom games, Battles and Challenges). customBadge: a count shown on Custom.
 export const LIVE_TAB = { id: 'live', label: 'Live' };
+export const CRYPTO_TAB = { id: 'crypto', label: 'Crypto' };
 export const CUSTOM_TAB = { id: 'custom', label: 'Custom' };
-export const BOARD_TABS = [LIVE_TAB, ...LEAGUES, CUSTOM_TAB];
+export const BOARD_TABS = [LIVE_TAB, ...LEAGUES, CRYPTO_TAB, CUSTOM_TAB];
 
 export default function LeagueTabs({ value, onChange, customBadge = 0 }) {
   return (

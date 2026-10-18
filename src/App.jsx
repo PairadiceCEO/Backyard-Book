@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage.jsx';
 import SetupPage from './pages/SetupPage.jsx';
 import SportsbookPage from './pages/SportsbookPage.jsx';
 import GameDetailPage from './pages/GameDetailPage.jsx';
+import CryptoCoinPage from './pages/crypto/CryptoCoinPage.jsx';
 import NewBattlePage from './pages/battles/NewBattlePage.jsx';
 import BattleDetailPage from './pages/battles/BattleDetailPage.jsx';
 import NewChallengePage from './pages/challenges/NewChallengePage.jsx';
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/sportsbook/battles/:battleId" element={<BattleDetailPage />} />
         <Route path="/sportsbook/challenges/new" element={<NewChallengePage />} />
         <Route path="/sportsbook/challenges/:challengeId" element={<ChallengeDetailPage />} />
+        <Route path="/sportsbook/crypto/:coin" element={<CryptoCoinPage />} />
         <Route path="/sportsbook/:league/:gameId" element={<GameDetailPage />} />
         <Route path="/casino" element={<CasinoLobby />} />
         <Route path="/casino/slots" element={<SlotsPage />} />

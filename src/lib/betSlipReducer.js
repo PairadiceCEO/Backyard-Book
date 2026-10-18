@@ -45,7 +45,7 @@ function applyQuote(leg, quote) {
     american: quote.american,
     decimal: quote.decimal,
     source: quote.source,
-    label: pickLabel({ marketType: leg.marketType, selection: leg.selection, line: quote.line, homeName: leg.homeName, awayName: leg.awayName }),
+    label: pickLabel({ marketType: leg.marketType, selection: leg.selection, line: quote.line, homeName: leg.homeName, awayName: leg.awayName, crypto: leg.crypto ?? null }),
     flag: null,
   };
 }
@@ -65,7 +65,9 @@ export function betSlipReducer(state, action) {
       }
       const replaced = state.legs.find((l) => conflictKey(l) === key);
       const leg = { ...pick, stake: replaced ? replaced.stake : '', flag: null };
-      return { ...state, legs: [...others, leg], notice: '' };
+      // Crypto picks are singles only: adding one turns a parlay slip back into singles.
+      const mode = pick.marketType === 'crypto' ? 'singles' : state.mode;
+      return { ...state, legs: [...others, leg], mode, notice: '' };
     }
     case 'remove': {
       const legs = state.legs.filter((l) => l.legId !== action.legId);
@@ -74,6 +76,7 @@ export function betSlipReducer(state, action) {
     }
     case 'setMode':
       if (action.mode === 'parlay' && state.legs.length < MIN_PARLAY_LEGS) return state;
+      if (action.mode === 'parlay' && state.legs.some((l) => l.marketType === 'crypto')) return state; // crypto: singles only
       return { ...state, mode: action.mode, notice: '' };
     case 'setStake':
       return { ...state, legs: state.legs.map((l) => (l.legId === action.legId ? { ...l, stake: action.value } : l)) };

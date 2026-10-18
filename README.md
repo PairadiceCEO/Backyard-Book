@@ -118,6 +118,13 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
 
+## Crypto markets (0.12.0)
+
+- **Crypto tab** on the Sportsbook (after the leagues, before Custom): one card per coin with the live Coinbase price, Kalshi's 15-minute **Up / Down** market (target, countdown) and the hourly **Above / Below** main strike (the strike whose YES price is nearest $0.50). Tap a card for the coin's page: big price, this hour's 1-minute chart (hand-built SVG) with the 15-min target and hourly strike drawn in and both close times marked, the Up/Down buttons and every hourly strike.
+- Coins and series live in `shared/crypto/coins.js` (BTC, ETH, SOL, XRP, DOGE, BNB, HYPE with both kinds; NEAR and ZEC 15-minute only). Range/bracket and daily series are left out.
+- Betting: singles only; priced at the Kalshi ask fetched fresh at bet time; closes 60 s before each market's close; no cash out. Kalshi's own result settles the bet (voided → stake back) in the normal settlement runs.
+- Crypto data is cached in function memory for 10 s and never written to Firestore.
+
 ## Challenges (batch C)
 
 - **One-time step:** Firebase console → Firestore Database → **Rules** → replace everything with the updated `firestore.rules` → **Publish**. It adds `challenges` (readable by anyone signed in; nobody writes from a phone).
