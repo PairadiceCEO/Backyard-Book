@@ -217,6 +217,44 @@ await check('craps: the shooter\'s dice tumble from the tap and land on the repl
   await context.close();
 });
 
+// ---------- My Bets → Finished: every finished bet, sort, filters, remembered view ----------
+await check('My Bets: a player with 263 bets sees all 260 finished (one extra query past the listener\'s 200); filters and sort are remembered', async () => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  const bets = F.heavyBets('u7', 260);
+  await page.addInitScript((h) => { window.__H = window.__H ?? h; }, { user: { uid: 'u7' }, admin: false, fs: { users: [...F.users, F.heavyUser], bets, ledger: [], customGames: F.customGames, battles: [] } });
+  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route('**/api/**', (route) => json(route, 200, { ok: true, ran: false, quotes: {} }));
+  await page.goto(BASE + '/my-bets', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.querySelector('.finished-summary')?.textContent.startsWith('260 bets'), null, { timeout: 4000 });
+  assert.equal(await page.evaluate(() => window.__H.getDocsCalls ?? 0), 1, 'one history query (60 bets after the 200 the listener holds)');
+  assert.equal(await page.locator('.finished-bets .bet-card').count(), 50, 'the list shows 50 at a time');
+  const lost = bets.filter((b) => b.status === 'lost').length;
+  await page.getByRole('button', { name: /^Filters/ }).click();
+  await page.locator('.filters-panel').getByRole('button', { name: 'Lost', exact: true }).click();
+  await page.waitForFunction((n) => document.querySelector('.finished-summary')?.textContent.startsWith(`${n} bets`), lost, { timeout: 2000 });
+  assert.match(await page.locator('.finished-summary').innerText(), /Net −\$/, 'losses only: net is negative');
+  assert.match(await page.locator('.finished-summary').innerText(), /Win rate 0%/);
+  await page.getByLabel('Sort finished bets').selectOption('stakeDesc');
+  const firstStake = await page.locator('.finished-bets .bet-card').first().innerText();
+  assert.match(firstStake, /Stake \$7\.00/, 'biggest stake first');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction((n) => document.querySelector('.finished-summary')?.textContent.startsWith(`${n} bets`), lost, { timeout: 4000 });
+  assert.equal(await page.locator('.filter-badge').innerText(), '1', 'filters remembered for the session');
+  assert.equal(await page.getByLabel('Sort finished bets').inputValue(), 'stakeDesc', 'sort remembered');
+  await page.getByRole('button', { name: /^Filters/ }).click();
+  await page.getByRole('button', { name: 'Clear all' }).click();
+  await page.waitForFunction(() => document.querySelector('.finished-summary')?.textContent.startsWith('260 bets'), null, { timeout: 2000 });
+  await context.close();
+});
+
+await check('My Bets: a player under 200 bets costs no extra reads', async () => {
+  const { page, context } = await openPage('/my-bets', [], () => {});
+  await page.waitForSelector('.finished-summary', { timeout: 3000 });
+  assert.equal(await page.evaluate(() => window.__H.getDocsCalls ?? 0), 0);
+  await context.close();
+});
+
 await browser.close();
 console.log(results.join('\n'));
 if (results.some((r) => r.startsWith('FAIL'))) process.exit(1);

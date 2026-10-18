@@ -4358,3 +4358,188 @@ fieldset.field legend {
   color: var(--accent);
   font-weight: 700;
 }
+
+/* My Bets → Finished: sort, filters, summary */
+
+.finished-bets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.finished-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.sort-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1 1 10rem;
+}
+
+.sort-field select,
+.filter-group select {
+  min-height: 2.75rem;
+  max-width: 100%;
+}
+
+.filters-toggle {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.filters-toggle.active {
+  border-color: var(--accent);
+}
+
+.filter-badge {
+  position: static;
+}
+
+.filters-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.filter-group {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.filter-group legend {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+  padding: 0;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  min-height: 2.5rem;
+  min-width: 2.5rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.date-range,
+.stake-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.date-range label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1 1 8.5rem;
+  min-width: 0;
+}
+
+.date-range input,
+.stake-range input,
+.filter-group input[type='search'] {
+  min-height: 2.75rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.stake-range input {
+  flex: 1 1 5rem;
+  width: auto;
+}
+
+.filter-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+}
+
+.filters-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.finished-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.finished-summary span:first-child {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.net-up {
+  color: var(--accent) !important;
+  font-weight: 700;
+}
+
+.net-down {
+  color: var(--danger) !important;
+  font-weight: 700;
+}
+
+.show-more {
+  min-height: 2.75rem;
+  width: 100%;
+}
+
+.sort-field select,
+.filter-group select,
+.date-range input,
+.stake-range input,
+.filter-group input[type='search'] {
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.filter-check input {
+  width: 1.25rem;
+  height: 1.25rem;
+}

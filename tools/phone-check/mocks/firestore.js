@@ -12,6 +12,7 @@ export function doc(db, name, id) { return { kind: 'doc', name, id }; }
 export function where(field, op, value) { return { type: 'where', field, op, value }; }
 export function orderBy(field, dir = 'asc') { return { type: 'orderBy', field, dir }; }
 export function limit(n) { return { type: 'limit', n }; }
+export function startAfter(docSnap) { return { type: 'startAfter', id: docSnap?.id }; }
 export function query(c, ...constraints) { return { ...c, constraints }; }
 function rows(target) {
   const src = (H().fs || {})[target.name];
@@ -21,6 +22,7 @@ function rows(target) {
     if (c.type === 'where' && c.op === '==') list = list.filter((d) => d[c.field] === c.value);
     if (c.type === 'where' && c.op === 'array-contains') list = list.filter((d) => Array.isArray(d[c.field]) && d[c.field].includes(c.value));
     if (c.type === 'orderBy') list.sort((a, b) => (a[c.field] < b[c.field] ? -1 : a[c.field] > b[c.field] ? 1 : 0) * (c.dir === 'desc' ? -1 : 1));
+    if (c.type === 'startAfter') { const i = list.findIndex((d) => d.id === c.id); list = i >= 0 ? list.slice(i + 1) : list; }
     if (c.type === 'limit') list = list.slice(0, c.n);
   }
   return { list };
@@ -47,6 +49,7 @@ export function onSnapshot(target, next, error) {
   return () => clearTimeout(t);
 }
 export async function getDocs(target) {
+  window.__H.getDocsCalls = (window.__H.getDocsCalls ?? 0) + 1; // the phone check counts one-off reads
   const r = snapshotFor(target);
   if (r.error) throw new Error(r.error);
   return r.snap;

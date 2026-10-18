@@ -27,10 +27,26 @@ Spec: Will's attachment of 2026-10-18 01:56. One phase on a fresh wip off main; 
       accepted incl. a Challenge leg, parlay with one leg 60 off refused with no wallet/ledger/bet change then
       resubmitted, LINE_CHANGED/MARKET_CLOSED priority, slip actions). Mutation-checked: threshold 51, 49, strict >,
       no −100=+100 scale, server check off — each fails. Phone check screen: sportsbook-odds-changed. CLAUDE.md line.
-- [ ] 3 My Bets → Finished: sort menu (settled newest default / oldest, placed newest, stake, profit); collapsible
-      Filters panel (result, date placed incl. custom Central dates, category, bet type, market, live/pre-game,
-      stake range, text search, poster's bets) with count badge + Clear all; summary line (bets, staked, returned,
-      net, win rate); sessionStorage. Data: every finished bet, lean reads (see decision below). Battles unchanged.
+- [x] 3 My Bets → Finished: src/lib/betFilters.js (pure: sorts, filters, `summarize`, `activeFilterCount`,
+      `cleanView`/`readSavedView`/`saveView` in try/catch), src/components/FinishedBets.jsx (sort select, Filters
+      panel with count badge + Clear all + Done, summary line with green/red net, list 50 at a time with "Show N
+      more"), MyBetsPage merges history + listener. Profit = returned − stake (cash out value; push/void = stake back;
+      loss −stake). Category: custom-game / Challenge / crypto legs count as those, not their league. Live = placedAt ≥
+      a leg's startTime. Dates in Central Time (calendar arithmetic, DST-safe). Battles unchanged.
+      Data decision (Spark reads): the live listener (newest 200, existing uid + placedAt index) stays. Only when it is
+      full does `useBetHistory` (src/hooks/useBetHistory.js) load the older bets, startAfter the listener's oldest doc,
+      100 per getDocs, all pages, once per browser session (kept in module memory, so reopening My Bets reads nothing).
+      Under 200 bets: 0 extra reads; otherwise (N − 200) reads once per session. Filters/sort/summary are exact over
+      every finished bet because everything is in memory. Rejected: paging 50 with Load more (filters/summary would
+      only cover what was loaded, or every filter change would re-query); a status/settledAt query (needs a new
+      composite index for no read savings, since the summary needs every finished bet anyway). NO new index, so no
+      Firebase console step. Listener bets are remembered in the same cache so a bet sliding out of the 200 window
+      never drops out of Finished.
+      Tests: test/betFilters.test.js (5, in `npm test`): profit, sorts, every filter + combined, summary/win rate,
+      remembered view. Mutation-checked (loss profit, parlay any→all, inclusive "to", win rate counting pushes).
+      interact.mjs: 263-bet player sees all 260 finished after exactly one history query; Lost filter + stake sort,
+      remembered across reload, Clear all; a <200-bet player makes no extra query. Phone screens: my-bets-filters,
+      my-bets-filters-dates, my-bets-history. Mock Firestore gained startAfter and a getDocs counter.
 - [ ] 4 Crypto chart scrubber: touch (touch-action: pan-y, drag, lift hides) and mouse hover; line + dot + time and
       price label kept inside the chart (flips near edges), "Target $X" near a target line; survives the 10 s refresh
       on the same timestamp (or the nearest); listeners removed on unmount; phone-check screen.
@@ -152,7 +168,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.13.0 item 3 (My Bets sort and filters).
+0.13.0 item 4 (chart scrubber).
 
 ## Open questions
 None open.
