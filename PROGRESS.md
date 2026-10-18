@@ -12,19 +12,29 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
 ## Phase 1 — fixes (0.11.0) — IN PROGRESS
 
 ### Checklist
-- [ ] 1 URGENT (own commit): live games priced from the wrong Kalshi game (ALCS G4 postponed → matched G5 events).
-  - [ ] a) series game number: ESPN `competitions[0].notes[].headline` ("ALCS - Game 5") → `gameNumber` on the
-        normalized game; Kalshi winner title "Game 5: …"; spread/total inherit from the winner event with the same
-        ticker suffix. Numbered ESPN game: only same-number events (any ticker date in the window, teams match);
-        different/unknown number rejected. Unnumbered: date + time matching as before.
-  - [ ] b) stale-market guard for live games: market `updated_time` must be ≥ ESPN start, else no price (board
-        "Live prices unavailable", bet closed, no live cash out). updated_time carried in compactEvent rows and the
-        board cache (quote ref). At bet time the fresh market decides.
-  - [ ] c) unsure → no price: two equally close candidate events (or a number in two slots) → the game gets no Kalshi
-        markets; never a nearby event.
-  - [ ] guards applied in buildBoard, alternate ladders, gameDetail, priceLeg (incl. leg.kalshiTicker), cash out bids
-  - [ ] tests (test/sportsbook/phase11.test.mjs): repro, normal series, regular season unchanged, stale live market
-        (no board quote, priceLeg closed incl. kalshiTicker, cash out unavailable); mutation-check both guards
+- [x] 1 URGENT (own commit): live games priced from the wrong Kalshi game (ALCS G4 postponed → matched G5 events).
+  - [x] a) series game number: `seriesGameNumber()` (server/sources/espn.js) reads competitions[0].notes[].headline
+        ("ALCS - Game 5", "NLCS - Game 5 If Necessary") → `gameNumber` on the normalized ESPN game;
+        `kalshiGameNumber()` reads the winner title "Game 5: …"; spread/total inherit it from the winner event with
+        the same ticker suffix (`numbersBySuffix`). `matchTeamsToGame(…, eventNumber)` (server/teamMatch.js): a
+        numbered game accepts only the same number, any ticker date in the fetched window; unnumbered unchanged.
+        Verified on the real APIs 2026-10-18: ESPN notes `[{"type":"event","headline":"ALCS - Game 5"}]`; Kalshi
+        KXMLBGAME-26OCT161800TBCLE title "Game 4: Tampa Bay vs Cleveland", …26OCT172000TBCLE "Game 5: …",
+        KXMLBSPREAD-26OCT161800TBCLE "Tampa Bay vs Cleveland: Spread".
+  - [x] b) stale-market guard: `freshForLive(market, liveSince)` / `liveSinceMs(game)` in kalshi.js;
+        tradablePrice/quoteFromMarket/buildKalshiMarkets/buildLadders take the game's start when it is 'in'.
+        compactEvent rows carry updatedMs (7th field; older 6-field rows are never used live); Kalshi quote refs carry
+        `updatedAt` (board cache). priceLeg checks the freshly fetched market (kalshiTicker path and board-quote path;
+        the fresh live lookup builds with the fresh ESPN state). Cash out: live legs carry `liveSince`; bids only from
+        fresh markets. See Q1 below: updated_time doesn't move on trades.
+  - [x] c) unsure → no price: `isAmbiguous()` — closest candidates in two different events/slots, or two events of
+        one kind tied in the chosen slot → the game gets no Kalshi markets.
+  - [x] Cash out also requires a stored ticker to belong to the event the board maps to that game now (bets placed
+        on Game 5's market before the fix can't cash out from it).
+  - [x] tests: test/sportsbook/phase11.test.mjs (11). Fixtures of live markets in phase5/6/6c and cashout tests got an
+        `updated_time` after their game's start (they model live markets). Mutation-checked: guard a off (6 fail),
+        guard b off (4), guard c off (1), spread number inheritance off (4), cash out mapping check off (1), pricing
+        fresh check off (2), board-quote path off (1), cash out fresh check off (1), ladder guard off (1).
 - [ ] 2 Craps/Crapless shooter timer: 1 player → no clock (deadline null, no auto-roll, no pass, no countdown);
       2+ → 30 s for every craps clock (CRAPS_TURN_SECONDS); 2→1 clears; 1→2 with a point on → now + 30 s;
       onDeadline re-checks the count. Tests incl. Blackjack/Baccarat still 15 s.

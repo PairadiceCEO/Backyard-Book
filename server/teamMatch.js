@@ -143,17 +143,28 @@ export function pairTeams(sides, game, league) {
 
 // sides: [{ label, code }, { label, code }] from the outside event.
 // when: "YYYY-MM-DD" or { dateKey, hhmm } from the event ticker.
+// eventNumber: the event's playoff series game number (null when it has none).
 // Picks the game whose teams fit best; among equally good fits (the same two teams on different days,
 // a doubleheader) the closest one by date, then start time. Returns { game, sideOf, distance } or null
 // when nothing fits or two games are exactly as close.
-export function matchTeamsToGame(sides, when, games, league) {
+//
+// A game with a series game number (game.gameNumber) only accepts an event with that same number, whatever
+// the ticker's date: a postponed game keeps its original Kalshi date while ESPN moves it. An event with another
+// number, or none, never matches a numbered game. Games without a number keep date + start-time matching.
+export function matchTeamsToGame(sides, when, games, league, eventNumber = null) {
   if (!Array.isArray(sides) || sides.length !== 2) return null;
 
   let best = null;
   let tie = false;
   for (const game of games) {
-    const distance = eventDistance(when, game.startTime);
-    if (distance === null) continue;
+    let distance;
+    if (Number.isInteger(game.gameNumber)) {
+      if (eventNumber !== game.gameNumber) continue;
+      distance = 0;
+    } else {
+      distance = eventDistance(when, game.startTime);
+      if (distance === null) continue;
+    }
     const pair = pairTeams(sides, game, league);
     if (!pair) continue;
     const candidate = { game, sideOf: pair.sideOf, score: pair.score, distance };

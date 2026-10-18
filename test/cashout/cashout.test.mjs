@@ -50,6 +50,7 @@ function market(eventTicker, suffix, strike, yesBid, noBid, status = 'active') {
     no_bid_dollars: fmt(noBid),
     yes_ask_dollars: fmt(yesBid === null ? null : Math.min(0.99, yesBid + 0.02)),
     no_ask_dollars: fmt(noBid === null ? null : Math.min(0.99, noBid + 0.02)),
+    updated_time: '2026-10-18T17:30:00Z', // after g1's start: a live market (stale-market guard)
   };
 }
 

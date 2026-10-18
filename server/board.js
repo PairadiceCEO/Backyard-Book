@@ -33,7 +33,8 @@ function anyQuote(markets) {
   return MARKET_KEYS.some((key) => marketHasQuote(markets[key]));
 }
 
-// Applies the price order to one ESPN game. kalshiMarkets may be undefined.
+// Applies the price order to one ESPN game. kalshiMarkets may be undefined. For a game in progress they were
+// built with the stale-market guard (buildKalshiMarkets: no market older than the start).
 export function mergeGameMarkets(game, kalshiMarkets) {
   if (game.source !== 'espn') return game;
   if (game.state === 'post' || game.canceled) {
@@ -52,8 +53,11 @@ export function mergeGameMarkets(game, kalshiMarkets) {
 
   let oddsNote = null;
   if (!anyQuote(markets)) oddsNote = game.state === 'in' ? 'Live prices unavailable' : 'Odds unavailable';
+  // Live game with some markets priced and others not (e.g. a market that hasn't updated since the start).
+  const someMissing = MARKET_KEYS.some((key) => Object.values(markets[key]).some((q) => q === null));
+  const partialNote = game.state === 'in' && !oddsNote && someMissing ? 'Some live prices unavailable' : null;
 
-  return { ...game, markets, oddsNote };
+  return { ...game, markets, oddsNote, partialNote };
 }
 
 const CUSTOM_FINAL_VISIBLE_MS = 24 * 60 * 60 * 1000; // finished custom games stay on the board for a day

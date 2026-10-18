@@ -160,6 +160,7 @@ export default function GameCard({ game, clickable = true }) {
               {game.state === 'in' ? 'Live odds' : 'Odds'}: {sourceLabel}
             </span>
           ) : null}
+          {!game.oddsNote && game.partialNote ? <span>{game.partialNote}</span> : null}
           {game.source === 'custom' ? <span className="badge">custom</span> : null}
           {clickable ? <span className="more-lines">All lines ›</span> : null}
         </footer>

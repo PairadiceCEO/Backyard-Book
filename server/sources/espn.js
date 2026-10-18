@@ -135,6 +135,19 @@ function normalizeTeam(competitor, state) {
   };
 }
 
+// Series game number from the competition notes: "ALCS - Game 5", "NLCS - Game 5 If Necessary" → 5.
+// null when no note names a game number (regular season, most football).
+export function seriesGameNumber(competition) {
+  for (const note of competition?.notes ?? []) {
+    const match = /(?:^|[\s-])Game\s+(\d{1,2})\b/i.exec(String(note?.headline ?? ''));
+    if (match) {
+      const n = Number(match[1]);
+      if (n >= 1 && n <= 9) return n;
+    }
+  }
+  return null;
+}
+
 export function normalizeEspnEvent(event, leagueId) {
   const competition = event?.competitions?.[0];
   if (!competition) return null;
@@ -176,6 +189,8 @@ export function normalizeEspnEvent(event, leagueId) {
     completed: statusType.completed === true,
     canceled,
     bettingClosed: state !== 'pre' || canceled,
+    // Playoff series game number (Kalshi matching uses it instead of dates; see matchKalshiEntries).
+    gameNumber: seriesGameNumber(competition),
     home: normalizeTeam(homeC, state),
     away: normalizeTeam(awayC, state),
     markets,

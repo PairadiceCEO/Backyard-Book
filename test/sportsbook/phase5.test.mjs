@@ -43,6 +43,7 @@ function km(ticker, yesSub, yesAsk, noAsk, extra = {}) {
     ticker, yes_sub_title: yesSub, no_sub_title: yesSub, status: 'active',
     yes_ask_dollars: yesAsk.toFixed(4), no_ask_dollars: noAsk.toFixed(4),
     yes_bid_dollars: (yesAsk - 0.01).toFixed(4), no_bid_dollars: (noAsk - 0.01).toFixed(4),
+    updated_time: '2026-10-18T17:30:00Z', // after the live game's start (stale-market guard)
     ...extra,
   };
 }
@@ -146,7 +147,7 @@ test('Kalshi markets for Houston vs Jacksonville (real prices)', () => {
   // Moneyline: JAX (away) YES 0.57 → -133; HOU (home) YES 0.44 → +127
   assert.equal(m.moneyline.away.american, -133);
   assert.equal(m.moneyline.home.american, 127);
-  assert.deepEqual(m.moneyline.away.ref, { provider: 'Kalshi', ticker: 'KXNFLGAME-26OCT18HOUJAC-JAC', side: 'yes', price: 0.57 });
+  assert.deepEqual(m.moneyline.away.ref, { provider: 'Kalshi', ticker: 'KXNFLGAME-26OCT18HOUJAC-JAC', side: 'yes', price: 0.57, updatedAt: '2026-10-18T17:30:00Z' });
   // Spread: favorite JAX; strike closest to $0.50 is JAC3 (2.5 @ 0.52)
   assert.equal(m.spread.away.line, -2.5);
   assert.equal(m.spread.away.american, -108);

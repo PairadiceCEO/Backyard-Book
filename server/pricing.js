@@ -6,8 +6,10 @@
 //   Challenge   → its Firestore doc: open (admin-approved) and before its close time on the server clock
 //   pre-game    → fresh ESPN odds; if ESPN doesn't price it, the board's Kalshi market, re-fetched
 //   live        → the Kalshi market (re-fetched); if the board still held ESPN's pre-game line,
-//                 the game's live Kalshi market is looked up fresh
+//                 the game's live Kalshi market is looked up fresh. The freshly fetched market must have
+//                 updated since the game started (stale-market guard), else the bet is refused as closed.
 //   final       → closed
+// Which Kalshi events belong to a game comes from the board's mapping (playoff games by series game number).
 
 import { adminDb } from './firebaseAdmin.js';
 import { getLeague } from './leagues.js';
@@ -18,6 +20,8 @@ import {
   attachKalshiToGames,
   fetchLeagueKalshi,
   fetchMarket,
+  freshForLive,
+  liveSinceMs,
   mappedEventTicker,
   marketMatchesLeg,
   quoteFromMarket,
@@ -97,11 +101,15 @@ function compare(leg, quote, game) {
   return { status: 'ok', quote, game };
 }
 
-async function kalshiFromBoardQuote(ctx, boardQuote, marketType) {
+const STALE_LIVE = 'Live prices unavailable for this market right now.';
+
+// liveSince: the game's start (ms) when it is in progress (the fresh market must have updated since), else null.
+async function kalshiFromBoardQuote(ctx, boardQuote, marketType, liveSince = null) {
   const ref = boardQuote?.ref;
-  if (!ref?.ticker || (ref.side !== 'yes' && ref.side !== 'no')) return null;
+  if (!ref?.ticker || (ref.side !== 'yes' && ref.side !== 'no')) return { quote: null, stale: false };
   const market = await ctx.market(ref.ticker);
-  return quoteFromMarket(market, ref.side, marketType);
+  if (market && !freshForLive(market, liveSince)) return { quote: null, stale: true };
+  return { quote: quoteFromMarket(market, ref.side, marketType, liveSince), stale: false };
 }
 
 // leg: { league, gameId, marketType, selection, line }
@@ -150,6 +158,7 @@ export async function priceLeg(leg, ctx) {
   const fresh = (await ctx.freshEspnGames(league)).find((g) => g.id === String(gameId));
   if (!fresh) return closed('This game is no longer on the board.');
   if (fresh.state === 'post' || fresh.canceled) return closed('This game is over.');
+  const liveSince = liveSinceMs(fresh); // null before the start: no stale-market check
 
   const board = await ctx.board(league);
   const boardGame = board?.games?.find((g) => g.id === String(gameId)) ?? null;
@@ -167,7 +176,8 @@ export async function priceLeg(leg, ctx) {
     if (market?.event_ticker && market.event_ticker !== expectedEvent) {
       return closed('This line is not offered for this game.');
     }
-    const quote = quoteFromMarket(market, leg.kalshiSide, marketType);
+    if (market && !freshForLive(market, liveSince)) return closed(STALE_LIVE);
+    const quote = quoteFromMarket(market, leg.kalshiSide, marketType, liveSince);
     if (!quote) return closed('This line is no longer posted.');
     return compare(leg, quote, fresh);
   }
@@ -176,14 +186,16 @@ export async function priceLeg(leg, ctx) {
     const espnQuote = fresh.markets[marketType]?.[selection] ?? null;
     if (espnQuote) return compare(leg, espnQuote, fresh);
     if (boardQuote?.source === 'kalshi') {
-      return compare(leg, await kalshiFromBoardQuote(ctx, boardQuote, marketType), fresh);
+      return compare(leg, (await kalshiFromBoardQuote(ctx, boardQuote, marketType)).quote, fresh);
     }
     return closed('This market is no longer available.');
   }
 
-  // Live game: Kalshi only.
+  // Live game: Kalshi only, and only a market updated since the start.
   if (boardQuote?.source === 'kalshi') {
-    return compare(leg, await kalshiFromBoardQuote(ctx, boardQuote, marketType), fresh);
+    const { quote, stale } = await kalshiFromBoardQuote(ctx, boardQuote, marketType, liveSince);
+    if (stale) return closed(STALE_LIVE);
+    return compare(leg, quote, fresh);
   }
   const live = (await ctx.freshKalshiForGames(league)).get(fresh.id);
   const liveQuote = live?.[marketType]?.[selection] ?? null;
