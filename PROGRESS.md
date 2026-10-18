@@ -2,11 +2,12 @@
 
 Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `wip` if it is ahead of
 `main`; continue from "Next". Casino history: `docs/CASINO_PROGRESS.md`.
-Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0).
+Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
+Battles (0.9.0), Challenges (0.10.0).
 
 ## Batch (Will, 2026-10-17): casino seats + craps, Battles, Challenges
-Spec: Will's attachment "Backyard Book — Next batch". **A** casino (done, merged) · **B** Battles (now) ·
-**C** Challenges + section 6 admin odds edits. B/C plan APPROVED 2026-10-17 18:54 with changes (below).
+Spec: Will's attachment "Backyard Book — Next batch". **A** casino (done, merged) · **B** Battles (done, merged) ·
+**C** Challenges + section 6 admin odds edits (done, merged). The batch is complete. B/C plan APPROVED 2026-10-17 18:54 with changes (below).
 
 ## Phase A — casino seats, leaving, craps — COMPLETE (2026-10-17), merged to main, ready for Will to test
 
@@ -114,7 +115,7 @@ Battles in My Bets, admin Battles tab (disputed first) with edit log.
 - [x] B6 Full suite (26 + 87 + 21 + 84 + 15), lint, build, interact.mjs, dealcheck.mjs, phone check 77 screens ×
       320/375/414 clean; merged wip → main. Will must publish firestore.rules (battles block).
 
-## Current phase: C — Challenges + admin odds edits (started 2026-10-17)
+## Phase C — Challenges + admin odds edits — COMPLETE (2026-10-17), merged to main (0.10.0), ready for Will to test
 
 ### Design
 - `challenges/{id}` (id = `{posterUid}_{clientRequestId}`): posterUid/Name, title, description, outcomes
@@ -144,13 +145,18 @@ Battles in My Bets, admin Battles tab (disputed first) with edit log.
 - [x] C4 custom-game edit log (update / final / cancel) + normalizeCustomGame carries `edits`
 - [x] C5 tests test/challenges/challenges.test.mjs, 11 tests incl. Will's poster-bet test (`npm run test:challenges`,
       in test:all); mutation-checked (poster flag, close checks in pricing and in the transaction, grading, approval)
-- [ ] C6 phones: Custom tab Challenges, Post a Challenge, Challenge page, slip picks, "Poster's bet" tags
-      (My Bets, Challenge page, admin Challenges + Bets), admin Challenges tab, custom-game edit logs
-- [ ] C7 full suite, build, lint, phone check, merge, report (Will publishes firestore.rules again)
+- [x] C6 Phones: lib/challenges.js (live lists, slip pick), ChallengeCard (outcome buttons → slip), Custom tab
+      Challenges section + "Post a Challenge", NewChallengePage, ChallengeDetailPage (outcomes, poster's bets,
+      edit log), routes /sportsbook/challenges/new and /:challengeId, "Poster's bet" tag in BetCard and
+      AdminBets, Admin → Challenges (Queue / Open / To settle / Finished / All; approve, edit + approve, reject
+      with note, edit odds/close, settle/void previews via MoneyConfirmModal), shared EditLog (Battles,
+      Challenges, custom games on GameDetailPage + AdminCustomGames). BetSlip staleCopy handles no-line legs.
+      Harness: challenge fixtures + 16 scenarios.
+- [x] C7 Full suite (26 + 87 + 21 + 84 + 15 + 11), lint, build, interact.mjs, dealcheck.mjs, phone check 93
+      screens × 320/375/414 clean; merged wip → main as 0.10.0. Will must publish firestore.rules (challenges).
 
 ## Next
-C6: phone screens. Start with src/pages/battles/CustomBoard.jsx (add the Challenges section), then the
-Post a Challenge page, Challenge detail page, slip picks, "Poster's bet" tags, admin Challenges tab, edit logs.
+Nothing queued: the batch (A, B, C) is merged. Wait for Will's test results or the next spec.
 
 ## Open questions
 None.

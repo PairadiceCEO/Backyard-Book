@@ -59,13 +59,11 @@ export default function ChallengeCard({ challenge, uid, nowMs }) {
   return (
     <article className={`card challenge-card state-${state}`}>
       <div className="battle-card-head">
-        <Link to={to} className="battle-title challenge-title">
-          {challenge.title}
-        </Link>
+        <strong className="battle-title">{challenge.title}</strong>
         <span className={`battle-status status-${state}`}>{CHALLENGE_STATUS_LABELS[state] ?? state}</span>
       </div>
       <div className="muted small">
-        By {mine ? 'you' : challenge.posterName} · {state === 'open' || state === 'pending' ? 'closes' : 'closed'} {closeMs ? formatCentralDateTime(new Date(closeMs)) : ''} · {bets} bet
+        By {mine ? 'you' : challenge.posterName} · {closeMs && closeMs > nowMs ? 'closes' : 'closed'} {closeMs ? formatCentralDateTime(new Date(closeMs)) : ''} · {bets} bet
         {bets === 1 ? '' : 's'}
       </div>
       <div className="outcome-grid">
@@ -74,8 +72,8 @@ export default function ChallengeCard({ challenge, uid, nowMs }) {
         ))}
       </div>
       {line ? <div className={state === 'rejected' ? 'error-text small' : 'muted small'}>{line}</div> : null}
-      <Link to={to} className="challenge-more small">
-        Details{(challenge.posterBets ?? []).length ? " · poster's bets" : ''}
+      <Link to={to} className="challenge-more small" aria-label={`Details: ${challenge.title}`}>
+        Details{(challenge.posterBets ?? []).length ? " · poster's bets" : ''} ›
       </Link>
     </article>
   );

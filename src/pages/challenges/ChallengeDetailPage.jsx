@@ -97,7 +97,7 @@ export default function ChallengeDetailPage() {
             <dd>{mine ? `${challenge.posterName} (you)` : challenge.posterName}</dd>
           </div>
           <div>
-            <dt>{state === 'open' || state === 'pending' ? 'Betting closes' : 'Betting closed'}</dt>
+            <dt>{closeMs && closeMs > nowMs ? 'Betting closes' : 'Betting closed'}</dt>
             <dd>{closeMs ? formatCentralDateTime(new Date(closeMs)) : '—'}</dd>
           </div>
           <div>

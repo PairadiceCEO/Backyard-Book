@@ -15,7 +15,8 @@ Vercel deploys the live site from `main`.
 - Keep `PROGRESS.md` current with every commit: current phase and task, what's done, what's in progress
   (with file names), what's next, open questions, decisions. A new session must be able to continue from it.
 - Push to `main` once per phase, as one merge of `wip`, only after all of these pass:
-  - the full test suite: `npm run test:all` (rules, casino engines, cash out, sportsbook server, Battles)
+  - the full test suite: `npm run test:all` (rules, casino engines, cash out, sportsbook server, Battles,
+    Challenges)
   - the production build (`npx vite build` with dummy `VITE_FIREBASE_*` env vars)
   - lint (`npx eslint src`)
   - the phone check at 320 / 375 / 414 px (`tools/phone-check/`: `shoot.mjs`, `interact.mjs`, `dealcheck.mjs`)

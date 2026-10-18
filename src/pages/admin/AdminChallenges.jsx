@@ -381,7 +381,7 @@ export default function AdminChallenges() {
               </>
             )}{' '}
             {totals ? `${totals.bets} bet${totals.bets === 1 ? '' : 's'} settle (${totals.won} won, ${totals.lost} lost, ${totals.push} push, ${totals.void} void), paying ${formatMoney(totals.payoutCents)}.` : ''}
-            {waiting ? ` ${waiting} parlay${waiting === 1 ? '' : 's'} stay open, waiting on other legs.` : ''}
+            {waiting ? ` ${waiting} parlay${waiting === 1 ? ' stays' : 's stay'} open, waiting on other legs.` : ''}
           </p>
         </MoneyConfirmModal>
       ) : null}

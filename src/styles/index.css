@@ -4024,17 +4024,13 @@ fieldset.field legend {
   border-color: var(--accent);
 }
 
-.challenge-title {
-  color: var(--text);
-  font-weight: 800;
-  text-decoration: none;
-}
-
 .challenge-more {
   align-self: flex-start;
   color: var(--accent);
   text-decoration: none;
-  min-height: 32px;
+  min-height: 44px;
+  min-width: 44px;
+  padding-right: 0.75rem;
   display: inline-flex;
   align-items: center;
 }
