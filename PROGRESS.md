@@ -70,21 +70,42 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       the instant before it re-rendered (failed on main too in this environment); it now waits up to 300 ms.
       Merged wip → main as 0.11.0. No firestore.rules change.
 
-## Phase 2 — crypto markets (0.12.0) — PLANNED (starts after Phase 1 is merged)
+## Phase 2 — crypto markets (0.12.0) — IN PROGRESS
 
 ### Checklist
-- [ ] P2-1 Discover Kalshi crypto series (category=Crypto): keep 15-min "Up or Down" (fifteen_min) and hourly
-      above/below (hourly, greater / greater_or_equal, floor_strike only); drop ranges (cap_strike) and daily+.
-      Verify each coin's Coinbase product "{SYMBOL}-USD" is online. Checked-in config `shared/crypto/coins.js`
-      (series → coin, symbol, product, kind). Record included / left-out coins below.
-- [ ] P2-2 Server data: `server/crypto.js` — soonest open 15-min event with a floor_strike that has opened; soonest
-      open hourly event; Coinbase ticker + 1-min candles. In-memory only (10 s TTL), never the Firestore cache.
-      Served by /api/board (league=crypto, league=crypto&game={coin}); no new function.
-- [ ] P2-3 Betting: leg { league 'crypto', gameId 'crypto:{eventTicker}', marketType 'crypto', selection yes|no,
-      kalshiTicker, line floor_strike }; fresh market at bet time (configured series, active, opened, > 60 s before
-      close, MIN/MAX price + gap); price = ask; LINE_CHANGED on another strike; singles only; no cash out.
-- [ ] P2-4 Settlement: Kalshi result yes/no grades; voided/cancelled → void; unsettled → pending; hooked into
-      gameResults/grading so every settlement run settles crypto bets (same ledger ids).
+- [x] P2-1 Series discovery (2026-10-18 ~05:00–06:00Z, real APIs). The /series?category=Crypto list has no cursor but
+      is too long to read in one go, so it was read several times (it comes back in a different order each time)
+      and every candidate checked on its own (/series/{t}, open /events with nested markets, Coinbase /products/{id}).
+      Config: shared/crypto/coins.js (`CRYPTO_COINS`, `CRYPTO_SERIES`).
+      Included (Coinbase product online for each):
+        BTC  KXBTC15M + KXBTCD (BTC-USD) · ETH KXETH15M + KXETHD (ETH-USD) · SOL KXSOL15M + KXSOLD (SOL-USD) ·
+        XRP KXXRP15M + KXXRPD (XRP-USD) · DOGE KXDOGE15M + KXDOGED (DOGE-USD) · BNB KXBNB15M + KXBNBD (BNB-USD) ·
+        HYPE KXHYPE15M + KXHYPED (HYPE-USD) · NEAR KXNEAR15M only (NEAR-USD) · ZEC KXZEC15M only (ZEC-USD).
+        15-min markets: one market, strike_type greater_or_equal, floor_strike = target; hourly: ~45+ markets,
+        strike_type greater, floor_strike only, opens on the hour and closes on the next.
+      Left out: ranges (cap_strike / between): KXBTC, KXETH, KXSOL, KXSOLE, KXXRP, KXRIPPLE, KXDOGE, KXZEC, KXTON,
+        KXNEAR, KXHYPE ("Hype", less/between). No open market when checked: KXBCH15M, KXADA15M, KXTON15M, KXTONH,
+        KXTOND, KXNEARH, KXZECD, KXZECH (so BCH, ADA, TON left out; NEAR and ZEC 15-min only). Daily or longer:
+        ETHD, KXBCHD, KXLTCD, KXSHIBAD and the monthly/annual/one-off series. Not one coin: KXCRYPTOCOMP15M,
+        KXCRYPTOLEAD15M.
+      Coinbase: /products/{id} status online; /ticker {price, time…}; /candles?granularity=60 → [time s, low, high,
+        open, close, volume], newest first, ~300 rows. CORS wasn't checkable from here, so the phone never calls
+        Coinbase: the chart comes through /api/board (decision).
+- [x] P2-2 server/crypto.js: memory-only 10 s cache (failures kept 10 s too); `pickCryptoEvent` (soonest-closing
+      open event that has opened and has a target), `fifteenSection`, `hourlySection` (main strike = YES ask
+      nearest $0.50; full tradable ladder on the coin page), Coinbase price + this hour's 1-minute candles.
+      /api/board?league=crypto → getCryptoBoard, &game={coin} → getCryptoCoin. No Firestore reads or writes.
+- [x] P2-3 Betting: shared/betRules.js knows 'crypto' (yes/no, has a line = strike, singles only:
+      CRYPTO_PARLAY_MESSAGE); `priceCryptoLeg` (configured series, ticker of that event, fresh market, active,
+      opened, target set, > 60 s before close, MIN/MAX/gap, ask price, LINE_CHANGED on another strike); placeBet
+      stores label ("BTC Up (≥ $81,931.55, 7:30 PM)"), strike, close time as startTime, `crypto` {symbol, coin,
+      kind, closeTime}. No cash out (NO_CASHOUT_PREFIXES has 'crypto:').
+- [x] P2-4 Settlement: gameKey for crypto legs includes the market ticker (each strike is its own market);
+      loadGameResults fetches the market; `resultFromCryptoMarket` (settled/finalized + yes/no → final; voided →
+      void; else pending); gradeLeg 'crypto'. Same settleBet path and ledger ids.
+      Tests: test/crypto/crypto.test.mjs (9, `npm run test:crypto`, in test:all). Mutation-checked: 60 s cutoff
+      (3 fail), series check (1), opened (1), target (1), price checks (2), parlay rule (1), cash out (1), grading
+      inverted (2), void ignored (2).
 - [ ] P2-5 Screens: Crypto tab (Live, leagues, Crypto, Custom), coin cards (price, 15-min target + countdown +
       Up/Down, hourly main strike + Above/Below + countdown, Closed / Next market opens soon); coin page
       /sportsbook/crypto/{coin} with hand-built SVG chart (1-min candles for the current hour, 10 s refresh, target and
@@ -245,7 +266,7 @@ Battles in My Bets, admin Battles tab (disputed first) with edit log.
       screens × 320/375/414 clean; merged wip → main as 0.10.0. Will must publish firestore.rules (challenges).
 
 ## Next
-Phase 2 (crypto markets), from a fresh wip off main: start at P2-1.
+Phase 2: P2-5 screens (Crypto tab, coin cards, coin page with chart), then P2-6/7.
 
 ## Open questions
 - Q1 (2026-10-18, Phase 1 item 1b): Kalshi's `updated_time` does NOT move when a market trades. Checked against the

@@ -5,7 +5,8 @@
 // date; if the id isn't there (ESPN may date a late game differently) we read the day before and after;
 // if it's still missing, the single-game summary endpoint is the last resort. Each scoreboard is fetched
 // once per run and reused for every game on it. Custom games come from their customGames doc; Challenges
-// from their challenges doc (settled = the admin's winning outcome, void = every leg void).
+// from their challenges doc (settled = the admin's winning outcome, void = every leg void); crypto legs from
+// their Kalshi market (settled/finalized with result yes or no; voided → void).
 
 import { adminDb } from './firebaseAdmin.js';
 import { getLeague } from './leagues.js';
@@ -15,8 +16,13 @@ import { centralYmd } from '../shared/time.js';
 import { resultFromCustomGame, resultFromEspnGame } from './grading.js';
 import { resultFromChallenge } from './challenges.js';
 import { CHALLENGE_PREFIX } from '../shared/challenges.js';
+import { CRYPTO_PREFIX } from '../shared/crypto/coins.js';
+import { fetchMarket } from './sources/kalshi.js';
+import { resultFromCryptoMarket } from './crypto.js';
 
+// A crypto event holds many markets (one per strike), each with its own result, so a crypto leg's key is its market.
 export function gameKey(leg) {
+  if (String(leg.gameId).startsWith(CRYPTO_PREFIX)) return `${leg.league}|${leg.gameId}|${leg.sourceRef?.ticker ?? ''}`;
   return `${leg.league}|${leg.gameId}`;
 }
 
@@ -37,7 +43,7 @@ export async function loadGameResults(legs, { now = new Date(), fetchImpl = fetc
       results.set(key, overrides.get(key));
       continue;
     }
-    if (!games.has(key)) games.set(key, { league: leg.league, gameId: String(leg.gameId), start: startMs(leg) });
+    if (!games.has(key)) games.set(key, { league: leg.league, gameId: String(leg.gameId), start: startMs(leg), ticker: leg.sourceRef?.ticker ?? null });
   }
 
   const scoreboards = new Map(); // `${league}|${yyyymmdd}` → Promise<Map(eventId → raw event) | null>
@@ -60,6 +66,22 @@ export async function loadGameResults(legs, { now = new Date(), fetchImpl = fetc
 
   const work = [];
   for (const [key, g] of games) {
+    // Crypto: Kalshi's own result for the leg's market (never our chart).
+    if (g.gameId.startsWith(CRYPTO_PREFIX)) {
+      if (!g.ticker) {
+        results.set(key, resultFromCryptoMarket(null));
+        continue;
+      }
+      work.push(
+        fetchMarket(g.ticker, fetchImpl)
+          .then((market) => results.set(key, resultFromCryptoMarket(market)))
+          .catch((err) => {
+            results.set(key, { ...resultFromCryptoMarket(null), reason: "Kalshi didn't answer." });
+            console.error(`settlement: Kalshi ${g.ticker} failed:`, err.message);
+          }),
+      );
+      continue;
+    }
     // Challenges: straight from Firestore.
     if (g.gameId.startsWith(CHALLENGE_PREFIX)) {
       const docId = g.gameId.slice(CHALLENGE_PREFIX.length);

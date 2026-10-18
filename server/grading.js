@@ -58,6 +58,7 @@ export function scoreText(result) {
   if (!result) return null;
   if (result.status === 'void') return result.statusText || 'Canceled';
   if (result.status !== 'final') return null;
+  if (result.cryptoResult) return result.statusText;
   if (result.winner) return `Winner: ${result.winnerLabel ?? result.winner}`;
   return `${result.awayName} ${result.awayScore} @ ${result.homeName} ${result.homeScore} · ${result.statusText || 'Final'}`;
 }
@@ -81,6 +82,11 @@ export function gradeLeg(leg, result) {
   }
 
   const { marketType, selection } = leg;
+  // Crypto: Kalshi's result decides. YES backs Up / above, NO backs Down / below.
+  if (marketType === 'crypto') {
+    if (result.cryptoResult !== 'yes' && result.cryptoResult !== 'no') return { result: 'pending', reason: 'Waiting for Kalshi to settle the market.', scoreText: null, finalScore: null };
+    return { result: selection === result.cryptoResult ? 'win' : 'loss', reason: '', scoreText: scoreText(result), finalScore: null };
+  }
   // A Challenge: the admin's winning outcome wins, every other outcome loses.
   if (marketType === 'challenge') {
     if (!result.winner) return { result: 'pending', reason: 'Challenge has no winner yet.', scoreText: null, finalScore: null };

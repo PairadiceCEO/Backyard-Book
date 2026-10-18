@@ -2,24 +2,30 @@
 
 import { REQUEST_ID_PATTERN } from './constants.js';
 import { decimalToAmerican } from './oddsMath.js';
+import { cryptoPickLabel } from './crypto/coins.js';
 
 export const MIN_STAKE_CENTS = 100; // $1.00
 export const MAX_LEGS = 10;
 export const MIN_PARLAY_LEGS = 2;
 // 'challenge' = a player-posted Challenge (selection = one of its outcome ids, no line).
-export const MARKET_TYPES = ['moneyline', 'spread', 'total', 'challenge'];
+// 'crypto' = a Kalshi crypto market (selection yes = Up / above, no = Down / below; line = its strike).
+export const MARKET_TYPES = ['moneyline', 'spread', 'total', 'challenge', 'crypto'];
 
 const SELECTIONS = {
   moneyline: ['home', 'away'],
   spread: ['home', 'away'],
   total: ['over', 'under'],
   challenge: ['o1', 'o2', 'o3', 'o4', 'o5', 'o6'],
+  crypto: ['yes', 'no'],
 };
 
-// Spread and total picks carry a line; moneyline and Challenge picks don't.
+// Spread, total and crypto picks carry a line (a crypto line is the market's strike, so another strike is a
+// different bet); moneyline and Challenge picks don't.
 export function marketHasLine(marketType) {
-  return marketType === 'spread' || marketType === 'total';
+  return marketType === 'spread' || marketType === 'total' || marketType === 'crypto';
 }
+
+export const CRYPTO_PARLAY_MESSAGE = "Crypto picks are singles only: they can't go in a parlay.";
 
 export function isValidSelection(marketType, selection) {
   return Array.isArray(SELECTIONS[marketType]) && SELECTIONS[marketType].includes(selection);
@@ -95,6 +101,9 @@ export function slipProblems(slip, { balanceCents = Infinity } = {}) {
   if (slip?.mode === 'parlay' && hasMoneylineSpreadConflict(legs)) {
     problems.push(PARLAY_ML_SPREAD_MESSAGE);
   }
+  if (slip?.mode === 'parlay' && legs.some((leg) => leg.marketType === 'crypto')) {
+    problems.push(CRYPTO_PARLAY_MESSAGE);
+  }
 
   let total = 0;
   if (slip?.mode === 'singles') {
@@ -133,9 +142,10 @@ export function formatSignedLine(line) {
 }
 
 // Human label for a pick, e.g. "Jaguars -2.5", "Over 42.5", "Texans moneyline". A Challenge pick is its
-// outcome's name (outcomeLabel).
-export function pickLabel({ marketType, selection, line, homeName, awayName, outcomeLabel = '' }) {
+// outcome's name (outcomeLabel); a crypto pick "BTC Up (≥ $81,931.55, 7:30 PM)" (crypto: { symbol, kind, closeTime }).
+export function pickLabel({ marketType, selection, line, homeName, awayName, outcomeLabel = '', crypto = null }) {
   if (marketType === 'challenge') return outcomeLabel || selection;
+  if (marketType === 'crypto') return cryptoPickLabel({ ...(crypto ?? {}), selection, line });
   if (marketType === 'total') return `${selection === 'over' ? 'Over' : 'Under'} ${line}`;
   const team = selection === 'home' ? homeName : awayName;
   if (marketType === 'spread') return `${team} ${formatSignedLine(line)}`;

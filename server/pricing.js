@@ -4,6 +4,7 @@
 // board says which Kalshi ticker/side backs a leg. Prices and lines are then fetched fresh:
 //   custom game → its Firestore doc, closed once the server clock reaches the start time
 //   Challenge   → its Firestore doc: open (admin-approved) and before its close time on the server clock
+//   crypto      → the Kalshi market itself, fetched fresh (server/crypto.js priceCryptoLeg)
 //   pre-game    → fresh ESPN odds; if ESPN doesn't price it, the board's Kalshi market, re-fetched
 //   live        → the Kalshi market (re-fetched); if the board still held ESPN's pre-game line,
 //                 the game's live Kalshi market is looked up fresh. The freshly fetched market must have
@@ -29,6 +30,8 @@ import {
 import { marketHasLine } from '../shared/betRules.js';
 import { makeQuote } from '../shared/oddsMath.js';
 import { CHALLENGE_LEAGUE, CHALLENGE_MARKET, challengeDocId, isChallengeLeg } from '../shared/challenges.js';
+import { isCryptoLeg } from '../shared/crypto/coins.js';
+import { priceCryptoLeg } from './crypto.js';
 
 const BOARD_TTL_MS = 30 * 1000;
 
@@ -145,6 +148,7 @@ async function priceChallengeLeg(leg, ctx) {
 export async function priceLeg(leg, ctx) {
   const { league, gameId, marketType, selection } = leg;
   if (isChallengeLeg(leg)) return priceChallengeLeg(leg, ctx);
+  if (isCryptoLeg(leg)) return priceCryptoLeg(leg, ctx);
 
   if (String(gameId).startsWith('custom:')) {
     const docId = String(gameId).slice('custom:'.length);

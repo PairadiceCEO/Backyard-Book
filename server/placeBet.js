@@ -24,6 +24,7 @@ import {
 } from '../shared/betRules.js';
 import { roundDecimal } from '../shared/oddsMath.js';
 import { CHALLENGE_LEAGUE, CHALLENGE_MARKET, challengeDocId, isChallengeLeg } from '../shared/challenges.js';
+import { CRYPTO_LEAGUE, CRYPTO_MARKET, CRYPTO_PREFIX } from '../shared/crypto/coins.js';
 
 const KALSHI_TICKER_PATTERN = /^[A-Z0-9][A-Z0-9._-]{3,100}$/;
 
@@ -44,8 +45,12 @@ function parseRequest(body) {
     const gameId = String(leg.gameId ?? '');
     if (!gameId || gameId.length > 200) throw bad(`Pick ${i + 1}: missing game.`);
     const challenge = league === CHALLENGE_LEAGUE || leg.marketType === CHALLENGE_MARKET || isChallengeLeg({ gameId });
+    const crypto = league === CRYPTO_LEAGUE || leg.marketType === CRYPTO_MARKET || gameId.startsWith(CRYPTO_PREFIX);
     if (challenge) {
       if (league !== CHALLENGE_LEAGUE || leg.marketType !== CHALLENGE_MARKET || !isChallengeLeg({ gameId })) throw bad(`Pick ${i + 1}: invalid Challenge pick.`);
+    } else if (crypto) {
+      if (league !== CRYPTO_LEAGUE || leg.marketType !== CRYPTO_MARKET || !gameId.startsWith(CRYPTO_PREFIX)) throw bad(`Pick ${i + 1}: invalid crypto pick.`);
+      if (!leg.kalshiTicker) throw bad(`Pick ${i + 1}: a crypto pick needs its Kalshi market.`);
     } else if (!getLeague(league)) throw bad(`Pick ${i + 1}: unknown league.`);
     if (!isValidSelection(leg.marketType, leg.selection)) throw bad(`Pick ${i + 1}: invalid market.`);
     const line = leg.line === null || leg.line === undefined ? null : Number(leg.line);
@@ -109,6 +114,25 @@ async function loadExisting(db, ids, uid) {
 
 function storedLeg(request, priced) {
   const { quote, game } = priced;
+  if (game.kind === 'crypto') {
+    return {
+      legId: makeLegId({ league: request.league, gameId: request.gameId, marketType: request.marketType, selection: request.selection, line: quote.line, source: quote.source }),
+      league: request.league,
+      gameId: request.gameId,
+      gameLabel: game.gameLabel,
+      startTime: game.startTime, // the market's close time
+      marketType: request.marketType,
+      selection: request.selection,
+      label: pickLabel({ marketType: request.marketType, selection: request.selection, line: quote.line, crypto: game.crypto }),
+      line: quote.line,
+      americanOdds: quote.american,
+      decimalOdds: quote.decimal,
+      source: quote.source,
+      sourceRef: quote.ref ?? null,
+      crypto: { symbol: game.crypto.symbol, coin: game.crypto.coin, kind: game.crypto.kind, closeTime: game.crypto.closeTime },
+      result: 'pending',
+    };
+  }
   if (game.kind === 'challenge') {
     return {
       legId: makeLegId({ league: request.league, gameId: request.gameId, marketType: request.marketType, selection: request.selection, source: quote.source }),
