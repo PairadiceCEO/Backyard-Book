@@ -7,8 +7,7 @@
 //   crypto      → the Kalshi market itself, fetched fresh (server/crypto.js priceCryptoLeg)
 //   pre-game    → fresh ESPN odds; if ESPN doesn't price it, the board's Kalshi market, re-fetched
 //   live        → the Kalshi market (re-fetched); if the board still held ESPN's pre-game line,
-//                 the game's live Kalshi market is looked up fresh. The freshly fetched market must have
-//                 updated since the game started (stale-market guard), else the bet is refused as closed.
+//                 the game's live Kalshi market is looked up fresh
 //   final       → closed
 // Which Kalshi events belong to a game comes from the board's mapping (playoff games by series game number).
 
@@ -21,8 +20,6 @@ import {
   attachKalshiToGames,
   fetchLeagueKalshi,
   fetchMarket,
-  freshForLive,
-  liveSinceMs,
   mappedEventTicker,
   marketMatchesLeg,
   quoteFromMarket,
@@ -104,15 +101,11 @@ function compare(leg, quote, game) {
   return { status: 'ok', quote, game };
 }
 
-const STALE_LIVE = 'Live prices unavailable for this market right now.';
-
-// liveSince: the game's start (ms) when it is in progress (the fresh market must have updated since), else null.
-async function kalshiFromBoardQuote(ctx, boardQuote, marketType, liveSince = null) {
+async function kalshiFromBoardQuote(ctx, boardQuote, marketType) {
   const ref = boardQuote?.ref;
-  if (!ref?.ticker || (ref.side !== 'yes' && ref.side !== 'no')) return { quote: null, stale: false };
+  if (!ref?.ticker || (ref.side !== 'yes' && ref.side !== 'no')) return null;
   const market = await ctx.market(ref.ticker);
-  if (market && !freshForLive(market, liveSince)) return { quote: null, stale: true };
-  return { quote: quoteFromMarket(market, ref.side, marketType, liveSince), stale: false };
+  return quoteFromMarket(market, ref.side, marketType);
 }
 
 // leg: { league, gameId, marketType, selection, line }
@@ -162,7 +155,6 @@ export async function priceLeg(leg, ctx) {
   const fresh = (await ctx.freshEspnGames(league)).find((g) => g.id === String(gameId));
   if (!fresh) return closed('This game is no longer on the board.');
   if (fresh.state === 'post' || fresh.canceled) return closed('This game is over.');
-  const liveSince = liveSinceMs(fresh); // null before the start: no stale-market check
 
   const board = await ctx.board(league);
   const boardGame = board?.games?.find((g) => g.id === String(gameId)) ?? null;
@@ -180,8 +172,7 @@ export async function priceLeg(leg, ctx) {
     if (market?.event_ticker && market.event_ticker !== expectedEvent) {
       return closed('This line is not offered for this game.');
     }
-    if (market && !freshForLive(market, liveSince)) return closed(STALE_LIVE);
-    const quote = quoteFromMarket(market, leg.kalshiSide, marketType, liveSince);
+    const quote = quoteFromMarket(market, leg.kalshiSide, marketType);
     if (!quote) return closed('This line is no longer posted.');
     return compare(leg, quote, fresh);
   }
@@ -190,16 +181,14 @@ export async function priceLeg(leg, ctx) {
     const espnQuote = fresh.markets[marketType]?.[selection] ?? null;
     if (espnQuote) return compare(leg, espnQuote, fresh);
     if (boardQuote?.source === 'kalshi') {
-      return compare(leg, (await kalshiFromBoardQuote(ctx, boardQuote, marketType)).quote, fresh);
+      return compare(leg, await kalshiFromBoardQuote(ctx, boardQuote, marketType), fresh);
     }
     return closed('This market is no longer available.');
   }
 
-  // Live game: Kalshi only, and only a market updated since the start.
+  // Live game: Kalshi only.
   if (boardQuote?.source === 'kalshi') {
-    const { quote, stale } = await kalshiFromBoardQuote(ctx, boardQuote, marketType, liveSince);
-    if (stale) return closed(STALE_LIVE);
-    return compare(leg, quote, fresh);
+    return compare(leg, await kalshiFromBoardQuote(ctx, boardQuote, marketType), fresh);
   }
   const live = (await ctx.freshKalshiForGames(league)).get(fresh.id);
   const liveQuote = live?.[marketType]?.[selection] ?? null;

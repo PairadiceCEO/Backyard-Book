@@ -1,8 +1,10 @@
 // npm run test:sportsbook  (or: node --experimental-test-module-mocks test/sportsbook/phase11.test.mjs)
 // 0.11.0 item 1: a live game must never be priced from another game's Kalshi markets.
 //   a) playoff games match Kalshi events by series game number (postponed ALCS Game 4, 2026-10-17)
-//   b) a game in progress never uses a market whose updated_time is before the game's start
 //   c) when the matcher can't decide, the game gets no Kalshi markets
+//   cash out bids only come from the event the board maps to the game now.
+// 0.13.0: the stale-market guard (b, Kalshi updated_time) is gone — updated_time doesn't move on trades — so a live
+// game's correctly mapped market is priced on the board, at bet time and for live cash out.
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -184,11 +186,8 @@ test('repro end to end: board, alternate ladder, bet pricing and cash out all us
   cache.clearMemoryCache();
   store.clear();
   const espnByDate = { 20261017: [espnRaw('g4', G4_START, 'in', 'ALCS - Game 4')], 20261018: [espnRaw('g5', '2026-10-19T00:00:00Z', 'pre', 'ALCS - Game 5')] };
-  // Kalshi lists Game 5 first, like the night it happened. Its TB2 market even answers as freshly updated here,
-  // so only the game-number mapping keeps it away from Game 4.
-  const g5tb2 = 'KXMLBSPREAD-26OCT172000TBCLE-TB2';
-  const g5Fresh = { ...G5_PRE.spread.markets.find((m) => m.ticker === g5tb2), updated_time: '2026-10-18T00:30:00Z' };
-  const net = network({ espnByDate, sets: [G5_PRE, G4_LIVE], marketOverrides: { [g5tb2]: g5Fresh } });
+  // Kalshi lists Game 5 first, like the night it happened. Only the game-number mapping keeps it away from Game 4.
+  const net = network({ espnByDate, sets: [G5_PRE, G4_LIVE] });
   const board = await buildBoard('mlb', { now: NOW, fetchImpl: net.fetchImpl });
   const g4 = board.games.find((g) => g.id === 'g4');
   assert.equal(g4.kalshi.spreadEvent, 'KXMLBSPREAD-26OCT161800TBCLE');
@@ -280,103 +279,72 @@ test('unsure → no Kalshi markets: two equally close events, or one game number
   assert.equal(match([GAME4], [G4_LIVE, relisted]).size, 0);
 });
 
-// ---------- b) stale-market guard ----------
+// ---------- 0.13.0: no stale-market guard ----------
 
-// Game 4 live, but its markets haven't updated since before first pitch.
-const G4_STALE = series('26OCT161800', 4, { tbWin: 0.95, tbSpread: [[1.5, 0.9], [2.5, 0.72]], totals: [[7.5, 0.55]], updated: '2026-10-17T23:59:00Z' });
+// Game 4 live, its markets last "updated" (Kalshi metadata) days before first pitch — as real live markets are.
+const G4_OLD_META = series('26OCT161800', 4, { tbWin: 0.95, tbSpread: [[1.5, 0.9], [2.5, 0.72]], totals: [[7.5, 0.55]], updated: '2026-10-16T11:01:10Z' });
 
-test('stale live market: no board quote, no ladder, priceLeg closed (also with kalshiTicker), no live cash out', async () => {
+test('a live game\'s correctly mapped market is priced: board, alternate ladder, bet time (with and without a ticker), live cash out', async () => {
   cache.clearMemoryCache();
   store.clear();
   const espnByDate = { 20261017: [espnRaw('g4', G4_START, 'in', 'ALCS - Game 4')] };
-  const net = network({ espnByDate, sets: [G4_STALE] });
+  const net = network({ espnByDate, sets: [G4_OLD_META] });
   const board = await buildBoard('mlb', { now: NOW, fetchImpl: net.fetchImpl });
   const g4 = board.games.find((g) => g.id === 'g4');
-  assert.equal(g4.kalshi.gameEvent, 'KXMLBGAME-26OCT161800TBCLE', 'still mapped (so a ticker can be checked), just not priced');
-  assert.equal(allQuotes(g4).length, 0, 'no board quote');
-  assert.equal(g4.oddsNote, 'Live prices unavailable');
+  assert.equal(g4.kalshi.gameEvent, 'KXMLBGAME-26OCT161800TBCLE');
+  assert.equal(g4.oddsNote, null);
+  assert.ok(g4.markets.moneyline.away && g4.markets.total.over, 'live board quotes from the mapped markets');
+  assert.ok(allQuotes(g4).every((q) => q.ref.ticker.includes('-26OCT161800TBCLE-')));
+  assert.ok(allQuotes(g4).every((q) => !('updatedAt' in q.ref)), 'no updated_time plumbing left');
 
   const detail = await getGameDetail('mlb', 'g4', { fetchImpl: net.fetchImpl, now: () => NOW });
-  assert.equal(allQuotes(detail.game, detail.ladders).length, 0, 'no alternate line either');
+  const raysMinus15 = detail.ladders.spreads.away.find((q) => q.line === -1.5);
+  assert.equal(raysMinus15.ref.ticker, 'KXMLBSPREAD-26OCT161800TBCLE-TB2');
+  assert.equal(raysMinus15.american, -900);
 
   const ctx = () => createPricingContext({ now: NOW, fetchImpl: net.fetchImpl, getBoard: async () => board });
-  // With the exact ticker (alternate-line pick).
   let r = await priceLeg({ league: 'mlb', gameId: 'g4', marketType: 'spread', selection: 'away', line: -1.5, kalshiTicker: 'KXMLBSPREAD-26OCT161800TBCLE-TB2', kalshiSide: 'yes' }, ctx());
-  assert.equal(r.status, 'closed');
-  assert.match(r.reason, /Live prices unavailable/);
-  // Without a ticker (main line): the fresh live lookup finds no fresh market.
+  assert.equal(r.status, 'ok');
+  assert.equal(r.quote.american, -900);
   r = await priceLeg({ league: 'mlb', gameId: 'g4', marketType: 'moneyline', selection: 'away', line: null }, ctx());
-  assert.equal(r.status, 'closed');
+  assert.equal(r.status, 'ok');
+  assert.equal(r.quote.ref.ticker, 'KXMLBGAME-26OCT161800TBCLE-TB');
 
-  // Cash out: live bet on that market → unavailable (estimate and confirmation).
   const bet = {
     status: 'open', type: 'single', stakeCents: 1000, potentialPayoutCents: 1111,
     legs: [{ league: 'mlb', gameId: 'g4', marketType: 'spread', selection: 'away', line: -1.5, decimalOdds: 1.111, startTime: G4_START, result: 'pending', source: 'kalshi', sourceRef: { provider: 'Kalshi', ticker: 'KXMLBSPREAD-26OCT161800TBCLE-TB2', side: 'yes', price: 0.9 } }],
   };
   for (const fresh of [false, true]) {
     const q = await quoteCashout(bet, createCashoutContext({ now: NOW, fetchImpl: net.fetchImpl, fresh, getBoard: async () => board }));
-    assert.equal(q.available, false, `fresh=${fresh}`);
-    assert.match(q.reason, /Live prices unavailable/);
+    assert.equal(q.available, true, `fresh=${fresh}`);
+    assert.equal(q.mode, 'live');
+    assert.equal(q.valueCents, Math.floor(1111 * 0.89 * 0.9));
   }
-  // A DraftKings-line leg matched to the same stale event: unavailable too.
+  // A DraftKings-line leg matched to the same live event: priced from its bid too.
   const dkBet = { ...bet, legs: [{ ...bet.legs[0], source: 'espn', sourceRef: { provider: 'DraftKings' } }] };
   const q = await quoteCashout(dkBet, createCashoutContext({ now: NOW, fetchImpl: net.fetchImpl, fresh: true, getBoard: async () => board }));
-  assert.equal(q.available, false);
+  assert.equal(q.available, true);
 });
 
-test('both guards: if ESPN gave no game number, the date match lands on Game 5, whose pre-game prices are still refused', async () => {
-  cache.clearMemoryCache();
-  store.clear();
-  const espnByDate = { 20261017: [espnRaw('g4', G4_START, 'in', null)] }; // no notes → no game number
-  const net = network({ espnByDate, sets: [G5_PRE, G4_LIVE] });
-  const board = await buildBoard('mlb', { now: NOW, fetchImpl: net.fetchImpl });
-  const g4 = board.games.find((g) => g.id === 'g4');
-  assert.equal(g4.kalshi.gameEvent, 'KXMLBGAME-26OCT172000TBCLE', 'date matching alone picks Game 5 (exact date)');
-  assert.equal(allQuotes(g4).length, 0, 'but its markets last updated before first pitch → no price');
-  const r = await priceLeg(
-    { league: 'mlb', gameId: 'g4', marketType: 'spread', selection: 'away', line: -1.5, kalshiTicker: 'KXMLBSPREAD-26OCT172000TBCLE-TB2', kalshiSide: 'yes' },
-    createPricingContext({ now: NOW, fetchImpl: net.fetchImpl, getBoard: async () => board }),
-  );
-  assert.equal(r.status, 'closed', 'Rays −1.5 at +133 is not bettable');
-});
-
-test('stale guard uses the market fetched at bet time, not the board copy', async () => {
+test('the price at bet time comes from the market fetched then (not the board copy)', async () => {
   cache.clearMemoryCache();
   store.clear();
   const espnByDate = { 20261017: [espnRaw('g4', G4_START, 'in', 'ALCS - Game 4')] };
   const boardNet = network({ espnByDate, sets: [G4_LIVE] });
   const board = await buildBoard('mlb', { now: NOW, fetchImpl: boardNet.fetchImpl });
   const boardQuote = board.games.find((g) => g.id === 'g4').markets.moneyline.away;
-  assert.equal(boardQuote.source, 'kalshi');
-  assert.equal(boardQuote.ref.updatedAt, '2026-10-18T00:41:07Z', 'board cache carries updated_time');
-
-  // At bet time Kalshi answers with a market whose updated_time is before the start → refused.
   const t = boardQuote.ref.ticker;
-  const stale = { ...boardNet.markets.get(t), updated_time: '2026-10-17T20:30:00Z' };
-  const betNet = network({ espnByDate, sets: [G4_LIVE], marketOverrides: { [t]: stale } });
-  const ctx = createPricingContext({ now: NOW, fetchImpl: betNet.fetchImpl, getBoard: async () => board });
-  const r = await priceLeg({ league: 'mlb', gameId: 'g4', marketType: 'moneyline', selection: 'away', line: null }, ctx);
-  assert.equal(r.status, 'closed');
-  assert.match(r.reason, /Live prices unavailable/);
-  assert.equal(betNet.calls.kalshiMarket, 1, 'the market was fetched fresh');
-
-  // Same market, fresh → accepted.
-  const ok = await priceLeg({ league: 'mlb', gameId: 'g4', marketType: 'moneyline', selection: 'away', line: null }, createPricingContext({ now: NOW, fetchImpl: boardNet.fetchImpl, getBoard: async () => board }));
-  assert.equal(ok.status, 'ok');
+  const moved = { ...boardNet.markets.get(t), yes_ask_dollars: '0.9700', yes_bid_dollars: '0.9600', no_ask_dollars: '0.0400', no_bid_dollars: '0.0300' };
+  const betNet = network({ espnByDate, sets: [G4_LIVE], marketOverrides: { [t]: moved } });
+  const r = await priceLeg({ league: 'mlb', gameId: 'g4', marketType: 'moneyline', selection: 'away', line: null }, createPricingContext({ now: NOW, fetchImpl: betNet.fetchImpl, getBoard: async () => board }));
+  assert.equal(r.status, 'ok');
+  assert.equal(r.quote.ref.price, 0.97);
+  assert.equal(betNet.calls.kalshiMarket, 1, 'fetched fresh');
 });
 
-test('stale guard applies only to games in progress; old cached ladder rows without updated_time are never used live', () => {
-  const market = { ticker: 'X-1', status: 'active', yes_ask_dollars: '0.5000', yes_bid_dollars: '0.4900', no_ask_dollars: '0.5100', no_bid_dollars: '0.5000', updated_time: '2026-10-17T20:00:00Z' };
-  const start = Date.parse(G4_START);
-  assert.equal(k.tradablePrice(market, 'yes'), 0.5, 'pre-game: no check');
-  assert.equal(k.tradablePrice(market, 'yes', start), null, 'live: updated before the start');
-  assert.equal(k.tradablePrice({ ...market, updated_time: G4_START }, 'yes', start), 0.5, 'updated at the start counts');
-  assert.equal(k.tradablePrice({ ...market, updated_time: undefined }, 'yes', start), null, 'no updated_time → no live price');
-  assert.equal(k.liveSinceMs(GAME5), null);
-  assert.equal(k.liveSinceMs(GAME4), start);
-
-  // A ladder row cached before 0.11.0 (6 fields, no updated_time).
-  const compact = { s: { e: 'KXMLBSPREAD-26OCT161800TBCLE', m: [['TB2', 1.5, 0.9, 0.89, 0.11, 0.1]] }, t: null };
-  assert.equal(k.buildLadders(compact, { TB: 'away', CLE: 'home' }).spreads.away.length, 1, 'fine before the start');
-  assert.equal(k.buildLadders(compact, { TB: 'away', CLE: 'home' }, start).spreads.away.length, 0, 'never live');
+test('old cached ladder rows (with the 0.11/0.12 seventh field) still build, live or not', () => {
+  const compact = { s: { e: 'KXMLBSPREAD-26OCT161800TBCLE', m: [['TB2', 1.5, 0.9, 0.89, 0.11, 0.1, 1792200000000]] }, t: null };
+  assert.equal(k.buildLadders(compact, { TB: 'away', CLE: 'home' }).spreads.away.length, 1);
+  assert.equal(k.freshForLive, undefined, 'the stale-market guard is gone');
+  assert.equal(k.liveSinceMs, undefined);
 });

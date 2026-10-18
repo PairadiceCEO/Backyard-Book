@@ -9,10 +9,14 @@ Battles (0.9.0), Challenges (0.10.0).
 Spec: Will's attachment of 2026-10-18 01:56. One phase on a fresh wip off main; merge after every CLAUDE.md check.
 
 ### Checklist
-- [ ] 1 Q1 answer: remove the stale-market guard (b) entirely (`freshForLive`, `liveSinceMs` uses, updatedAt
-      plumbing) from board, alternate ladders, game detail, priceLeg and cash out bids. No latest-trade check.
-      Keep game-number matching, "when unsure, no price" and the cash out mapping check. Tests: stale tests replaced
-      by "a live game's correctly mapped market is priced (board, bet time, live cash out)". CLAUDE.md line.
+- [x] 1 Stale-market guard (b) removed: `marketUpdatedMs`/`liveSinceMs`/`freshForLive` gone from kalshi.js;
+      tradablePrice/quoteFromMarket/buildKalshiMarkets/buildLadders back to no live check; compactEvent rows back to 6
+      fields (old 7-field cached rows still read); no `updatedAt` on quote refs; gameDetail, priceLeg
+      (STALE_LIVE gone) and cash out bids (STALE_LIVE, liveSince gone) cleaned. Kept: game-number matching, `isAmbiguous`
+      ("when unsure, no price"), cash out mapping check. Tests: phase11 stale tests replaced by "live game's mapped
+      market is priced (board, ladder, bet time ±ticker, live cash out ±DK line)", "bet-time price is the fresh
+      market", "old cached rows still build"; 0.11.0 fixture `updated_time` lines removed. Re-mutation-checked:
+      cash out mapping (1 fail), game number (6), unsure (1). CLAUDE.md + README lines updated.
 - [ ] 2 ODDS_CHANGED: `oddsDistance()` + `ODDS_CONFIRM_POINTS = 50` in shared/oddsMath.js (f(a) = a − 100 for
       a ≥ +100, a + 100 for a ≤ −100). placeBets refuses with 409 ODDS_CHANGED { oddsChanges: [{ legId,
       oldAmerican, newAmerican, quote }] } when any leg moved ≥ 50 (every market type, each parlay leg);
@@ -144,7 +148,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.13.0 item 1.
+0.13.0 item 2 (ODDS_CHANGED).
 
 ## Open questions
 None open.

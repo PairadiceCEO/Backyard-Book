@@ -75,7 +75,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Before any game in the bet starts:** stake × 0.90.
 - **Once a game has started:** potential payout × the Kalshi bid for every undecided leg × 0.90 (legs already won count as 1; pushed/voided legs drop out of the payout). DraftKings lines use the Kalshi market at the same line; with no exact match or no bid, it shows "Cash out unavailable right now".
 - No cash out once a leg has lost, or when every game is final (settlement pays it). Never on a bet with a custom-game or Challenge leg (singles or parlays, before or after the start); My Bets shows no cash out row on those. Battles have no cash out.
-- A live game uses only Kalshi markets updated since it started; playoff games are matched to Kalshi by series game number (a postponed game keeps its own markets).
+- Playoff games are matched to Kalshi by series game number (a postponed game keeps its own markets); when the match is unclear, the game gets no Kalshi price.
 
 **Cash out $X** → confirm. The server re-prices with fresh ESPN and Kalshi data; if the value moved it shows the new amount to confirm again, and it never pays a different amount silently. A cashed-out bet moves to Finished as **Cashed out $X**, counts as neither won nor lost, writes a `cashout` ledger entry (once per bet), and is final: settlement skips it and **Admin → Bets** shows it (Status filter **Cashed out**) without regrade buttons.
 

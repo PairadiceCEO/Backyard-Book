@@ -114,34 +114,9 @@ export function isActive(market) {
   return market?.status === 'active' || market?.status === 'open';
 }
 
-// ---------- Stale-market guard for games in progress ----------
-// A live game may only use a Kalshi market that has been updated since the game started: a market whose
-// updated_time is before the ESPN start time is treated as having no price (board "Live prices unavailable",
-// bet refused as closed, no live cash out). liveSinceMs is null for a game that isn't in progress (no check).
-
-export function marketUpdatedMs(market) {
-  const ms = Date.parse(market?.updated_time ?? '');
-  return Number.isFinite(ms) ? ms : null;
-}
-
-// The ESPN start (ms) when the game is in progress, else null.
-export function liveSinceMs(game) {
-  if (!game || game.state !== 'in') return null;
-  const ms = Date.parse(game.startTime ?? '');
-  return Number.isFinite(ms) ? ms : 0; // in progress with no usable start: every market must carry an updated_time
-}
-
-export function freshForLive(market, liveSince) {
-  if (liveSince === null || liveSince === undefined) return true;
-  const updated = marketUpdatedMs(market);
-  return updated !== null && updated >= liveSince;
-}
-
-// Price to buy `side` ('yes' | 'no') of a market, or null if it fails the board's checks
-// (or, for a game in progress, the market hasn't updated since the start).
-export function tradablePrice(market, side, liveSince = null) {
+// Price to buy `side` ('yes' | 'no') of a market, or null if it fails the board's checks.
+export function tradablePrice(market, side) {
   if (!isActive(market)) return null;
-  if (!freshForLive(market, liveSince)) return null;
   const ask = num(side === 'yes' ? market.yes_ask_dollars : market.no_ask_dollars);
   // A YES bid is the same order as a NO ask at (1 − price), so a missing bid can be derived.
   const otherAsk = num(side === 'yes' ? market.no_ask_dollars : market.yes_ask_dollars);
@@ -153,18 +128,19 @@ export function tradablePrice(market, side, liveSince = null) {
   return ask;
 }
 
-function kalshiQuote(market, side, line, liveSince = null) {
-  const price = tradablePrice(market, side, liveSince);
+function kalshiQuote(market, side, line) {
+  const price = tradablePrice(market, side);
   if (price === null) return null;
-  const ref = { provider: 'Kalshi', ticker: market.ticker, side, price };
-  if (market.updated_time) ref.updatedAt = String(market.updated_time); // kept in the board cache
-  return makeQuote(probabilityToAmerican(price), { line, source: 'kalshi', ref });
+  return makeQuote(probabilityToAmerican(price), {
+    line,
+    source: 'kalshi',
+    ref: { provider: 'Kalshi', ticker: market.ticker, side, price },
+  });
 }
 
 // Fresh quote for a stored leg (ticker + side), as placed at bet time. Line comes from the market itself:
 // spread YES = favorite −strike, spread NO = underdog +strike; total = strike; moneyline = none.
-// liveSince: the game's start (ms) when it is in progress (stale-market guard), else null.
-export function quoteFromMarket(market, side, marketType, liveSince = null) {
+export function quoteFromMarket(market, side, marketType) {
   if (!market) return null;
   const strike = num(market.floor_strike);
   let line = null;
@@ -175,7 +151,7 @@ export function quoteFromMarket(market, side, marketType, liveSince = null) {
     if (strike === null) return null;
     line = strike;
   }
-  return kalshiQuote(market, side, line, liveSince);
+  return kalshiQuote(market, side, line);
 }
 
 // Team code at the end of a market ticker: "KXNFLSPREAD-26OCT18HOUJAC-JAC3" → "JAC"
@@ -189,11 +165,9 @@ function spreadLabel(market) {
 }
 
 // Quotes for one matched game. sideByCode maps Kalshi team codes to 'home' / 'away'.
-// For a game in progress (entry.game.state 'in') every market must have updated since the start.
-export function buildKalshiMarkets({ gameEvent, spreadEvent, totalEvent, sideByCode, game = null }) {
-  const live = liveSinceMs(game);
-  const quote = (market, side, line) => kalshiQuote(market, side, line, live);
-  const price = (market, side) => tradablePrice(market, side, live);
+export function buildKalshiMarkets({ gameEvent, spreadEvent, totalEvent, sideByCode }) {
+  const quote = kalshiQuote;
+  const price = tradablePrice;
   const markets = {
     moneyline: { home: null, away: null },
     spread: { home: null, away: null },
@@ -299,7 +273,6 @@ function eventSides(event, kind) {
 }
 
 // Matches every fetched event to an ESPN game and returns Map(gameId → Kalshi markets).
-// Each game's own state decides the stale-market guard (entry.game).
 export function attachKalshiToGames(params) {
   const result = new Map();
   for (const [gameId, entry] of matchKalshiEntries(params)) {
@@ -493,7 +466,7 @@ export function kalshiMapping(entry) {
 }
 
 // Compact copy of one event's active markets:
-// [tickerSuffix, strike, yesAsk, yesBid, noAsk, noBid, updatedMs] (updatedMs = the market's updated_time).
+// [tickerSuffix, strike, yesAsk, yesBid, noAsk, noBid]. (Rows cached by 0.11/0.12 have a 7th field; it's ignored.)
 function compactEvent(event) {
   if (!event) return null;
   const rows = [];
@@ -503,7 +476,7 @@ function compactEvent(event) {
     if (strike === null || strike <= 0) continue;
     const suffix = String(m.ticker ?? '').slice(String(event.event_ticker).length + 1);
     if (!suffix) continue;
-    rows.push([suffix, strike, num(m.yes_ask_dollars), num(m.yes_bid_dollars), num(m.no_ask_dollars), num(m.no_bid_dollars), marketUpdatedMs(m)]);
+    rows.push([suffix, strike, num(m.yes_ask_dollars), num(m.yes_bid_dollars), num(m.no_ask_dollars), num(m.no_bid_dollars)]);
   }
   return { e: event.event_ticker, m: rows };
 }
@@ -522,12 +495,10 @@ export function compactFromEvents(spreadEvent, totalEvent) {
 }
 
 function expandRow(eventTicker, row) {
-  const [suffix, strike, yesAsk, yesBid, noAsk, noBid, updatedMs] = row;
+  const [suffix, strike, yesAsk, yesBid, noAsk, noBid] = row;
   return {
     ticker: `${eventTicker}-${suffix}`,
     status: 'active',
-    // A row cached before updated_time was kept has none, so a game in progress never uses it.
-    updated_time: Number.isFinite(updatedMs) ? new Date(updatedMs).toISOString() : null,
     floor_strike: strike,
     yes_ask_dollars: yesAsk,
     yes_bid_dollars: yesBid,
@@ -540,8 +511,7 @@ function expandRow(eventTicker, row) {
 // Every posted, tradable spread and total line for a game. Never computes a line Kalshi didn't post.
 // Spreads: team X at −N = YES on "X wins by over N"; X's opponent at +N = NO on that same market.
 // Totals: over = YES on "Over N", under = NO.
-// liveSince: the game's start (ms) when it is in progress, so a market not updated since then is left out.
-export function buildLadders(compact, sideByCode, liveSince = null) {
+export function buildLadders(compact, sideByCode) {
   const ladders = { spreads: { home: [], away: [] }, totals: [] };
   if (!compact) return ladders;
 
@@ -551,8 +521,8 @@ export function buildLadders(compact, sideByCode, liveSince = null) {
       const side = sideByCode?.[market.suffix.replace(/\d+$/, '')];
       if (side !== 'home' && side !== 'away') continue;
       const other = side === 'home' ? 'away' : 'home';
-      const fav = quoteFromMarket(market, 'yes', 'spread', liveSince);
-      const dog = quoteFromMarket(market, 'no', 'spread', liveSince);
+      const fav = quoteFromMarket(market, 'yes', 'spread');
+      const dog = quoteFromMarket(market, 'no', 'spread');
       if (fav) ladders.spreads[side].push(fav);
       if (dog) ladders.spreads[other].push(dog);
     }
@@ -563,8 +533,8 @@ export function buildLadders(compact, sideByCode, liveSince = null) {
     const byLine = new Map();
     for (const row of compact.t.m) {
       const market = expandRow(compact.t.e, row);
-      const over = quoteFromMarket(market, 'yes', 'total', liveSince);
-      const under = quoteFromMarket(market, 'no', 'total', liveSince);
+      const over = quoteFromMarket(market, 'yes', 'total');
+      const under = quoteFromMarket(market, 'no', 'total');
       if (!over && !under) continue;
       byLine.set(market.floor_strike, { line: market.floor_strike, over, under });
     }
