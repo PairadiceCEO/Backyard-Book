@@ -104,12 +104,15 @@ Battles in My Bets, admin Battles tab (disputed first) with edit log.
 - [x] B3 Custom board: buildCustomBoard / CUSTOM_BOARD_KEY in server/board.js; league boards ESPN only;
       /api/board?league=custom; gameDetail; GameCard gamePath → /sportsbook/custom/{id}; admin edits
       invalidate board_custom
-- [ ] B4 Tests test/battles/*.test.mjs (+ move the sportsbook server suites into test/sportsbook)
+- [x] B4 test/battles/battles.test.mjs (15 tests: payout math incl. ties/teams/rounding, validation, create/
+      accept/decline/cancel/expiry/result/dispute, admin result/payout/void, races, API). Mutation-checked (10
+      mutations, each caught). Sportsbook suites moved to test/sportsbook (84). fakeFirestore: where/get queries.
 - [ ] B5 Phones: Custom tab, New Battle, Battle detail, badge, My Bets, admin Battles tab
 - [ ] B6 Full suite, build, lint, phone check, merge, live test steps (incl. console rules step)
 
 ## Next
-B4: test/battles/battles.test.mjs (sportsbook suites already moved: test/sportsbook, npm run test:sportsbook, 84 pass).
+B5 phones: BattlesContext (one listener: battles array-contains my uid), Custom tab in LeagueTabs (+ badge),
+CustomBoard (Battles + custom games), /battles/new, /battles/:id, My Bets Battles, admin Battles tab.
 
 ## Open questions
 None.

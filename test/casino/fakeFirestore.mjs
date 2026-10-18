@@ -41,8 +41,32 @@ export function makeFakeDb() {
       async get() { await network(); await pause(); bump('reads', path); return snap(path); },
     };
   }
+  // Whole-collection reads and equality queries (direct children only), outside transactions.
+  function query(path, filter) {
+    return {
+      async get() {
+        await network();
+        await pause();
+        const docs = [...store.entries()]
+          .filter(([p, d]) => p.startsWith(`${path}/`) && !p.slice(path.length + 1).includes('/') && filter(d))
+          .map(([p, d]) => {
+            bump('reads', p);
+            return { id: p.split('/').pop(), exists: true, data: () => clone(d) };
+          });
+        return { docs, size: docs.length, empty: docs.length === 0, forEach: (fn) => docs.forEach(fn) };
+      },
+    };
+  }
   function collectionRef(path) {
-    return { path, doc: (id) => docRef(`${path}/${id}`) };
+    return {
+      path,
+      doc: (id) => docRef(`${path}/${id}`),
+      where: (field, op, value) => {
+        if (op !== '==') throw new Error(`fake Firestore: only == queries (${op})`);
+        return query(path, (d) => d?.[field] === value);
+      },
+      get: () => query(path, () => true).get(),
+    };
   }
   class AlreadyExists extends Error { constructor(p) { super(`ALREADY_EXISTS ${p}`); this.code = 6; } }
   const db = {
