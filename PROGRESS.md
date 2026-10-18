@@ -1,15 +1,12 @@
 # PROGRESS
 
-Read this first in every session: `git fetch`, check out `wip` if it is ahead of `main`, read this
-file, continue from "Next". `main` = finished, tested phases only (Vercel deploys it). Work in
-progress is pushed to `wip` after every commit. Casino history: `docs/CASINO_PROGRESS.md`.
-Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1).
+Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `wip` if it is ahead of
+`main`; continue from "Next". Casino history: `docs/CASINO_PROGRESS.md`.
+Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0).
 
 ## Batch (Will, 2026-10-17): casino seats + craps, Battles, Challenges
-Spec file: Will's attachment of 2026-10-17 14:17 ("Backyard Book — Next batch"). Three phases, each
-merged to main on its own: **A** casino changes (build now) · **B** Battles · **C** Challenges.
-B/C plan was sent to Will 2026-10-17 for approval — **do not code B before he approves it** (copy of the
-plan below under "B/C plan (sent)").
+Spec: Will's attachment "Backyard Book — Next batch". **A** casino (done, merged) · **B** Battles (now) ·
+**C** Challenges + section 6 admin odds edits. B/C plan APPROVED 2026-10-17 18:54 with changes (below).
 
 ## Phase A — casino seats, leaving, craps — COMPLETE (2026-10-17), merged to main, ready for Will to test
 
@@ -60,28 +57,67 @@ Spec summary:
 - [x] A5 Full suite (26 + 87 + 21 + scratchpad sportsbook suites), lint, build, interact.mjs (incl. leave-all),
       dealcheck.mjs, phone check 66 screens × 320/375/414 clean; merged wip → main (0.8.0)
 
+## Phase B — Battles — COMPLETE (2026-10-17), merged to main (0.9.0), ready for Will to test
+
+### Approved plan (B/C), with Will's changes
+Battles `battles/{id}`: title, description, creatorUid/Name, format 'ffa' | 'teams', teams [{id, name}],
+stakeCents, payoutBps [per place, sum 10000], participants [{uid, name, team, status: invited | accepted |
+declined, stakeSeq, notice}], **participantUids** (array; client query `array-contains` my uid is what the
+rules allow — Will's change 2), potCents, status pending → live → settled | cancelled | void, createdAt,
+expiresAt (+48 h), liveAt, result {places, enteredBy, enteredAt}, paid {uid: cents credited by payouts},
+disputes [{uid, name, note, at}], disputed, edits [{by, byName, at, what}], version.
+Challenges (Phase C) `challenges/{id}`: poster, title, description, 2–6 outcomes {id, label, american},
+closeTime, status pending → open → settled | rejected | void, winner, rejectNote, edits. **Posters CAN bet**
+(Will's change 1): same limits/pricing/close time, only after approval; the server sets `posterBet: true`
+on the bet when bet.uid === challenge.poster; "Poster's bet" tag in My Bets, Challenge detail, admin
+Challenges and Bets tabs; no automatic blocking; test: poster bets on own approved Challenge → accepted,
+posterBet true, graded normally.
+Rules: battles readable by isAdmin() or `request.auth.uid in resource.data.participantUids`; challenges by
+signed-in; no client writes. (Will must publish the new firestore.rules in the Firebase console.)
+API: new `/api/battles` (create, accept, decline, withdraw, keep, cancel, setResult, dispute; Phase C adds
+postChallenge) → 7 functions. Admin (`/api/admin`, preview + confirm with expectedVersion):
+battleSetResult, battleSetPayout, battleVoid; Phase C: challengeApprove/Reject/Edit/Settle/Void,
+customGameEditOdds. Challenge bets via /api/bets (gameId `challenge:{id}`, marketType `challenge`).
+Money: battle_stake (create/accept), battle_refund (decline → everyone, cancel, withdraw, 48 h expiry
+swept by settlement runs and lazily on any Battle action), battle_payout (ties split the places they cover;
+team share split evenly; floor to the cent; leftover cents to the highest-placed winner); admin fixes move
+only differences (admin_regrade; wallet may go negative, shown red). Battles never touch win rate / Shop.
+Screens: Sportsbook "Custom" sub-tab (custom games moved there from league tabs; Battles; Phase C
+Challenges), badge on the Sportsbook tab (invites + payout-change notices), New Battle, Battle detail,
+Battles in My Bets, admin Battles tab (disputed first) with edit log.
+
+### Decisions (Phase B)
+- Ledger ids: `bstake_{id}_{uid}_{seq}`, `brefund_{id}_{uid}_{seq}` (seq = that player's stake number, so
+  withdraw → re-accept works), `bpay_{id}_{uid}`, `regrade_battle_{id}_v{version}_{uid}`.
+- Withdraw (only offered after a payout change before live) refunds and puts the player back to "invited";
+  they may accept again under the new payout or decline (which cancels the Battle, refunding everyone).
+- Places: the creator gives each player (or team) a place number; equal numbers tie. Sorted, a tied group
+  covers the next k positions (so 1,1,2 and 1,1,3 both mean "two tied for 1st, then 3rd").
+- Payout places: free-for-all 1 … players − 1; teams 1 … teams − 1. Percent with up to 2 decimals (bps).
+- Stake: whole dollars $1–$10,000 (sanity cap). Accept refused if the wallet can't cover it.
+- Disputes: any participant, within 48 h of the result, with a note (1–300 chars), once each.
+
+### Checklist
+- [x] B1 shared/battles.js (validation, places → payouts, ties, leftover)
+- [x] B2 server/battles.js + api/battles.js (7th function) + admin battleSetResult/SetPayout/Void + expiry sweep
+      at the end of settleOpenBets + firestore.rules battles block
+- [x] B3 Custom board: buildCustomBoard / CUSTOM_BOARD_KEY in server/board.js; league boards ESPN only;
+      /api/board?league=custom; gameDetail; GameCard gamePath → /sportsbook/custom/{id}; admin edits
+      invalidate board_custom
+- [x] B4 test/battles/battles.test.mjs (15 tests: payout math incl. ties/teams/rounding, validation, create/
+      accept/decline/cancel/expiry/result/dispute, admin result/payout/void, races, API). Mutation-checked (10
+      mutations, each caught). Sportsbook suites moved to test/sportsbook (84). fakeFirestore: where/get queries.
+- [x] B5 Phones: BattlesContext (one listener), Custom tab (LeagueTabs + badge; CustomBoard), NewBattlePage,
+      BattleDetailPage (accept/decline/keep/withdraw/cancel/result/dispute, logs), BattleCard in My Bets, admin
+      Battles tab (filters, disputed first, result/payout/void previews via MoneyConfirmModal), nav badge.
+      Harness: battle fixtures + 11 scenarios; firestore mock supports array-contains.
+- [x] B6 Full suite (26 + 87 + 21 + 84 + 15), lint, build, interact.mjs, dealcheck.mjs, phone check 77 screens ×
+      320/375/414 clean; merged wip → main. Will must publish firestore.rules (battles block).
+
 ## Next
-Phase B (Battles) — BLOCKED until Will approves the B/C plan below (sent 2026-10-17). When he does: start
-from a fresh `wip` off main, follow the plan, then Phase C (Challenges + section 6 admin odds edits).
+Phase C — Challenges + section 6 (admin odds edits on custom games / Challenges / Battle payout, edit logs).
+Start from a fresh `wip` off main once Will has tested B (or when he says go). Plan is above (approved);
+remember Will's change 1: posters CAN bet, `posterBet: true` set by the server, "Poster's bet" tag.
 
 ## Open questions
-- Waiting for Will to approve the B/C plan.
-
-## B/C plan (sent 2026-10-17)
-Battles doc `battles/{id}` (title, description, creator, format ffa|teams, teams, stakeCents, payout bps by
-place, participants [{uid,name,team,status}], participantUids, status pending→live→settled|cancelled|void,
-expiresAt 48 h, result, paid-so-far per player, disputes, edit log, version). Challenges `challenges/{id}`
-(poster, title, description, 2–6 outcomes {id,label,american}, closeTime, status pending→open→settled|
-rejected|void, winner, reject note, edit log). customGames get an edit log. Rules: battles readable by
-participants + admin; challenges by everyone signed in; no client writes. New `/api/battles` (create,
-accept, decline, withdraw, cancel, setResult, dispute, postChallenge) → 7 functions. Admin actions:
-battleSetResult/SetPayout/Void, challengeApprove/Reject/Edit/Settle/Void, customGameEditOdds (preview +
-confirm). Challenge bets via /api/bets: gameId `challenge:{id}`, marketType `challenge`, selection =
-outcome id; priced fresh; close time server clock; poster can't bet; one leg per challenge; graded from
-admin's pick; count toward win rate; cash out stake×0.9 before close. Screens: Custom tab (custom games,
-Challenges, Battles), badge on Sportsbook tab, Battle detail, My Bets shows Battles, admin Battles +
-Challenges tabs, edit logs. Money: battle_stake (create/accept), battle_refund (decline/cancel/withdraw/
-48 h expiry swept when settlement runs), battle_payout (ties split covered places; team shares even;
-floor to cent; leftover to highest-placed winner), admin fixes move only differences (admin_regrade, wallet
-may go negative). Defaults: anyone can be invited; in-app notices only; accept refused without funds;
-only admin edits challenge odds.
+None.

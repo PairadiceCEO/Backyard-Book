@@ -9,7 +9,7 @@ const out = process.argv[2];
 const only = process.argv[3] ? new RegExp(process.argv[3]) : null;
 mkdirSync(out, { recursive: true });
 
-const fsDefault = { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames };
+const fsDefault = { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, battles: F.battles };
 const json = (route, status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
 async function routeApi(page, mode) {
@@ -20,6 +20,7 @@ async function routeApi(page, mode) {
     if (mode.apiDown) return json(route, 502, { error: { code: 'UPSTREAM_UNAVAILABLE', message: "ESPN didn't answer. Try again in a moment." } });
     if (u.pathname === '/api/board') {
       if (u.searchParams.get('game')) return json(route, 200, F.gameDetail(u.searchParams.get('game')));
+      if (u.searchParams.get('league') === 'custom') return json(route, 200, F.customBoard());
       return json(route, 200, F.board(u.searchParams.get('league')));
     }
     if (u.pathname === '/api/settle') return json(route, 200, body?.preview || body?.force ? F.settlePreview : { ran: false });
@@ -41,6 +42,8 @@ async function routeApi(page, mode) {
       return json(route, 200, { ok: true, duplicate: false, cashoutCents: body.expectedCents, balanceCents: 14287, bet: { id: body.betId } });
     }
     if (u.pathname === '/api/shop') return json(route, 200, { ok: true, balanceCents: 12140 });
+    if (u.pathname === '/api/battles') return json(route, 200, { ok: true, battleId: 'b-inv', balanceCents: 7640 });
+    if (u.pathname === '/api/admin' && /^battle/.test(body?.action ?? '')) return json(route, 200, F.battlePreview);
     if (u.pathname === '/api/admin') {
       if (body?.action === 'gradeBet' || body?.action === 'setLegResult') return json(route, 200, F.regradePreview);
       return json(route, 200, { ok: true, admin: true, username: 'will' });
@@ -159,6 +162,17 @@ const scenarios = [
   S('bac-two-seats-tab2', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(bacTwo), act: async (p) => { await p.getByRole('tab', { name: /Seat 4/ }).click(); await p.waitForTimeout(150); } }),
   S('cr-come-hard', '/casino/craps', { admin: false, user: 'u1', fs: withTable(crNew) }),
   S('cr-dont-odds', '/casino/craps', { admin: false, user: 'u1', fs: withTable(crDont) }),
+  S('sportsbook-custom', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: /^Custom/ }).click(); await p.waitForTimeout(400); } }),
+  S('battle-new', '/sportsbook/battles/new', { admin: false, user: 'u1', act: async (p) => { await p.getByLabel('Title').fill('Saturday golf'); await p.getByRole('button', { name: 'Dan' }).click(); await p.getByRole('button', { name: 'Ann' }).click(); await p.getByRole('button', { name: '70 / 30' }).click(); await p.waitForTimeout(150); } }),
+  S('battle-new-teams', '/sportsbook/battles/new', { admin: false, user: 'u1', act: async (p) => { await p.getByLabel('Title').fill('Cornhole'); await p.getByRole('radio', { name: 'Teams' }).click(); for (const n of ['Dan', 'Ann', 'Bo']) await p.getByRole('button', { name: n }).click(); await p.waitForTimeout(150); } }),
+  S('battle-new-confirm', '/sportsbook/battles/new', { admin: false, user: 'u1', act: async (p) => { await p.getByLabel('Title').fill('Saturday golf'); await p.getByRole('button', { name: 'Dan' }).click(); await p.getByRole('button', { name: 'Review and create' }).click(); await p.waitForTimeout(150); } }),
+  S('battle-invite', '/sportsbook/battles/b-inv', { admin: false, user: 'u1' }),
+  S('battle-payout-notice', '/sportsbook/battles/b-pc', { admin: false, user: 'u1' }),
+  S('battle-live-creator', '/sportsbook/battles/b-live', { admin: false, user: 'u1', act: async (p) => { await p.getByLabel('Place for Bag Tossers').selectOption('1'); await p.getByLabel('Place for Hole Hunters').selectOption('2'); await p.waitForTimeout(150); } }),
+  S('battle-settled', '/sportsbook/battles/b-done', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('button', { name: 'Dispute this result' }).click(); await p.waitForTimeout(150); } }),
+  S('battle-cancelled', '/sportsbook/battles/b-cx', { admin: false, user: 'u1' }),
+  S('admin-battles', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Battles' }).click(); await p.waitForTimeout(400); } }),
+  S('admin-battles-preview', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Battles' }).click(); await p.waitForTimeout(400); await p.getByRole('button', { name: 'Change result' }).first().click(); await p.getByRole('button', { name: 'Preview result' }).click(); await p.waitForTimeout(400); } }),
   S('admin-bets', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Bets' }).click(); await p.waitForTimeout(300); } }),
   S('admin-bets-cashed', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Bets' }).click(); await p.waitForTimeout(300); await p.locator('select').filter({ hasText: 'Cashed out' }).selectOption('cashed_out'); await p.waitForTimeout(200); } }),
   S('admin-bets-confirm', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Bets' }).click(); await p.waitForTimeout(300); await p.getByRole('button', { name: 'Force win' }).first().click(); await p.waitForTimeout(300); } }),
@@ -231,7 +245,7 @@ for (const sc of scenarios) {
     await page.waitForTimeout(250);
     const m = await measure(page);
     report[sc.name][width] = { ...m, errors };
-    if (width === 375) await page.screenshot({ path: `${out}/${sc.name}.png`, fullPage: !/slip|confirm/.test(sc.name) });
+    if (width === 375) await page.screenshot({ path: `${out}/${sc.name}.png`, fullPage: !/slip|confirm|preview/.test(sc.name) });
     await context.close();
   }
 }

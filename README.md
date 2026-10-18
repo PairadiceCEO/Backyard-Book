@@ -115,7 +115,17 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Bets:** pick a chip, tap a spot; "Take down" + tap takes a bet back (Pass / Don't Pass stay up once a Point is set). $1–$10 a bet, up to $10 a spot. Place bets work only while a Point is on and stay up after a win; Field is one roll.
 - **Shooter:** only the shooter can roll, and only with a line bet. Roll carries `rollSeq`, so a double tap rolls once and other players' bets never block it. The clock starts at the first bet after a come-out roll, or right after each roll while a Point is on; at zero the server rolls (or, on a come-out with no line bet, passes the dice). Seven-out: dice to the next seat clockwise.
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
-- **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Build notes: `docs/CASINO_PROGRESS.md`.
+- **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
+
+## Battles (batch B)
+
+- **One-time step:** Firebase console → Firestore Database → **Rules** → replace everything with the updated `firestore.rules` → **Publish**. It adds `battles` (readable by the admin and by each Battle's own players; nobody writes from a phone).
+- **Custom tab** on the Sportsbook (after the leagues): your Battles and the admin's custom games from every league (they moved off the league tabs). A red badge on the Sportsbook tab counts invites (and payout changes) waiting for you.
+- **New Battle:** title, description, free-for-all (you + 1–7) or teams (2–4 teams of 2–4, 8 max, you assign everyone), a whole-dollar stake, and the payout by place (percentages adding up to exactly 100%, at most one place fewer than players/teams). Your stake is taken when you create it.
+- **Joining:** each invited player accepts (stake taken, `battle_stake`) or declines (cancels it for everyone, `battle_refund`). It goes live when everyone has accepted; after 48 hours without that it's cancelled and refunded (checked whenever settlement runs or anyone opens it). The creator can cancel before it's live.
+- **Result:** the creator gives every player (or team) a place; equal places tie and split the places they cover; a team's share is split evenly. Pays out at once (`battle_payout`), rounded down to the cent with leftover cents to the top winner. Anyone in it can **Dispute** within 48 hours.
+- **Admin → Battles** (disputed first): change the result, change the payout, or void — each previewed with every wallet before → after (a wallet may go below $0, shown in red); only the differences move (`admin_regrade`). A payout change before it's live asks players who already accepted to keep their spot or withdraw (full refund).
+- Battles appear in My Bets, never count toward win rate, and never appear in Shop purchases.
 
 ## Casino seats and craps (batch A)
 

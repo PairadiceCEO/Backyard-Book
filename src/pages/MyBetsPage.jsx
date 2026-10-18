@@ -1,9 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import BattleCard from '../components/BattleCard.jsx';
 import BetCard from '../components/BetCard.jsx';
 import CashoutConfirmModal from '../components/CashoutConfirmModal.jsx';
 import { EmptyState, ErrorState, LoadingState } from '../components/StatusViews.jsx';
 import { useWalletDisplay } from '../context/WalletDisplayContext.jsx';
+import { useBattles } from '../context/BattlesContext.jsx';
+import { isFinished } from '../lib/battles.js';
 import { useCashoutQuotes } from '../hooks/useCashoutQuotes.js';
 import { useMyBets } from '../hooks/useMyBets.js';
 import { usePolling } from '../hooks/usePolling.js';
@@ -15,6 +18,10 @@ const SETTLE_CHECK_MS = 60 * 1000;
 
 export default function MyBetsPage() {
   const { bets, error, loading, retry } = useMyBets();
+  // Battles I'm in (the same live list as the Custom tab): open ones with Active, the rest with Finished.
+  const { battles, uid: myUid } = useBattles();
+  const activeBattles = battles.filter((b) => !isFinished(b));
+  const finishedBattles = battles.filter(isFinished);
   const { reportBalance } = useWalletDisplay();
 
   // On load and every minute while this page is visible, ask the server to settle finished games.
@@ -85,7 +92,7 @@ export default function MyBetsPage() {
     );
   }
 
-  if (bets.length === 0) {
+  if (bets.length === 0 && battles.length === 0) {
     return (
       <section className="page">
         <h2 className="section-title">My Bets</h2>
@@ -106,8 +113,8 @@ export default function MyBetsPage() {
 
   return (
     <section className="page">
-      <h2 className="section-title">Active ({active.length})</h2>
-      {active.length === 0 ? (
+      <h2 className="section-title">Active ({active.length + activeBattles.length})</h2>
+      {active.length === 0 && activeBattles.length === 0 ? (
         <EmptyState title="No active bets">Everything you've bet on has finished. Pick a price on the Sportsbook to start a slip.</EmptyState>
       ) : null}
       {cashedNote ? (
@@ -119,12 +126,21 @@ export default function MyBetsPage() {
         <BetCard key={bet.id} bet={bet} cashout={quotes[bet.id] ?? null} onCashOut={startCashout} />
       ))}
 
-      <h2 className="section-title">Finished ({finished.length})</h2>
-      {finished.length === 0 ? (
+      {activeBattles.length ? <h3 className="day-label">Battles</h3> : null}
+      {activeBattles.map((b) => (
+        <BattleCard key={b.id} battle={b} uid={myUid} />
+      ))}
+
+      <h2 className="section-title">Finished ({finished.length + finishedBattles.length})</h2>
+      {finished.length === 0 && finishedBattles.length === 0 ? (
         <EmptyState title="Nothing settled yet">Bets settle automatically once their games are final.</EmptyState>
       ) : null}
       {finished.map((bet) => (
         <BetCard key={bet.id} bet={bet} />
+      ))}
+      {finishedBattles.length ? <h3 className="day-label">Battles</h3> : null}
+      {finishedBattles.map((b) => (
+        <BattleCard key={b.id} battle={b} uid={myUid} />
       ))}
 
       {cashout ? (

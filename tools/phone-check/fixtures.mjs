@@ -109,6 +109,8 @@ export const users = [
   { id: 'u1', username: 'mike', displayName: 'Mike the Bookie Slayer', role: 'player', balanceCents: 9640, stats: { won: 5, lost: 7 }, disabled: false },
   { id: 'u2', username: 'dan', displayName: 'Dan', role: 'player', balanceCents: 123456789, stats: { won: 0, lost: 0 }, disabled: false },
   { id: 'u3', username: 'sam', displayName: 'Sam', role: 'player', balanceCents: 0, stats: { won: 1, lost: 0 }, disabled: true },
+  { id: 'u4', username: 'ann', displayName: 'Ann', role: 'player', balanceCents: 5000, stats: { won: 2, lost: 2 }, disabled: false },
+  { id: 'u5', username: 'bo', displayName: 'Bo', role: 'player', balanceCents: 7000, stats: { won: 1, lost: 3 }, disabled: false },
 ];
 
 export const ledger = [
@@ -141,4 +143,38 @@ export const settlePreview = {
     legs: [{ label: 'Eagles -2.5', gameLabel: 'Panthers @ Eagles', league: 'nfl', gameId: '403', americanOdds: -110, result: 'win', scoreText: 'Panthers 27 @ Eagles 30 · Final/OT', reason: '' }] }],
   staysOpen: [{ id: 'b6', uid: 'u2', username: 'dan', type: 'single', stakeCents: 500, status: 'open', payoutCents: 0, deltaCents: 0, droppedLegs: 0, review: 'Pending over 72 h — Ravens @ Browns: Not final yet (ESPN: Suspended)',
     legs: [{ label: 'Ravens ML', gameLabel: 'Ravens @ Browns', league: 'nfl', gameId: '402', americanOdds: -420, result: 'pending', scoreText: null, reason: 'Not final yet (ESPN: Suspended).' }] }],
+};
+
+// ---------- Custom board and Battles ----------
+export function customBoard() {
+  const games = nflGames.slice(0, 2).map((g, i) => ({ ...g, id: `custom:${['abc', 'def'][i]}`, source: 'custom', league: i ? 'mlb' : 'nfl', oddsProvider: 'Custom' }));
+  return { league: 'custom', fetchedAt: new Date().toISOString(), stale: false, partial: false, kalshiStatus: 'ok', games };
+}
+
+const part = (uid, name, status = 'accepted', extra = {}) => ({ uid, name, team: null, status, stakeSeq: status === 'accepted' ? 1 : 0, notice: null, acceptedAt: status === 'accepted' ? iso(now - 3 * H) : null, ...extra });
+const battleBase = (extra) => ({
+  title: 'Saturday golf, 9 holes', description: 'Lowest score wins. Winner buys the first round.', creatorUid: 'u0', creatorName: 'Will', format: 'ffa', teams: [],
+  stakeCents: 2000, potCents: 6000, payoutBps: [7000, 3000], status: 'pending', createdAt: iso(now - 5 * H), updatedAt: iso(now - H), expiresAt: iso(now + 43 * H),
+  liveAt: null, result: null, resultAt: null, credited: {}, disputes: [], disputed: false, edits: [], cancelReason: null, version: 2, ...extra,
+});
+export const battles = [
+  { id: 'b-inv', ...battleBase({ participants: [part('u0', 'Will'), part('u1', 'Mike the Bookie Slayer', 'invited'), part('u2', 'Dan')], participantUids: ['u0', 'u1', 'u2'] }) },
+  { id: 'b-pc', ...battleBase({ title: 'Darts to 501', createdAt: iso(now - 6 * H), stakeCents: 500, potCents: 1500, payoutBps: [10000], participants: [part('u2', 'Dan'), part('u1', 'Mike the Bookie Slayer', 'accepted', { notice: 'payoutChanged' }), part('u4', 'Ann', 'invited')], participantUids: ['u2', 'u1', 'u4'], creatorUid: 'u2', creatorName: 'Dan',
+    edits: [{ by: 'u0', byName: 'Will', at: iso(now - 2 * H), what: 'Payout changed: 70/30% → 100%' }] }) },
+  { id: 'b-live', ...battleBase({ title: 'Cornhole tournament', createdAt: iso(now - 20 * H), status: 'live', liveAt: iso(now - 18 * H), format: 'teams', creatorUid: 'u1', creatorName: 'Mike the Bookie Slayer', stakeCents: 1000, potCents: 4000, payoutBps: [10000],
+    teams: [{ id: 't1', name: 'Bag Tossers' }, { id: 't2', name: 'Hole Hunters' }],
+    participants: [part('u1', 'Mike the Bookie Slayer', 'accepted', { team: 't1' }), part('u4', 'Ann', 'accepted', { team: 't1' }), part('u2', 'Dan', 'accepted', { team: 't2' }), part('u5', 'Bo', 'accepted', { team: 't2' })], participantUids: ['u1', 'u4', 'u2', 'u5'] }) },
+  { id: 'b-done', ...battleBase({ title: 'Mario Kart 150cc', createdAt: iso(now - 30 * H), status: 'settled', liveAt: iso(now - 28 * H), resultAt: iso(now - 4 * H), stakeCents: 1000, potCents: 4000, payoutBps: [7000, 3000],
+    participants: [part('u0', 'Will'), part('u1', 'Mike the Bookie Slayer'), part('u2', 'Dan'), part('u4', 'Ann')], participantUids: ['u0', 'u1', 'u2', 'u4'],
+    result: { places: { u0: 2, u1: 1, u2: 3, u4: 4 }, enteredBy: 'u0', enteredAt: iso(now - 4 * H), by: 'creator' }, credited: { u0: 1200, u1: 2800, u2: 0, u4: 0 },
+    disputes: [{ uid: 'u2', name: 'Dan', note: 'Ann used a blue shell on the last lap after time was called.', at: iso(now - 3 * H), resolved: false }], disputed: true }) },
+  { id: 'b-cx', ...battleBase({ title: 'Ping pong', createdAt: iso(now - 50 * H), status: 'cancelled', cancelReason: 'Dan declined.', participants: [part('u1', 'Mike the Bookie Slayer', 'refunded'), part('u2', 'Dan', 'declined')], participantUids: ['u1', 'u2'], creatorUid: 'u1', creatorName: 'Mike the Bookie Slayer' }) },
+];
+export const battlePreview = {
+  preview: true, battleId: 'b-done', version: 2, title: 'Mario Kart 150cc', status: 'settled', toStatus: 'settled', describe: 'Result changed by the admin',
+  players: [
+    { uid: 'u0', name: 'Will', fromCents: 1200, toCents: 0, deltaCents: -1200, balanceBeforeCents: 500, balanceAfterCents: -700 },
+    { uid: 'u1', name: 'Mike the Bookie Slayer', fromCents: 2800, toCents: 2800, deltaCents: 0, balanceBeforeCents: 9640, balanceAfterCents: 9640 },
+    { uid: 'u2', name: 'Dan', fromCents: 0, toCents: 1200, deltaCents: 1200, balanceBeforeCents: 2000, balanceAfterCents: 3200 },
+  ],
 };

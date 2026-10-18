@@ -1,5 +1,5 @@
-// Admin home: Players, Bets (regrades, needs review), Custom games, Settlement (preview, settle now),
-// Shop purchases and a server access check.
+// Admin home: Players, Bets (regrades, needs review), Battles (disputes, result / payout / void),
+// Custom games, Settlement (preview, settle now), Shop purchases and a server access check.
 
 import { useState } from 'react';
 import { adminAction } from '../../lib/api.js';
@@ -8,10 +8,12 @@ import AdminShopHistory from './AdminShopHistory.jsx';
 import AdminSettlement from './AdminSettlement.jsx';
 import AdminBets from './AdminBets.jsx';
 import AdminCustomGames from './AdminCustomGames.jsx';
+import AdminBattles from './AdminBattles.jsx';
 
 const SECTIONS = [
   { id: 'players', label: 'Players' },
   { id: 'bets', label: 'Bets' },
+  { id: 'battles', label: 'Battles' },
   { id: 'custom', label: 'Custom games' },
   { id: 'settlement', label: 'Settlement' },
   { id: 'shop', label: 'Shop purchases' },
@@ -71,6 +73,7 @@ export default function AdminPage() {
       </div>
       {section === 'players' ? <AdminUsers /> : null}
       {section === 'bets' ? <AdminBets /> : null}
+      {section === 'battles' ? <AdminBattles /> : null}
       {section === 'custom' ? <AdminCustomGames /> : null}
       {section === 'shop' ? <AdminShopHistory /> : null}
       {section === 'settlement' ? <AdminSettlement /> : null}

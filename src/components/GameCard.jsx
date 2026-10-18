@@ -5,8 +5,10 @@ import { useNavigate } from 'react-router-dom';
 import PickButton from './PickButton.jsx';
 import { formatCentralClock, formatSpreadLine } from '../lib/format.js';
 
+// Custom games live on the Custom tab's board, so their page reads that board.
 export function gamePath(game) {
-  return `/sportsbook/${game.league}/${encodeURIComponent(game.id)}`;
+  const board = game.source === 'custom' ? 'custom' : game.league;
+  return `/sportsbook/${board}/${encodeURIComponent(game.id)}`;
 }
 
 function initials(team) {

@@ -8,6 +8,8 @@ import LoginPage from './pages/LoginPage.jsx';
 import SetupPage from './pages/SetupPage.jsx';
 import SportsbookPage from './pages/SportsbookPage.jsx';
 import GameDetailPage from './pages/GameDetailPage.jsx';
+import NewBattlePage from './pages/battles/NewBattlePage.jsx';
+import BattleDetailPage from './pages/battles/BattleDetailPage.jsx';
 import MyBetsPage from './pages/MyBetsPage.jsx';
 import LeaderboardPage from './pages/LeaderboardPage.jsx';
 import ShopPage from './pages/ShopPage.jsx';
@@ -37,6 +39,8 @@ export default function App() {
         }
       >
         <Route path="/sportsbook" element={<SportsbookPage />} />
+        <Route path="/sportsbook/battles/new" element={<NewBattlePage />} />
+        <Route path="/sportsbook/battles/:battleId" element={<BattleDetailPage />} />
         <Route path="/sportsbook/:league/:gameId" element={<GameDetailPage />} />
         <Route path="/casino" element={<CasinoLobby />} />
         <Route path="/casino/slots" element={<SlotsPage />} />

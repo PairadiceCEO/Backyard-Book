@@ -15,7 +15,7 @@ Vercel deploys the live site from `main`.
 - Keep `PROGRESS.md` current with every commit: current phase and task, what's done, what's in progress
   (with file names), what's next, open questions, decisions. A new session must be able to continue from it.
 - Push to `main` once per phase, as one merge of `wip`, only after all of these pass:
-  - the full test suite: `npm run test:all` (rules, casino engines, cash out) plus every other suite in `test/`
+  - the full test suite: `npm run test:all` (rules, casino engines, cash out, sportsbook server, Battles)
   - the production build (`npx vite build` with dummy `VITE_FIREBASE_*` env vars)
   - lint (`npx eslint src`)
   - the phone check at 320 / 375 / 414 px (`tools/phone-check/`: `shoot.mjs`, `interact.mjs`, `dealcheck.mjs`)
@@ -28,7 +28,8 @@ Vercel deploys the live site from `main`.
 - Sonnet for layout and small fixes.
 
 ## Stack and limits (everything on free tiers)
-- React + Vite on Vercel Hobby: at most 12 serverless functions in `/api`, cron jobs at most daily
+- React + Vite on Vercel Hobby: at most 12 serverless functions in `/api` (7 used: admin, battles, bets,
+  board, casino, settle, shop), cron jobs at most daily
   (`/api/settle` runs once a day; players' visits trigger the rest).
 - Firebase Auth + Firestore on the Spark plan (50k reads / 20k writes a day): keep reads and writes lean.
 - Data: ESPN (scores, DraftKings lines) and Kalshi (live prices) public APIs.
@@ -43,6 +44,8 @@ Vercel deploys the live site from `main`.
 - Every money change happens in one Firestore transaction with a deterministic ledger id (e.g.
   `stake_{betId}`, `payout_{betId}`, `cashout_{betId}`), written with `create()`, so a retry or
   double-tap can never pay twice.
+- `firestore.rules` is published by hand in the Firebase console: whenever it changes, the phase's test
+  steps must tell Will to publish it.
 - Firestore rules block clients from writing wallets, bets, ledger or results; all money moves through
   `/api` functions using the Admin SDK. `/api` verifies the Firebase ID token on every request; admin
   endpoints also check the admin role.
