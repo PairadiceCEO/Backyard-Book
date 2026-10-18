@@ -1,6 +1,7 @@
 // One game: the card with main lines, then every posted alternate spread and total (Kalshi).
 
 import { Link, useParams } from 'react-router-dom';
+import EditLog from '../components/EditLog.jsx';
 import GameCard from '../components/GameCard.jsx';
 import PickButton from '../components/PickButton.jsx';
 import UpdatedAgo from '../components/UpdatedAgo.jsx';
@@ -103,6 +104,7 @@ export default function GameDetailPage() {
           {!finished && game.source === 'custom' ? (
             <p className="muted small">House game: main lines only. Betting closes at the start time.</p>
           ) : null}
+          {game.source === 'custom' ? <EditLog edits={game.edits} /> : null}
 
           {!finished && game.source !== 'custom' ? (
             <>

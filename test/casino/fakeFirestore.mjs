@@ -39,16 +39,22 @@ export function makeFakeDb() {
       id: path.split('/').pop(),
       collection: (name) => collectionRef(`${path}/${name}`),
       async get() { await network(); await pause(); bump('reads', path); return snap(path); },
+      // Single writes outside a transaction.
+      async set(data, opts = {}) { await network(); write(path, opts.merge ? { ...(store.get(path) ?? {}), ...data } : data); bump('writes', path); },
+      async update(data) { await network(); if (!store.has(path)) throw new Error(`NOT_FOUND ${path}`); write(path, { ...store.get(path), ...data }); bump('writes', path); },
+      async delete() { await network(); write(path, undefined); bump('writes', path); },
     };
   }
   // Whole-collection reads and equality queries (direct children only), outside transactions.
-  function query(path, filter) {
+  function query(path, filter, max = Infinity) {
     return {
+      limit: (n) => query(path, filter, n),
       async get() {
         await network();
         await pause();
         const docs = [...store.entries()]
           .filter(([p, d]) => p.startsWith(`${path}/`) && !p.slice(path.length + 1).includes('/') && filter(d))
+          .slice(0, max)
           .map(([p, d]) => {
             bump('reads', p);
             return { id: p.split('/').pop(), exists: true, data: () => clone(d) };

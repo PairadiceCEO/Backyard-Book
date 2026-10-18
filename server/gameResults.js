@@ -4,7 +4,8 @@
 // between the same teams can't be confused. For each game we read the scoreboard for its Central Time
 // date; if the id isn't there (ESPN may date a late game differently) we read the day before and after;
 // if it's still missing, the single-game summary endpoint is the last resort. Each scoreboard is fetched
-// once per run and reused for every game on it. Custom games come from their customGames doc.
+// once per run and reused for every game on it. Custom games come from their customGames doc; Challenges
+// from their challenges doc (settled = the admin's winning outcome, void = every leg void).
 
 import { adminDb } from './firebaseAdmin.js';
 import { getLeague } from './leagues.js';
@@ -12,6 +13,8 @@ import { normalizeCustomGame } from './board.js';
 import { fetchEspnScoreboard, fetchEspnSummaryEvent, normalizeEspnEvent } from './sources/espn.js';
 import { centralYmd } from '../shared/time.js';
 import { resultFromCustomGame, resultFromEspnGame } from './grading.js';
+import { resultFromChallenge } from './challenges.js';
+import { CHALLENGE_PREFIX } from '../shared/challenges.js';
 
 export function gameKey(leg) {
   return `${leg.league}|${leg.gameId}`;
@@ -57,6 +60,22 @@ export async function loadGameResults(legs, { now = new Date(), fetchImpl = fetc
 
   const work = [];
   for (const [key, g] of games) {
+    // Challenges: straight from Firestore.
+    if (g.gameId.startsWith(CHALLENGE_PREFIX)) {
+      const docId = g.gameId.slice(CHALLENGE_PREFIX.length);
+      work.push(
+        db
+          .collection('challenges')
+          .doc(docId)
+          .get()
+          .then((snap) => results.set(key, resultFromChallenge(snap.exists ? snap.data() : null)))
+          .catch((err) => {
+            results.set(key, resultFromChallenge(null));
+            console.error(`settlement: Challenge ${g.gameId} failed:`, err.message);
+          }),
+      );
+      continue;
+    }
     // Custom games: straight from Firestore.
     if (g.gameId.startsWith('custom:')) {
       const docId = g.gameId.slice('custom:'.length);

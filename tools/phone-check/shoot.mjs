@@ -9,7 +9,7 @@ const out = process.argv[2];
 const only = process.argv[3] ? new RegExp(process.argv[3]) : null;
 mkdirSync(out, { recursive: true });
 
-const fsDefault = { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, battles: F.battles };
+const fsDefault = { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, battles: F.battles, challenges: F.challenges };
 const json = (route, status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
 async function routeApi(page, mode) {
@@ -42,7 +42,10 @@ async function routeApi(page, mode) {
       return json(route, 200, { ok: true, duplicate: false, cashoutCents: body.expectedCents, balanceCents: 14287, bet: { id: body.betId } });
     }
     if (u.pathname === '/api/shop') return json(route, 200, { ok: true, balanceCents: 12140 });
+    if (u.pathname === '/api/battles' && body?.action === 'postChallenge') return json(route, 200, { ok: true, challengeId: 'c-pend', duplicate: false });
     if (u.pathname === '/api/battles') return json(route, 200, { ok: true, battleId: 'b-inv', balanceCents: 7640 });
+    if (u.pathname === '/api/admin' && /^challenge(Settle|Void)$/.test(body?.action ?? '')) return json(route, 200, body.confirm ? { ok: true, settlement: { settled: 6, stillOpen: 1 } } : F.challengeSettlePreview);
+    if (u.pathname === '/api/admin' && /^challenge/.test(body?.action ?? '')) return json(route, 200, { ok: true, challengeId: body.challengeId });
     if (u.pathname === '/api/admin' && /^battle/.test(body?.action ?? '')) return json(route, 200, F.battlePreview);
     if (u.pathname === '/api/admin') {
       if (body?.action === 'gradeBet' || body?.action === 'setLegResult') return json(route, 200, F.regradePreview);
@@ -173,6 +176,22 @@ const scenarios = [
   S('battle-cancelled', '/sportsbook/battles/b-cx', { admin: false, user: 'u1' }),
   S('admin-battles', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Battles' }).click(); await p.waitForTimeout(400); } }),
   S('admin-battles-preview', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Battles' }).click(); await p.waitForTimeout(400); await p.getByRole('button', { name: 'Change result' }).first().click(); await p.getByRole('button', { name: 'Preview result' }).click(); await p.waitForTimeout(400); } }),
+  S('challenge-pick', '/sportsbook', { admin: false, user: 'u2', act: async (p) => { await p.getByRole('tab', { name: /^Custom/ }).click(); await p.waitForTimeout(400); await p.locator('.challenge-card .odds-button').first().click(); await openSlip(p); } }),
+  S('challenge-new', '/sportsbook/challenges/new', { admin: false, user: 'u1', act: async (p) => { await p.getByLabel('Question').fill('Will Mike run a 5K under 25 minutes?'); await p.getByLabel('Outcome 1 odds').fill('+150'); await p.getByLabel('Outcome 2 odds').fill('-180'); await p.getByRole('button', { name: 'Add an outcome' }).click(); await p.getByLabel('Outcome 3 name').fill('He doesn’t show up'); await p.getByLabel('Outcome 3 odds').fill('+900'); await p.waitForTimeout(150); } }),
+  S('challenge-new-empty', '/sportsbook/challenges/new', { admin: false, user: 'u1' }),
+  S('challenge-open', '/sportsbook/challenges/c-open', { admin: false, user: 'u2', act: async (p) => { await p.locator('.outcome-grid .odds-button').nth(1).click(); await p.waitForTimeout(150); } }),
+  S('challenge-pending', '/sportsbook/challenges/c-pend', { admin: false, user: 'u2' }),
+  S('challenge-closed', '/sportsbook/challenges/c-closed', { admin: false, user: 'u1' }),
+  S('challenge-settled', '/sportsbook/challenges/c-settled', { admin: false, user: 'u1' }),
+  S('challenge-rejected', '/sportsbook/challenges/c-rej', { admin: false, user: 'u1' }),
+  S('challenge-missing', '/sportsbook/challenges/nope', { admin: false, user: 'u1' }),
+  S('game-detail-custom', '/sportsbook/custom/custom:abc', { admin: false, user: 'u1' }),
+  S('admin-challenges', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Challenges' }).click(); await p.waitForTimeout(400); } }),
+  S('admin-challenges-edit', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Challenges' }).click(); await p.waitForTimeout(400); await p.getByRole('button', { name: 'Edit', exact: true }).first().click(); await p.getByLabel('Outcome 3 odds').fill('+400'); await p.waitForTimeout(150); } }),
+  S('admin-challenges-reject', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Challenges' }).click(); await p.waitForTimeout(400); await p.getByRole('button', { name: 'Reject', exact: true }).first().click(); await p.getByLabel(/Why it's rejected/).fill('Too hard to judge fairly.'); await p.waitForTimeout(150); } }),
+  S('admin-challenges-open', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Challenges' }).click(); await p.waitForTimeout(400); await p.getByRole('tab', { name: /^Open/ }).click(); await p.getByRole('button', { name: 'Edit odds / close' }).first().click(); await p.waitForTimeout(150); } }),
+  S('admin-challenges-settle-preview', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Challenges' }).click(); await p.waitForTimeout(400); await p.getByRole('tab', { name: /^To settle/ }).click(); await p.getByRole('button', { name: 'Settle', exact: true }).first().click(); await p.getByLabel('Winning outcome').selectOption('o2'); await p.getByRole('button', { name: 'Preview payouts' }).click(); await p.waitForTimeout(400); } }),
+  S('admin-challenges-finished', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Challenges' }).click(); await p.waitForTimeout(400); await p.getByRole('tab', { name: /^Finished/ }).click(); await p.waitForTimeout(150); } }),
   S('admin-bets', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Bets' }).click(); await p.waitForTimeout(300); } }),
   S('admin-bets-cashed', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Bets' }).click(); await p.waitForTimeout(300); await p.locator('select').filter({ hasText: 'Cashed out' }).selectOption('cashed_out'); await p.waitForTimeout(200); } }),
   S('admin-bets-confirm', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Bets' }).click(); await p.waitForTimeout(300); await p.getByRole('button', { name: 'Force win' }).first().click(); await p.waitForTimeout(300); } }),

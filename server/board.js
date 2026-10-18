@@ -149,6 +149,8 @@ export function normalizeCustomGame(id, data, now) {
     markets,
     oddsProvider: state === 'pre' ? 'Custom' : null,
     oddsNote,
+    // The admin's change log (who, what, when), shown on the game's page.
+    edits: (Array.isArray(data.edits) ? data.edits : []).map((e) => ({ byName: e.byName ?? 'Admin', what: e.what ?? '', at: toDate(e.at)?.toISOString() ?? null })),
   };
 }
 

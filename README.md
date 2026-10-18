@@ -117,6 +117,17 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
 
+## Challenges (batch C)
+
+- **One-time step:** Firebase console → Firestore Database → **Rules** → replace everything with the updated `firestore.rules` → **Publish**. It adds `challenges` (readable by anyone signed in; nobody writes from a phone).
+- **Post a Challenge** (Sportsbook → Custom → Challenges): a question, an optional description, 2–6 outcomes each with proposed American odds (+100 or more / −100 or less), and when betting closes (Central Time, 10 minutes to 60 days ahead). Everyone sees it at once as **Pending approval**; nobody can bet yet.
+- **Admin → Challenges → Queue:** Approve as posted, **Edit** the wording, outcomes, odds or close time and then approve (or save and keep it pending), or **Reject** with a note the poster sees. Once approved, betting opens.
+- **Betting:** tap an outcome to add it to the slip, like any price: singles or parlays, one outcome per Challenge in a parlay. Odds are priced from the Challenge on the server and locked on the bet. Betting closes at the close time on the server clock. Cash out before the close is stake × 0.90; after it, none.
+- **Poster's bets:** the poster may bet on their own Challenge (same limits, odds and close time; only after approval). The server tags those bets **Poster's bet** (My Bets, the Challenge page, Admin → Challenges and Admin → Bets), and the Challenge page lists them for everyone.
+- **Settling:** Admin → Challenges → **To settle** → Settle → pick the winning outcome → preview every wallet change → Confirm. Or **Void** (singles get their stake back, parlays drop the leg). Settlement then runs as normal; Challenge bets count toward win rate.
+- **Admin edits are logged** (who, what, when) and shown on the event: every Challenge change, every custom-game change (shown on the game's page and in Admin → Custom games), and Battle payout changes. Open Challenges' odds and close time can change at any time; the wording is fixed once betting opens. Placed bets always keep their odds.
+- **Tests:** `npm run test:challenges` (also in `npm run test:all`).
+
 ## Battles (batch B)
 
 - **One-time step:** Firebase console → Firestore Database → **Rules** → replace everything with the updated `firestore.rules` → **Publish**. It adds `battles` (readable by the admin and by each Battle's own players; nobody writes from a phone).

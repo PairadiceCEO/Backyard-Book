@@ -1,14 +1,17 @@
-// The Sportsbook's Custom tab: my Battles (invites first) with "New Battle", then the admin's custom
-// games from every league (bet on them like any game). Phase C adds Challenges here.
+// The Sportsbook's Custom tab: my Battles (invites first) with "New Battle"; Challenges (player-posted
+// lines, betting once the admin approves them) with "Post a Challenge"; then the admin's custom games from
+// every league (bet on them like any game).
 
 import { Link } from 'react-router-dom';
 import BattleCard from '../../components/BattleCard.jsx';
+import ChallengeCard from '../../components/ChallengeCard.jsx';
 import GameCard from '../../components/GameCard.jsx';
 import UpdatedAgo from '../../components/UpdatedAgo.jsx';
 import { EmptyState, ErrorState, LoadingState } from '../../components/StatusViews.jsx';
 import { useBattles } from '../../context/BattlesContext.jsx';
 import { battleNeedsMe, isFinished } from '../../lib/battles.js';
 import { groupByDay } from '../../lib/board.js';
+import { boardChallenges, sortForBoard, useChallenges, useNowMs } from '../../lib/challenges.js';
 
 const RECENT_FINISHED = 3;
 
@@ -18,6 +21,9 @@ export default function CustomBoard({ board }) {
   const open = battles.filter((b) => !isFinished(b) && !battleNeedsMe(b, uid));
   const finished = battles.filter(isFinished).slice(0, RECENT_FINISHED);
   const groups = board.games ? groupByDay(board.games) : [];
+  const { challenges: allChallenges, loading: challengesLoading, error: challengesError, retry: retryChallenges } = useChallenges();
+  const nowMs = useNowMs();
+  const challenges = sortForBoard(boardChallenges(allChallenges, uid, nowMs), nowMs);
 
   return (
     <>
@@ -46,6 +52,23 @@ export default function CustomBoard({ board }) {
           <p className="muted small">Every Battle you've been in is also in My Bets.</p>
         </>
       ) : null}
+
+      <div className="section-head">
+        <h2 className="section-title">Challenges</h2>
+        <Link to="/sportsbook/challenges/new" className="btn btn-primary">
+          Post a Challenge
+        </Link>
+      </div>
+      {challengesLoading ? <LoadingState label="Loading Challenges…" rows={1} /> : null}
+      {!challengesLoading && challengesError ? <ErrorState title="Couldn't load Challenges" message={challengesError} onRetry={retryChallenges} /> : null}
+      {!challengesLoading && !challengesError && challenges.length === 0 ? (
+        <EmptyState icon="🎯" title="No Challenges yet">
+          Post a line anyone can bet on (“Will Mike run a 5K under 25 minutes?”). It opens for betting once the admin approves it.
+        </EmptyState>
+      ) : null}
+      {challenges.map((c) => (
+        <ChallengeCard key={c.id} challenge={c} uid={uid} nowMs={nowMs} />
+      ))}
 
       <div className="section-head">
         <h2 className="section-title">Custom games</h2>

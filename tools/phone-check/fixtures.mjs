@@ -39,6 +39,7 @@ export const nflGames = [
   },
   {
     id: 'custom:abc', league: 'nfl', source: 'custom', startTime: iso(now + 26 * H), state: 'pre', statusText: '', canceled: false, bettingClosed: false,
+    edits: [{ byName: 'Will', at: iso(now - 30 * H), what: 'Created' }, { byName: 'Will', at: iso(now - 5 * H), what: 'Edited: Home ML -140 → -150; Away ML +120 → +130' }],
     home: team('BB', 'Backyard Bears', 'Backyard Bears'), away: team('LL', 'Lawn Lions', 'Lawn Lions'),
     markets: markets({
       moneyline: { home: q(-150, null, 'custom', { provider: 'Custom' }), away: q(130, null, 'custom', { provider: 'Custom' }) },
@@ -97,6 +98,8 @@ export const bets = [
       leg({ gameId: '403', marketType: 'moneyline', selection: 'home', label: 'Eagles ML', gameLabel: 'Panthers @ Eagles', americanOdds: -150 }),
       leg({ gameId: '402', marketType: 'spread', selection: 'away', line: 6.5, label: 'Ravens +6.5', gameLabel: 'Ravens @ Browns', americanOdds: 150 }),
     ] },
+  { id: 'b8', uid: 'u1', username: 'mike', type: 'single', status: 'open', stakeCents: 1800, potentialPayoutCents: 2800, payoutCents: 0, combinedAmerican: -180, placedAt: iso(now - 3 * H), version: 0, posterBet: true,
+    legs: [leg({ league: 'challenge', gameId: 'challenge:c-open', marketType: 'challenge', selection: 'o2', label: 'No', gameLabel: 'Will Mike run a 5K under 25 minutes?', americanOdds: -180, decimalOdds: 1.5556, source: 'challenge', startTime: iso(now + 5 * H) })] },
   { id: 'b5', uid: 'u2', username: 'dan', type: 'single', status: 'push', stakeCents: 2000, potentialPayoutCents: 3818, payoutCents: 2000, combinedAmerican: -110, placedAt: iso(now - 8 * H), settledAt: iso(now - 2 * H), version: 1,
     legs: [leg({ gameId: '403', marketType: 'spread', selection: 'home', line: -3, label: 'Eagles -3', gameLabel: 'Panthers @ Eagles', result: 'push', scoreText: 'Panthers 27 @ Eagles 30 · Final/OT' })] },
   { id: 'b6', uid: 'u2', username: 'dan', type: 'single', status: 'open', stakeCents: 500, potentialPayoutCents: 954, payoutCents: 0, combinedAmerican: -110, placedAt: iso(now - 90 * H), version: 0,
@@ -120,7 +123,7 @@ export const ledger = [
 ];
 
 export const customGames = [
-  { id: 'abc', league: 'nfl', status: 'scheduled', startTime: iso(now + 26 * H), betCount: 3, home: { name: 'Backyard Bears', abbr: 'BB', logoUrl: null }, away: { name: 'Lawn Lions', abbr: 'LL', logoUrl: null },
+  { id: 'abc', league: 'nfl', status: 'scheduled', startTime: iso(now + 26 * H), betCount: 3, edits: [{ by: 'u0', byName: 'Will', at: iso(now - 30 * H), what: 'Created' }, { by: 'u0', byName: 'Will', at: iso(now - 5 * H), what: 'Edited: Home ML -140 → -150; Away ML +120 → +130' }], home: { name: 'Backyard Bears', abbr: 'BB', logoUrl: null }, away: { name: 'Lawn Lions', abbr: 'LL', logoUrl: null },
     odds: { moneyline: { home: -150, away: 130 }, spread: { homeLine: -3.5, home: -110, away: -110 }, total: { line: null, over: null, under: null } } },
   { id: 'def', league: 'mlb', status: 'scheduled', startTime: iso(now - H), betCount: 0, home: { name: 'Patio Pumas', abbr: 'PP', logoUrl: null }, away: { name: 'Deck Ducks', abbr: 'DD', logoUrl: null },
     odds: { moneyline: { home: -120, away: 100 }, spread: { homeLine: null, home: null, away: null }, total: { line: 8.5, over: -110, under: -110 } } },
@@ -177,4 +180,36 @@ export const battlePreview = {
     { uid: 'u1', name: 'Mike the Bookie Slayer', fromCents: 2800, toCents: 2800, deltaCents: 0, balanceBeforeCents: 9640, balanceAfterCents: 9640 },
     { uid: 'u2', name: 'Dan', fromCents: 0, toCents: 1200, deltaCents: 1200, balanceBeforeCents: 2000, balanceAfterCents: 3200 },
   ],
+};
+
+// ---------- Challenges (Phase C) ----------
+const outcome = (id, label, american) => ({ id, label, american });
+const challengeBase = (extra) => ({
+  title: 'Will Mike run a 5K under 25 minutes?', description: 'Saturday park run, chip time. Mike says he’s been training.', posterUid: 'u1', posterName: 'Mike the Bookie Slayer',
+  status: 'open', winner: null, rejectNote: null, closeTime: iso(now + 5 * H), createdAt: iso(now - 6 * H), updatedAt: iso(now - 2 * H), approvedAt: iso(now - 4 * H), approvedBy: 'u0',
+  settledAt: null, settledBy: null, betCount: 4, posterBets: [], edits: [], version: 1,
+  outcomes: [outcome('o1', 'Yes', 150), outcome('o2', 'No', -180)], ...extra,
+});
+export const challenges = [
+  { id: 'c-open', ...challengeBase({
+    posterBets: [{ betId: 'b8', outcomeId: 'o2', label: 'No', americanOdds: -180, stakeCents: 1800, parlay: false, at: iso(now - 3 * H) }],
+    edits: [{ by: 'u0', byName: 'Will', at: iso(now - 4 * H), what: 'Approved with edits: Yes +170 → +150; No -200 → -180' }, { by: 'u0', byName: 'Will', at: iso(now - 2 * H), what: 'Edited: closes Oct 18, 9:00 AM → Oct 18, 7:00 PM' }] }) },
+  { id: 'c-pend', ...challengeBase({ title: 'How many wings can Dan eat in 10 minutes?', description: 'Medium sauce. Bones counted at the end.', posterUid: 'u2', posterName: 'Dan', status: 'pending', approvedAt: null, approvedBy: null, betCount: 0, createdAt: iso(now - H), version: 0,
+    outcomes: [outcome('o1', 'Under 30', -120), outcome('o2', '30 to 44', 200), outcome('o3', '45 or more (a new backyard record)', 450)] }) },
+  { id: 'c-closed', ...challengeBase({ title: 'Who wins the bake-off?', description: '', posterUid: 'u4', posterName: 'Ann', closeTime: iso(now - H), createdAt: iso(now - 30 * H), betCount: 7,
+    outcomes: [outcome('o1', 'Ann’s lemon tart', 120), outcome('o2', 'Bo’s brownies', 250), outcome('o3', 'Dan’s mystery pie', 600), outcome('o4', 'Nobody shows up', 2000)] }) },
+  { id: 'c-settled', ...challengeBase({ title: 'Will it rain on the cookout?', description: '', posterUid: 'u5', posterName: 'Bo', status: 'settled', winner: 'o1', closeTime: iso(now - 20 * H), settledAt: iso(now - 2 * H), createdAt: iso(now - 40 * H), betCount: 3,
+    edits: [{ by: 'u0', byName: 'Will', at: iso(now - 38 * H), what: 'Approved' }, { by: 'u0', byName: 'Will', at: iso(now - 2 * H), what: 'Settled: "Yes" won' }] }) },
+  { id: 'c-rej', ...challengeBase({ title: 'Will Sam quit his job on Monday?', description: '', status: 'rejected', rejectNote: 'Not about someone who isn’t in on it.', approvedAt: null, approvedBy: null, betCount: 0, createdAt: iso(now - 3 * H), updatedAt: iso(now - 2 * H),
+    edits: [{ by: 'u0', byName: 'Will', at: iso(now - 2 * H), what: 'Rejected: Not about someone who isn’t in on it.' }] }) },
+];
+export const challengeSettlePreview = {
+  preview: true, challengeId: 'c-closed', kind: 'settle', winner: 'o2', winnerLabel: 'Bo’s brownies', title: 'Who wins the bake-off?',
+  totals: { bets: 6, payoutCents: 8750, won: 2, lost: 4, push: 0, void: 0, needsReview: 0 },
+  walletChanges: [
+    { uid: 'u5', username: 'bo', deltaCents: 7000, bets: 1, balanceBeforeCents: 7000, balanceAfterCents: 14000 },
+    { uid: 'u1', username: 'mike', deltaCents: 1750, bets: 2, balanceBeforeCents: 9640, balanceAfterCents: 11390 },
+    { uid: 'u4', username: 'ann', deltaCents: 0, bets: 3, balanceBeforeCents: 5000, balanceAfterCents: 5000 },
+  ],
+  wouldSettle: [], staysOpen: [{ id: 'bx' }],
 };

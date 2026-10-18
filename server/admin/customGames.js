@@ -4,7 +4,8 @@
 //   { league, home: { name, abbr, logoUrl }, away: { … }, startTime: Timestamp,
 //     odds: { moneyline: { home, away }, spread: { homeLine, home, away }, total: { line, over, under } },
 //     status: 'scheduled' | 'final' | 'canceled', finalScore: { home, away } | null,
-//     betCount, createdAt, updatedAt, createdBy }
+//     betCount, createdAt, updatedAt, createdBy, edits: [{ by, byName, at, what }] }
+// Every admin change is appended to `edits` (who, what, when) and shown on the game.
 //
 // Betting closes at startTime on the server clock (pricing reads the doc fresh at placement), so moving the
 // start later reopens betting and moving it before now closes it at once. Bets keep the odds they were
@@ -24,6 +25,33 @@ import { centralWallTimeToDate } from '../../shared/time.js';
 import { parseAmerican } from '../../shared/oddsMath.js';
 
 const NAME_MAX = 30;
+const MAX_EDITS = 100;
+
+function editEntry(caller, what) {
+  return { by: caller?.uid ?? 'admin', byName: String(caller?.user?.displayName || caller?.user?.username || 'Admin').slice(0, 40), at: Timestamp.now(), what: String(what).slice(0, 400) };
+}
+
+const american = (n) => (n === null || n === undefined ? 'off' : n > 0 ? `+${n}` : String(n));
+const lineText = (n) => (n === null || n === undefined ? 'off' : n > 0 ? `+${n}` : String(n));
+
+// Every odds change in words: "Home ML -150 → -160; total 44.5 → 45.5".
+export function describeOddsChange(before, after) {
+  const b = before ?? {};
+  const a = after ?? {};
+  const parts = [];
+  const cmp = (label, x, y, fmt = american) => {
+    if ((x ?? null) !== (y ?? null)) parts.push(`${label} ${fmt(x)} → ${fmt(y)}`);
+  };
+  cmp('Home ML', b.moneyline?.home, a.moneyline?.home);
+  cmp('Away ML', b.moneyline?.away, a.moneyline?.away);
+  cmp('Spread (home line)', b.spread?.homeLine, a.spread?.homeLine, lineText);
+  cmp('Home spread price', b.spread?.home, a.spread?.home);
+  cmp('Away spread price', b.spread?.away, a.spread?.away);
+  cmp('Total', b.total?.line, a.total?.line, (n) => (n === null || n === undefined ? 'off' : String(n)));
+  cmp('Over price', b.total?.over, a.total?.over);
+  cmp('Under price', b.total?.under, a.total?.under);
+  return parts;
+}
 const ABBR_PATTERN = /^[A-Z0-9]{1,5}$/;
 const MAX_SCORE = 999;
 
@@ -142,13 +170,15 @@ export async function createCustomGame(body, caller) {
     createdAt: now,
     updatedAt: now,
     createdBy: caller.uid,
+    edits: [editEntry(caller, 'Created')],
   });
   await invalidateCache(CUSTOM_BOARD_KEY);
   return { ok: true, gameId: `custom:${ref.id}` };
 }
 
 // Edits anything on a game that hasn't finished. League can only change while it has no bets.
-export async function updateCustomGame(body) {
+// Bets already placed keep their odds; the change is logged on the game.
+export async function updateCustomGame(body, caller) {
   const docId = gameIdFrom(body);
   const db = adminDb();
   const ref = db.collection('customGames').doc(docId);
@@ -168,7 +198,16 @@ export async function updateCustomGame(body) {
     if (league !== game.league && (Number(game.betCount) || 0) > 0) {
       throw new HttpError(409, 'HAS_BETS', "Bets were placed on this game, so its league can't change.");
     }
-    tx.update(ref, { ...fields, league, updatedAt: Timestamp.now() });
+    const changes = describeOddsChange(game.odds, fields.odds);
+    const startBefore = game.startTime?.toMillis ? game.startTime.toMillis() : new Date(game.startTime).getTime();
+    if (startBefore !== fields.startTime.toMillis()) {
+      const fmt = (ms) => new Date(ms).toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      changes.push(`start ${fmt(startBefore)} → ${fmt(fields.startTime.toMillis())}`);
+    }
+    if (game.home?.name !== fields.home.name || game.away?.name !== fields.away.name) changes.push(`teams ${game.away?.name} @ ${game.home?.name} → ${fields.away.name} @ ${fields.home.name}`);
+    if (league !== game.league) changes.push(`league ${game.league} → ${league}`);
+    const edits = changes.length ? [...(game.edits ?? []), editEntry(caller, `Edited: ${changes.join('; ')}`)].slice(-MAX_EDITS) : game.edits ?? [];
+    tx.update(ref, { ...fields, league, edits, updatedAt: Timestamp.now() });
     return game;
   });
 
@@ -224,11 +263,13 @@ async function closeOut(body, caller, kind) {
     if (!snap.exists) throw new HttpError(404, 'GAME_NOT_FOUND', 'That custom game does not exist.');
     requireScheduled(snap.data());
     const now = Timestamp.now();
+    const what = kind === 'final' ? `Final score: ${game.away.name} ${scores.away} @ ${game.home.name} ${scores.home}` : 'Canceled (every bet on it is void)';
+    const edits = [...(snap.data().edits ?? []), editEntry(caller, what)].slice(-MAX_EDITS);
     tx.update(
       ref,
       kind === 'final'
-        ? { status: 'final', finalScore: scores, finishedAt: now, finishedBy: caller.uid, updatedAt: now }
-        : { status: 'canceled', finalScore: null, finishedAt: now, finishedBy: caller.uid, updatedAt: now },
+        ? { status: 'final', finalScore: scores, finishedAt: now, finishedBy: caller.uid, updatedAt: now, edits }
+        : { status: 'canceled', finalScore: null, finishedAt: now, finishedBy: caller.uid, updatedAt: now, edits },
     );
   });
   await invalidateCache(CUSTOM_BOARD_KEY);

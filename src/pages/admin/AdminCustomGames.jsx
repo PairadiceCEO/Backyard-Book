@@ -9,6 +9,7 @@ import { LEAGUES } from '../../../shared/constants.js';
 import { centralWallParts } from '../../../shared/time.js';
 import { formatAmerican, formatCentralDateTime, formatMoney, formatSpreadLine } from '../../lib/format.js';
 import MoneyConfirmModal from './MoneyConfirmModal.jsx';
+import EditLog from '../../components/EditLog.jsx';
 import { ErrorState, LoadingState } from '../../components/StatusViews.jsx';
 
 const LEAGUE_LABELS = Object.fromEntries(LEAGUES.map((l) => [l.id, l.label]));
@@ -373,6 +374,7 @@ function GameRow({ game, group, onEdit, onNotice }) {
         </div>
       </div>
       <div className="muted small">{oddsSummary(game)}</div>
+      <EditLog edits={game.edits} compact max={4} />
 
       {scheduled && scoring ? (
         <div className="score-entry">

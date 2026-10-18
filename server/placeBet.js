@@ -1,5 +1,8 @@
 // Places singles or a parlay: validate → re-price every leg at its source → one Firestore
 // transaction that checks the balance, creates the bet(s), subtracts the stake and writes the ledger.
+// Challenge legs: the transaction re-checks the Challenge is still open, counts the bet on it, and when
+// the bettor is the Challenge's poster, sets `posterBet: true` on the bet (decided here, never by the
+// browser) and lists the bet in the Challenge's public `posterBets`.
 
 import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from './firebaseAdmin.js';
@@ -13,12 +16,14 @@ import {
   isValidRequestId,
   isValidSelection,
   makeLegId,
+  marketHasLine,
   payoutCents,
   pickLabel,
   slipProblems,
   totalStakeCents,
 } from '../shared/betRules.js';
 import { roundDecimal } from '../shared/oddsMath.js';
+import { CHALLENGE_LEAGUE, CHALLENGE_MARKET, challengeDocId, isChallengeLeg } from '../shared/challenges.js';
 
 const KALSHI_TICKER_PATTERN = /^[A-Z0-9][A-Z0-9._-]{3,100}$/;
 
@@ -36,13 +41,16 @@ function parseRequest(body) {
   const legs = body.legs.map((raw, i) => {
     const leg = raw && typeof raw === 'object' ? raw : {};
     const league = String(leg.league ?? '').toLowerCase();
-    if (!getLeague(league)) throw bad(`Pick ${i + 1}: unknown league.`);
     const gameId = String(leg.gameId ?? '');
-    if (!gameId || gameId.length > 120) throw bad(`Pick ${i + 1}: missing game.`);
+    if (!gameId || gameId.length > 200) throw bad(`Pick ${i + 1}: missing game.`);
+    const challenge = league === CHALLENGE_LEAGUE || leg.marketType === CHALLENGE_MARKET || isChallengeLeg({ gameId });
+    if (challenge) {
+      if (league !== CHALLENGE_LEAGUE || leg.marketType !== CHALLENGE_MARKET || !isChallengeLeg({ gameId })) throw bad(`Pick ${i + 1}: invalid Challenge pick.`);
+    } else if (!getLeague(league)) throw bad(`Pick ${i + 1}: unknown league.`);
     if (!isValidSelection(leg.marketType, leg.selection)) throw bad(`Pick ${i + 1}: invalid market.`);
     const line = leg.line === null || leg.line === undefined ? null : Number(leg.line);
     if (line !== null && !Number.isFinite(line)) throw bad(`Pick ${i + 1}: invalid line.`);
-    if (leg.marketType !== 'moneyline' && line === null) throw bad(`Pick ${i + 1}: missing line.`);
+    if (marketHasLine(leg.marketType) && line === null) throw bad(`Pick ${i + 1}: missing line.`);
     const quotedAmerican = Number(leg.quotedAmerican);
     if (!Number.isInteger(quotedAmerican)) throw bad(`Pick ${i + 1}: missing price.`);
     const stakeCents = leg.stakeCents === undefined ? undefined : Number(leg.stakeCents);
@@ -67,7 +75,7 @@ function parseRequest(body) {
       gameId,
       marketType: leg.marketType,
       selection: leg.selection,
-      line: leg.marketType === 'moneyline' ? null : line,
+      line: marketHasLine(leg.marketType) ? line : null,
       quotedAmerican,
       stakeCents,
       kalshiTicker,
@@ -101,13 +109,31 @@ async function loadExisting(db, ids, uid) {
 
 function storedLeg(request, priced) {
   const { quote, game } = priced;
+  if (game.kind === 'challenge') {
+    return {
+      legId: makeLegId({ league: request.league, gameId: request.gameId, marketType: request.marketType, selection: request.selection, source: quote.source }),
+      league: request.league,
+      gameId: request.gameId,
+      gameLabel: game.title,
+      startTime: game.startTime,
+      marketType: request.marketType,
+      selection: request.selection,
+      label: pickLabel({ marketType: request.marketType, selection: request.selection, outcomeLabel: game.outcomeLabel }),
+      line: null,
+      americanOdds: quote.american,
+      decimalOdds: quote.decimal,
+      source: quote.source,
+      sourceRef: quote.ref ?? null,
+      result: 'pending',
+    };
+  }
   return {
     legId: makeLegId({
       league: request.league,
       gameId: request.gameId,
       marketType: request.marketType,
       selection: request.selection,
-      line: request.marketType === 'moneyline' ? null : quote.line,
+      line: marketHasLine(request.marketType) ? quote.line : null,
       source: quote.source,
     }),
     league: request.league,
@@ -123,7 +149,7 @@ function storedLeg(request, priced) {
       homeName: game.home.shortName,
       awayName: game.away.shortName,
     }),
-    line: request.marketType === 'moneyline' ? null : quote.line,
+    line: marketHasLine(request.marketType) ? quote.line : null,
     americanOdds: quote.american,
     decimalOdds: quote.decimal,
     source: quote.source,
@@ -196,7 +222,11 @@ export async function placeBets(caller, body, { now = new Date(), fetchImpl = fe
     requestId: request.requestId,
   };
 
-  const bets =
+  // Challenges this player posted: their bets on them are flagged by the server.
+  const postedByMe = new Set(results.filter((r) => r.game?.kind === 'challenge' && r.game.posterUid === caller.uid).map((r) => r.game.id));
+  const isPosterLeg = (leg) => isChallengeLeg(leg) && postedByMe.has(String(leg.gameId));
+
+  const bets = (
     request.mode === 'parlay'
       ? [(() => {
           const decimal = roundDecimal(combinedDecimal(legsOut.map((l) => l.decimalOdds)));
@@ -218,7 +248,8 @@ export async function placeBets(caller, body, { now = new Date(), fetchImpl = fe
           combinedDecimal: leg.decimalOdds,
           combinedAmerican: leg.americanOdds,
           potentialPayoutCents: payoutCents(request.legs[i].stakeCents, leg.decimalOdds),
-        }));
+        }))
+  ).map((bet) => (bet.legs.some(isPosterLeg) ? { ...bet, posterBet: true } : bet));
 
   const total = totalStakeCents({ mode: request.mode, legs: request.legs, stakeCents: request.stakeCents });
   const userRef = db.collection('users').doc(caller.uid);
@@ -232,12 +263,36 @@ export async function placeBets(caller, body, { now = new Date(), fetchImpl = fe
   }
   const customRefs = [...customBetCounts.keys()].map((docId) => db.collection('customGames').doc(docId));
 
+  // Challenges count their bets too, and list the poster's own bets publicly.
+  const challengeBets = new Map(); // challenges doc id → [{ bet, index }]
+  bets.forEach((bet, i) => {
+    const docIds = new Set(bet.legs.filter(isChallengeLeg).map((l) => challengeDocId(l.gameId)));
+    for (const docId of docIds) challengeBets.set(docId, [...(challengeBets.get(docId) ?? []), { bet, index: i }]);
+  });
+  const challengeIds = [...challengeBets.keys()];
+  const challengeRefs = challengeIds.map((docId) => db.collection('challenges').doc(docId));
+
   const outcome = await db.runTransaction(async (tx) => {
-    const [userSnap, firstBetSnap, ...customSnaps] = await Promise.all([tx.get(userRef), tx.get(betRefs[0]), ...customRefs.map((r) => tx.get(r))]);
+    const [userSnap, firstBetSnap, ...docSnaps] = await Promise.all([
+      tx.get(userRef),
+      tx.get(betRefs[0]),
+      ...customRefs.map((r) => tx.get(r)),
+      ...challengeRefs.map((r) => tx.get(r)),
+    ]);
+    const customSnaps = docSnaps.slice(0, customRefs.length);
+    const challengeSnaps = docSnaps.slice(customRefs.length);
     if (firstBetSnap.exists) return { duplicate: true };
     if (!userSnap.exists) throw new HttpError(403, 'NO_PROFILE', 'No player profile exists for this login.');
     if (customSnaps.some((s) => !s.exists)) {
       throw new HttpError(409, 'MARKET_CLOSED', 'A custom game on this slip was just removed.', { closedLegs: [], lineChanges: [] });
+    }
+    // Re-checked inside the transaction: settled, voided or closed since it was priced → refused.
+    for (const snap of challengeSnaps) {
+      const c = snap.exists ? snap.data() : null;
+      const closeMs = c?.closeTime?.toMillis ? c.closeTime.toMillis() : new Date(c?.closeTime ?? 0).getTime();
+      if (!c || c.status !== 'open' || now.getTime() >= closeMs) {
+        throw new HttpError(409, 'MARKET_CLOSED', 'A Challenge on this slip just closed.', { closedLegs: [], lineChanges: [] });
+      }
     }
 
     const balance = Number(userSnap.data().balanceCents) || 0;
@@ -264,6 +319,19 @@ export async function placeBets(caller, body, { now = new Date(), fetchImpl = fe
     customRefs.forEach((ref, i) => {
       const count = Number(customSnaps[i].data().betCount) || 0;
       tx.update(ref, { betCount: count + customBetCounts.get(ref.id ?? ref.path.split('/').pop()) });
+    });
+    challengeRefs.forEach((ref, i) => {
+      const c = challengeSnaps[i].data();
+      const placed = challengeBets.get(challengeIds[i]);
+      const update = { betCount: (Number(c.betCount) || 0) + placed.length };
+      if (c.posterUid === caller.uid) {
+        const mine = placed.map(({ bet, index }) => {
+          const leg = bet.legs.find((l) => isChallengeLeg(l) && challengeDocId(l.gameId) === challengeIds[i]);
+          return { betId: ids[index], outcomeId: leg.selection, label: leg.label, americanOdds: leg.americanOdds, stakeCents: bet.stakeCents, parlay: bet.type === 'parlay', at: placedAt };
+        });
+        update.posterBets = [...(c.posterBets ?? []), ...mine].slice(-100);
+      }
+      tx.update(ref, update);
     });
     return { duplicate: false, balanceCents: running };
   });

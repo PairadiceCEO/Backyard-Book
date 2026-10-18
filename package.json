@@ -1,7 +1,7 @@
 {
   "name": "backyard-book",
   "private": true,
-  "version": "0.9.0",
+  "version": "0.10.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,9 +10,10 @@
     "test": "node --test test/*.test.js",
     "test:casino": "node --experimental-test-module-mocks --test test/casino/*.test.mjs",
     "test:cashout": "node --experimental-test-module-mocks --test test/cashout/*.test.mjs",
-    "test:all": "npm test && npm run test:casino && npm run test:cashout && npm run test:sportsbook && npm run test:battles",
+    "test:all": "npm test && npm run test:casino && npm run test:cashout && npm run test:sportsbook && npm run test:battles && npm run test:challenges",
     "test:sportsbook": "node --experimental-test-module-mocks --test test/sportsbook/*.test.mjs",
-    "test:battles": "node --experimental-test-module-mocks --test test/battles/*.test.mjs"
+    "test:battles": "node --experimental-test-module-mocks --test test/battles/*.test.mjs",
+    "test:challenges": "node --experimental-test-module-mocks --test test/challenges/*.test.mjs"
   },
   "dependencies": {
     "firebase": "^10.14.1",

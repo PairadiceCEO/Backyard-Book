@@ -24,6 +24,8 @@ import { decideBet, gradeLeg, resultFromCustomGame, resultFromEspnGame } from '.
 import { fetchLeagueGames } from './sources/espn.js';
 import { fetchEvent, fetchMarket, mappedEventTicker } from './sources/kalshi.js';
 import { combinedDecimal, payoutCents } from '../shared/betRules.js';
+import { challengeDocId, isChallengeLeg } from '../shared/challenges.js';
+import { resultFromChallenge } from './challenges.js';
 
 export const CASHOUT_NUMERATOR = 9n; // 0.90 = 9 / 10
 export const CASHOUT_DENOMINATOR = 10n;
@@ -202,6 +204,21 @@ async function legGameState(leg, ctx) {
   }
 
   const gameId = String(leg.gameId);
+  // A Challenge: before its close time it's "pre-game"; after that there's no market price, so no cash out
+  // until the admin settles it.
+  if (isChallengeLeg(leg)) {
+    const data = await ctx.challenge(challengeDocId(gameId));
+    if (!data) return { grade: 'pending', started: false, blocked: 'This Challenge no longer exists.', custom: true, challenge: true };
+    const result = resultFromChallenge(data);
+    if (result.status === 'void') return { grade: 'void', started: false, blocked: null, custom: true, challenge: true };
+    if (result.status === 'final') {
+      const grade = graded(leg, result);
+      return { grade, started: true, blocked: null, custom: true, challenge: true };
+    }
+    const closeMs = toMs(data.closeTime);
+    const started = data.status !== 'open' || closeMs === null || ctx.now.getTime() >= closeMs;
+    return { grade: 'pending', started, blocked: null, custom: true, challenge: true };
+  }
   if (gameId.startsWith('custom:')) {
     const docId = gameId.slice('custom:'.length);
     const data = await ctx.customGame(docId);
@@ -236,6 +253,9 @@ async function legGameState(leg, ctx) {
 
 // Kalshi bid for an undecided leg: { bid, noBid }.
 async function legBid(leg, state, ctx) {
+  if (state.challenge) {
+    return { bid: null, noBid: state.started ? 'Cash out closes when the Challenge closes.' : 'No live price for a Challenge in this bet.' };
+  }
   if (state.custom) {
     return { bid: null, noBid: state.started ? 'Cash out closes once a custom game starts.' : 'No live price for a custom game in this bet.' };
   }
@@ -356,6 +376,12 @@ export function createCashoutContext({ now = new Date(), fetchImpl = fetch, fres
     customGame(docId) {
       return once(`custom:${docId}`, async () => {
         const snap = await database().collection('customGames').doc(docId).get();
+        return snap.exists ? snap.data() : null;
+      });
+    },
+    challenge(docId) {
+      return once(`challenge:${docId}`, async () => {
+        const snap = await database().collection('challenges').doc(docId).get();
         return snap.exists ? snap.data() : null;
       });
     },

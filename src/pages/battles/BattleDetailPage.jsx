@@ -10,6 +10,7 @@ import { db } from '../../firebase.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useWalletDisplay } from '../../context/WalletDisplayContext.jsx';
 import { ErrorState, LoadingState, friendlyError } from '../../components/StatusViews.jsx';
+import EditLog from '../../components/EditLog.jsx';
 import { PARTICIPANT_STATUS, battleAction, isExpired, myPart, timeLeft, toMs } from '../../lib/battles.js';
 import { formatCentralDateTime, formatMoney } from '../../lib/format.js';
 import {
@@ -358,22 +359,7 @@ export default function BattleDetailPage() {
         </div>
       ) : null}
 
-      {(battle.edits ?? []).length ? (
-        <div className="card">
-          <h3 className="small-heading">Admin changes</h3>
-          <ul className="battle-log">
-            {battle.edits.map((e, i) => (
-              <li key={i}>
-                {e.what}
-                <span className="muted small">
-                  {' '}
-                  · {e.byName} · {formatCentralDateTime(new Date(toMs(e.at) ?? 0))}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      <EditLog edits={battle.edits} />
     </section>
   );
 }

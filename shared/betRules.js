@@ -6,19 +6,27 @@ import { decimalToAmerican } from './oddsMath.js';
 export const MIN_STAKE_CENTS = 100; // $1.00
 export const MAX_LEGS = 10;
 export const MIN_PARLAY_LEGS = 2;
-export const MARKET_TYPES = ['moneyline', 'spread', 'total'];
+// 'challenge' = a player-posted Challenge (selection = one of its outcome ids, no line).
+export const MARKET_TYPES = ['moneyline', 'spread', 'total', 'challenge'];
 
 const SELECTIONS = {
   moneyline: ['home', 'away'],
   spread: ['home', 'away'],
   total: ['over', 'under'],
+  challenge: ['o1', 'o2', 'o3', 'o4', 'o5', 'o6'],
 };
+
+// Spread and total picks carry a line; moneyline and Challenge picks don't.
+export function marketHasLine(marketType) {
+  return marketType === 'spread' || marketType === 'total';
+}
 
 export function isValidSelection(marketType, selection) {
   return Array.isArray(SELECTIONS[marketType]) && SELECTIONS[marketType].includes(selection);
 }
 
-// One leg per game + market type: blocks both moneylines, both spread sides, over + under.
+// One leg per game + market type: blocks both moneylines, both spread sides, over + under, and two
+// outcomes of the same Challenge.
 export function conflictKey(leg) {
   return `${leg.gameId}|${leg.marketType}`;
 }
@@ -27,7 +35,7 @@ export function conflictKey(leg) {
 // each alternate line (or the same number from a different source) are separate picks.
 export function makeLegId({ league, gameId, marketType, selection, line = null, source = '' }) {
   const base = `${league}:${gameId}:${marketType}:${selection}`;
-  if (marketType === 'moneyline') return source ? `${base}:${source}` : base;
+  if (!marketHasLine(marketType)) return source ? `${base}:${source}` : base;
   return `${base}:${line}${source ? `:${source}` : ''}`;
 }
 
@@ -124,8 +132,10 @@ export function formatSignedLine(line) {
   return line > 0 ? `+${line}` : String(line);
 }
 
-// Human label for a pick, e.g. "Jaguars -2.5", "Over 42.5", "Texans moneyline".
-export function pickLabel({ marketType, selection, line, homeName, awayName }) {
+// Human label for a pick, e.g. "Jaguars -2.5", "Over 42.5", "Texans moneyline". A Challenge pick is its
+// outcome's name (outcomeLabel).
+export function pickLabel({ marketType, selection, line, homeName, awayName, outcomeLabel = '' }) {
+  if (marketType === 'challenge') return outcomeLabel || selection;
   if (marketType === 'total') return `${selection === 'over' ? 'Over' : 'Under'} ${line}`;
   const team = selection === 'home' ? homeName : awayName;
   if (marketType === 'spread') return `${team} ${formatSignedLine(line)}`;

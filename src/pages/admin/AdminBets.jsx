@@ -75,6 +75,7 @@ function AdminBetCard({ bet, flagged, busy, onAction }) {
       <header className="bet-card-head">
         <strong>
           {bet.username} · {bet.type === 'parlay' ? `Parlay · ${bet.legs.length} legs` : 'Single'}
+          {bet.posterBet ? <span className="tag tag-poster">Poster's bet</span> : null}
         </strong>
         <span className={`bet-status status-${bet.status}`}>{STATUS_LABELS[bet.status] ?? bet.status}</span>
       </header>
