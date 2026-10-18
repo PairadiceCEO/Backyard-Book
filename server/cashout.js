@@ -3,6 +3,7 @@
 // Value (cents, always rounded DOWN):
 //   pre-game (no leg's game has started) → stake × 0.90
 //   live     (any leg's game has started) → potential payout × P × 0.90
+//   never    a bet with any custom-game, Challenge or crypto leg (shared/betRules.js cashoutEligible)
 //     potential payout = stake × product of the decimals of every leg that hasn't pushed/voided
 //     P = product of the Kalshi BID of every undecided leg (won legs count as 1)
 // Unavailable when a leg lost, when every leg is decided (settlement pays it), when a leg's game
@@ -25,7 +26,7 @@ import { gameKey, loadGameResults } from './gameResults.js';
 import { decideBet, gradeLeg, resultFromCustomGame, resultFromEspnGame } from './grading.js';
 import { fetchLeagueGames } from './sources/espn.js';
 import { fetchEvent, fetchMarket, freshForLive, liveSinceMs, mappedEventTicker } from './sources/kalshi.js';
-import { combinedDecimal, payoutCents } from '../shared/betRules.js';
+import { NO_CASHOUT_REASON, cashoutEligible, combinedDecimal, payoutCents } from '../shared/betRules.js';
 import { challengeDocId, isChallengeLeg } from '../shared/challenges.js';
 import { resultFromChallenge } from './challenges.js';
 
@@ -288,8 +289,10 @@ async function legBid(leg, state, ctx) {
 }
 
 // Full quote for a stored bet. ctx: see createCashoutContext.
+// A bet with a custom-game, Challenge or crypto leg is never cashable: refused before anything is fetched.
 export async function quoteCashout(bet, ctx) {
   if (!bet || bet.status !== 'open') return unavailable('This bet is no longer open.');
+  if (!cashoutEligible(bet)) return unavailable(NO_CASHOUT_REASON);
   const legs = Array.isArray(bet.legs) ? bet.legs : [];
   let states;
   try {
@@ -480,6 +483,8 @@ export async function cashOutBet(caller, body, { now = new Date(), fetchImpl = f
   const bet = betSnap.data();
   if (bet.status === 'cashed_out') return alreadyDone(bet);
   if (bet.status !== 'open') throw new HttpError(409, 'CASHOUT_UNAVAILABLE', 'This bet has already been settled.', { reason: 'This bet has already been settled.' });
+  // Custom-game, Challenge and crypto legs: never, and nothing is fetched to say so.
+  if (!cashoutEligible(bet)) throw new HttpError(409, 'CASHOUT_UNAVAILABLE', NO_CASHOUT_REASON, { reason: NO_CASHOUT_REASON });
 
   // Fresh prices, never the board cache.
   const quote = await quoteCashout(bet, makeContext({ now, fetchImpl, fresh: true, db }));

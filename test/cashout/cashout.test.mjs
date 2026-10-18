@@ -24,7 +24,7 @@ const cashout = await import(url('server/cashout.js'));
 const { settleBet } = await import(url('server/settlement.js'));
 const adminBets = await import(url('server/admin/bets.js'));
 const { normalizeEspnEvent } = await import(url('server/sources/espn.js'));
-const { combinedDecimal, payoutCents } = await import(url('shared/betRules.js'));
+const { NO_CASHOUT_REASON, combinedDecimal, payoutCents } = await import(url('shared/betRules.js'));
 const { groupShopPurchases } = await import(url('src/lib/shopHistory.js'));
 const betsHandler = (await import(url('api/bets.js'))).default;
 
@@ -401,22 +401,25 @@ test('a lost leg → unavailable; a bet whose games are all final → unavailabl
   assert.equal(balance(), 5000);
 });
 
-test('custom games: pre-game cash out works; once the custom game starts, no cash out', async () => {
+test('custom games (0.11.0): never cashed out, before or after the start, single or parlay; nothing is fetched', async () => {
   fake.write('customGames/c1', { league: 'nfl', startTime: '2026-10-18T22:00:00.000Z', status: 'scheduled', home: { name: 'Hawks' }, away: { name: 'Owls' } });
   fake.write('customGames/c2', { league: 'nfl', startTime: '2026-10-18T17:30:00.000Z', status: 'scheduled', home: { name: 'Bears' }, away: { name: 'Cats' } });
   putBet('c1', [leg('custom:c1', 'moneyline', 'home', null, 1.9, { source: 'custom', sourceRef: { provider: 'Custom' }, startTime: '2026-10-18T22:00:00.000Z' })]);
-  assert.deepEqual(await quote('c1'), { available: true, valueCents: 900, mode: 'pregame' });
-
   putBet('c2', [leg('custom:c2', 'moneyline', 'home', null, 1.9, { source: 'custom', sourceRef: { provider: 'Custom' }, startTime: '2026-10-18T17:30:00.000Z' })]);
-  assert.deepEqual(await quote('c2'), { available: false, valueCents: null, reason: 'Cash out closes once a custom game starts.' });
-
-  // A not-started custom leg inside a live parlay has no Kalshi price → unavailable
+  // A not-started custom leg inside a live parlay with a real game.
   putBet('c3', [leg('custom:c1', 'moneyline', 'home', null, 1.9, { source: 'custom', sourceRef: { provider: 'Custom' } }), leg('g1', 'moneyline', 'home', null, 1.6, kalshiRef('KXNFLGAME-26OCT18JAXHOU-HOU', 'yes'))]);
-  assert.equal((await quote('c3')).available, false);
+  const fetchesBefore = { ...world.fetches };
+  fake.resetCounts();
+  for (const id of ['c1', 'c2', 'c3']) {
+    assert.deepEqual(await quote(id), { available: false, valueCents: null, reason: NO_CASHOUT_REASON }, id);
+  }
+  assert.deepEqual(world.fetches, fetchesBefore, 'no ESPN or Kalshi request');
+  assert.equal(fake.counts.byPrefix['reads:customGames'] ?? 0, 0, 'not even the custom game doc');
 
-  const res = await cashout.cashOutBet(mike, { betId: 'c1', expectedCents: 900 }, deps);
-  assert.equal(res.cashoutCents, 900);
-  await expectHttp(cashout.cashOutBet(mike, { betId: 'c2', expectedCents: 900 }, deps), 'CASHOUT_UNAVAILABLE');
+  const start = balance();
+  for (const id of ['c1', 'c2', 'c3']) await expectHttp(cashout.cashOutBet(mike, { betId: id, expectedCents: 900 }, deps), 'CASHOUT_UNAVAILABLE');
+  assert.equal(balance(), start);
+  assert.equal(fake.get('bets/c1').status, 'open');
 });
 
 test('bets that are not open, or not yours, are never quoted or paid', async () => {

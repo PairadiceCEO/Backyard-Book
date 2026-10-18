@@ -45,12 +45,22 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       Mutation-checked (always on, no 2→1 clear, no 1→2 start, no onDeadline re-check, 15 s, no leaving-shooter
       exception: each fails a test).
 - [x] 3 Slots: the "Return to player 90.0%…" line removed from SlotsPage.jsx (math unchanged)
-- [ ] 4 Board: league + Custom tabs show only unfinished games (filtered in /api/board's response, not the cache);
-      new "Live" tab first (every ESPN game in progress, grouped by league in app order, sorted by start;
-      /api/board?league=live built from the five cached boards via getOrRefresh; 30 s poll; saved tab accepts
-      'live'); phone check with and without live games
-- [ ] 5 No cash out on any bet with a custom-game or Challenge leg (server refuses without fetching; phone shows no
-      cash out row and asks for no quote). Tests: custom single, Challenge single, MLB + custom parlay, pre and live.
+- [x] 4 Board: `isListedGame` / `listedGames` (server/board.js) drop ESPN games that are final, canceled or
+      postponed and custom games that are final or canceled — applied to /api/board's reply only (the cache keeps
+      every game for settlement, pricing and game pages from My Bets). Live tab: `LIVE_TAB` first in LeagueTabs
+      (`BOARD_TABS`, saved tab accepts 'live'); /api/board?league=live → `getLiveBoard()` builds from the five
+      league boards via getOrRefresh (no new function, no extra ESPN/Kalshi fetches); each game keeps its `league`;
+      phone groups by league (`groupByLeague`, app order) sorted by start; empty "No games are live right now.";
+      polls every 30 s through useBoard. Decision (Spark quota): for the Live tab a league whose cached board has
+      nothing live or starting is reused up to 5 min (the 30-second rebuild only for leagues with a game in
+      progress or starting), so an open Live tab doesn't rewrite five boards every 30 s.
+- [x] 5 No cash out with a custom-game or Challenge leg (and crypto, Phase 2): `cashoutEligible()` /
+      `NO_CASHOUT_PREFIXES` in shared/betRules.js. quoteCashout and cashOutBet refuse before fetching anything
+      (cashOutBet reads only the bet). My Bets asks quotes only for eligible bets and shows no cash out row on the
+      others. Existing tests that expected pre-game cash out on custom/Challenge bets now expect the refusal.
+      Tests: test/sportsbook/phase11b.test.mjs (board filter, Custom filter, Live tab, quota, cash out refusals);
+      mutation-checked (no list filter, canceled kept, live includes pre, always 30 s, no server check, Challenge
+      prefix dropped: each fails a test).
 - [ ] 6 package-lock.json committed; build passes
 - [ ] 7 CLAUDE.md "Deliberate decisions": cash out line, craps clocks, Kalshi matching
 - [ ] 8 Checks (test:all, build, lint, phone check 320/375/414) → merge wip → main as 0.11.0
