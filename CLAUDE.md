@@ -65,10 +65,10 @@ Vercel deploys the live site from `main`.
 - Cash out: pre-game = stake × 0.90; live = potential payout × Kalshi bid(s) × 0.90. Never on a bet containing a
   custom-game, Challenge or crypto leg; Battles have no cash out.
 - Kalshi matching picks the closest date; settlement finds games by ESPN game id, never by team names.
-- Kalshi matching: playoff games match by series game number; a live game never uses a Kalshi market that hasn't
-  updated since the game started; when unsure, no price.
-- A line change returns LINE_CHANGED (the player must accept); a price change on the same line is
-  accepted automatically.
+- Kalshi matching: playoff games match by series game number; when unsure, no price.
+- A line change returns LINE_CHANGED (the player must accept); a price change on the same line under 50 points is
+  accepted automatically; 50+ points (−100 and +100 count as the same point) returns ODDS_CHANGED and the player
+  confirms.
 - Win rate = won ÷ (won + lost). Pushes, voids, cash outs and Battles don't count; Challenge bets do.
 - A Challenge's poster may bet on it; that bet is tagged "Poster's bet".
 - Crypto bets: singles only, betting closes 60 s before the market closes, settled by Kalshi's result (never our chart).

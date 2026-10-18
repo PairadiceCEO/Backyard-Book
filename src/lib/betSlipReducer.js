@@ -103,6 +103,25 @@ export function betSlipReducer(state, action) {
         ...state,
         legs: state.legs.map((l) => (l.legId === action.legId && l.flag?.type === 'lineChanged' ? applyQuote(l, l.flag.quote) : l)),
       };
+    case 'acceptOdds': {
+      // ODDS_CHANGED: the player accepted the new odds for these picks (same line, new price).
+      const byLeg = new Map((action.changes ?? []).map((c) => [c.legId, c]));
+      return {
+        ...state,
+        legs: state.legs.map((l) => {
+          const c = byLeg.get(l.legId);
+          if (!c) return l;
+          const decimal = Number.isFinite(c.quote?.decimal) ? c.quote.decimal : l.decimal;
+          return { ...l, american: c.newAmerican, decimal, flag: null };
+        }),
+      };
+    }
+    case 'removeMany': {
+      const gone = new Set(action.legIds ?? []);
+      const legs = state.legs.filter((l) => !gone.has(l.legId));
+      const mode = state.mode === 'parlay' && legs.length < MIN_PARLAY_LEGS ? 'singles' : state.mode;
+      return { ...state, legs, mode, notice: '' };
+    }
     case 'acceptAll':
       return { ...state, legs: state.legs.map((l) => (l.flag?.type === 'lineChanged' ? applyQuote(l, l.flag.quote) : l)) };
     case 'clear':

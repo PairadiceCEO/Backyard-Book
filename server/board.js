@@ -35,8 +35,7 @@ function anyQuote(markets) {
   return MARKET_KEYS.some((key) => marketHasQuote(markets[key]));
 }
 
-// Applies the price order to one ESPN game. kalshiMarkets may be undefined. For a game in progress they were
-// built with the stale-market guard (buildKalshiMarkets: no market older than the start).
+// Applies the price order to one ESPN game. kalshiMarkets may be undefined.
 export function mergeGameMarkets(game, kalshiMarkets) {
   if (game.source !== 'espn') return game;
   if (game.state === 'post' || game.canceled) {

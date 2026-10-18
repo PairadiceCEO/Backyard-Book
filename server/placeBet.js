@@ -1,5 +1,8 @@
 // Places singles or a parlay: validate → re-price every leg at its source → one Firestore
 // transaction that checks the balance, creates the bet(s), subtracts the stake and writes the ledger.
+// Refusals, in this order: MARKET_CLOSED, LINE_CHANGED, then ODDS_CHANGED (a leg's fresh price is 50+ points from
+// the quotedAmerican the player saw, shared/oddsMath.js needsOddsConfirm). Nothing is placed and no money moves.
+// A smaller price change is accepted at the fresh price and listed in priceChanges.
 // Challenge legs: the transaction re-checks the Challenge is still open, counts the bet on it, and when
 // the bettor is the Challenge's poster, sets `posterBet: true` on the bet (decided here, never by the
 // browser) and lists the bet in the Challenge's public `posterBets`.
@@ -22,7 +25,7 @@ import {
   slipProblems,
   totalStakeCents,
 } from '../shared/betRules.js';
-import { roundDecimal } from '../shared/oddsMath.js';
+import { needsOddsConfirm, roundDecimal } from '../shared/oddsMath.js';
 import { CHALLENGE_LEAGUE, CHALLENGE_MARKET, challengeDocId, isChallengeLeg } from '../shared/challenges.js';
 import { CRYPTO_LEAGUE, CRYPTO_MARKET, CRYPTO_PREFIX } from '../shared/crypto/coins.js';
 
@@ -223,6 +226,22 @@ export async function placeBets(caller, body, { now = new Date(), fetchImpl = fe
   if (lineChanges.length > 0) {
     throw new HttpError(409, 'LINE_CHANGED', 'A line moved. Accept the new line or remove the pick, then submit again.', {
       lineChanges,
+      closedLegs: [],
+    });
+  }
+
+  // A big price move on any leg (either direction, any market, each parlay leg): the player confirms first.
+  const oddsChanges = [];
+  results.forEach((r, i) => {
+    const leg = request.legs[i];
+    if (needsOddsConfirm(leg.quotedAmerican, r.quote.american)) {
+      oddsChanges.push({ legId: leg.legId, oldAmerican: leg.quotedAmerican, newAmerican: r.quote.american, quote: r.quote });
+    }
+  });
+  if (oddsChanges.length > 0) {
+    throw new HttpError(409, 'ODDS_CHANGED', oddsChanges.length === 1 ? 'The odds moved. Accept the new odds or remove the pick.' : 'Some odds moved. Accept the new odds or remove the picks.', {
+      oddsChanges,
+      lineChanges: [],
       closedLegs: [],
     });
   }

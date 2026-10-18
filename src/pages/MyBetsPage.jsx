@@ -3,22 +3,27 @@ import { Link } from 'react-router-dom';
 import BattleCard from '../components/BattleCard.jsx';
 import BetCard from '../components/BetCard.jsx';
 import CashoutConfirmModal from '../components/CashoutConfirmModal.jsx';
+import FinishedBets from '../components/FinishedBets.jsx';
 import { EmptyState, ErrorState, LoadingState } from '../components/StatusViews.jsx';
 import { useWalletDisplay } from '../context/WalletDisplayContext.jsx';
 import { useBattles } from '../context/BattlesContext.jsx';
 import { isFinished } from '../lib/battles.js';
 import { useCashoutQuotes } from '../hooks/useCashoutQuotes.js';
 import { useMyBets } from '../hooks/useMyBets.js';
+import { useBetHistory } from '../hooks/useBetHistory.js';
 import { usePolling } from '../hooks/usePolling.js';
 import { apiRequest } from '../lib/api.js';
 import { formatMoney } from '../lib/format.js';
 import { requestSettlement } from '../lib/settle.js';
 import { cashoutEligible } from '../../shared/betRules.js';
+import { isFinishedBet } from '../lib/betFilters.js';
 
 const SETTLE_CHECK_MS = 60 * 1000;
 
 export default function MyBetsPage() {
-  const { bets, error, loading, retry } = useMyBets();
+  const { uid, bets, lastDoc, full, error, loading, retry } = useMyBets();
+  // Every finished bet (older ones beyond the listener's newest 200 are loaded once per session).
+  const history = useBetHistory({ uid, liveBets: bets, startAfterDoc: lastDoc, needed: full });
   // Battles I'm in (the same live list as the Custom tab): open ones with Active, the rest with Finished.
   const { battles, uid: myUid } = useBattles();
   const activeBattles = battles.filter((b) => !isFinished(b));
@@ -29,13 +34,16 @@ export default function MyBetsPage() {
   // Results arrive through the live bets listener; requestSettlement is a stable module function.
   usePolling(requestSettlement, SETTLE_CHECK_MS, 'my-bets');
 
-  const { active, finished } = useMemo(
-    () => ({
-      active: bets.filter((b) => b.status === 'open'),
-      finished: bets.filter((b) => b.status !== 'open'),
-    }),
-    [bets],
-  );
+  const active = useMemo(() => bets.filter((b) => b.status === 'open'), [bets]);
+  // The listener's copy wins over the remembered one (it is the newest).
+  const finished = useMemo(() => {
+    const byId = new Map(history.bets.map((b) => [b.id, b]));
+    for (const b of bets) {
+      if (isFinishedBet(b)) byId.set(b.id, b);
+      else byId.delete(b.id);
+    }
+    return [...byId.values()];
+  }, [bets, history.bets]);
 
   // Cash out: estimates for every open bet that can be cashed out (never one with a custom-game, Challenge or
   // crypto leg), then confirm → server re-prices → pay (or CASHOUT_CHANGED).
@@ -137,9 +145,7 @@ export default function MyBetsPage() {
       {finished.length === 0 && finishedBattles.length === 0 ? (
         <EmptyState title="Nothing settled yet">Bets settle automatically once their games are final.</EmptyState>
       ) : null}
-      {finished.map((bet) => (
-        <BetCard key={bet.id} bet={bet} />
-      ))}
+      {finished.length ? <FinishedBets bets={finished} history={history} /> : null}
       {finishedBattles.length ? <h3 className="day-label">Battles</h3> : null}
       {finishedBattles.map((b) => (
         <BattleCard key={b.id} battle={b} uid={myUid} />

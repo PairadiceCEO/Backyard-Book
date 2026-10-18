@@ -22,6 +22,7 @@ const { placeBets } = await import(url('server/placeBet.js'));
 const { settleOpenBets } = await import(url('server/settlement.js'));
 const { gradeLeg } = await import(url('server/grading.js'));
 const cashout = await import(url('server/cashout.js'));
+const { probabilityToAmerican } = await import(url('shared/oddsMath.js'));
 
 // 7:20 PM CDT Oct 17 (= 00:20 UTC Oct 18). The 15-min window 7:15–7:30 PM is open; the hourly closes 8:00 PM.
 const NOW = new Date('2026-10-18T00:20:00.000Z');
@@ -312,7 +313,8 @@ test('settlement runs settle crypto bets from Kalshi (each strike its own market
   const place = (uid, legSpec) => placeBets(caller(uid), { mode: 'singles', clientRequestId: rid(), legs: [{ ...legSpec, stakeCents: 1000 }] }, { now: NOW, fetchImpl });
   const up = (await place('mike', leg15('yes'))).bets[0];
   const down = (await place('dan', leg15('no'))).bets[0];
-  const hLeg = (strike, side) => ({ league: 'crypto', gameId: 'crypto:KXBTCD-26OCT1720', marketType: 'crypto', selection: side, line: strike, kalshiTicker: `KXBTCD-26OCT1720-T${strike}`, kalshiSide: side, quotedAmerican: -110 });
+  // quotedAmerican = what the board showed (the ask), so no odds-change confirmation is needed.
+  const hLeg = (strike, side) => ({ league: 'crypto', gameId: 'crypto:KXBTCD-26OCT1720', marketType: 'crypto', selection: side, line: strike, kalshiTicker: `KXBTCD-26OCT1720-T${strike}`, kalshiSide: side, quotedAmerican: probabilityToAmerican(Number(world.markets[`KXBTCD-26OCT1720-T${strike}`][`${side}_ask_dollars`])) });
   const above = (await place('mike', hLeg(81499.99, 'yes'))).bets[0];
   const above82 = (await place('dan', hLeg(81999.99, 'yes'))).bets[0];
 

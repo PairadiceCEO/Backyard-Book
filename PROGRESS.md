@@ -5,6 +5,62 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.13.0 (Will, 2026-10-18 01:56 CT; re-sent 11:31) — COMPLETE (2026-10-18), merged to main, ready for Will to test
+Spec: Will's attachment of 2026-10-18 01:56. One phase on a fresh wip off main; merge after every CLAUDE.md check.
+
+### Checklist
+- [x] 1 Stale-market guard (b) removed: `marketUpdatedMs`/`liveSinceMs`/`freshForLive` gone from kalshi.js;
+      tradablePrice/quoteFromMarket/buildKalshiMarkets/buildLadders back to no live check; compactEvent rows back to 6
+      fields (old 7-field cached rows still read); no `updatedAt` on quote refs; gameDetail, priceLeg
+      (STALE_LIVE gone) and cash out bids (STALE_LIVE, liveSince gone) cleaned. Kept: game-number matching, `isAmbiguous`
+      ("when unsure, no price"), cash out mapping check. Tests: phase11 stale tests replaced by "live game's mapped
+      market is priced (board, ladder, bet time ±ticker, live cash out ±DK line)", "bet-time price is the fresh
+      market", "old cached rows still build"; 0.11.0 fixture `updated_time` lines removed. Re-mutation-checked:
+      cash out mapping (1 fail), game number (6), unsure (1). CLAUDE.md + README lines updated.
+- [x] 2 ODDS_CHANGED: `ODDS_CONFIRM_POINTS = 50`, `oddsScale`, `oddsDistance`, `needsOddsConfirm` in
+      shared/oddsMath.js. placeBets checks after MARKET_CLOSED and LINE_CHANGED: any leg ≥ 50 → 409 ODDS_CHANGED
+      { oddsChanges: [{ legId, oldAmerican, newAmerican, quote }], lineChanges: [], closedLegs: [] }, nothing placed.
+      Phone: OddsChangedModal ("Old +100 → New +155", Accept new odds / Remove pick(s)); reducer actions
+      `acceptOdds` (new odds + decimal → payout recalculated) and `removeMany`. Admin test switch added: "submit with
+      odds 60 points off" (next submit only) to trigger the popup on purpose. Crypto settlement test fixture now
+      quotes what the board showed. Tests: test/sportsbook/phase13.test.mjs (5: the examples, 50 refused / 49
+      accepted incl. a Challenge leg, parlay with one leg 60 off refused with no wallet/ledger/bet change then
+      resubmitted, LINE_CHANGED/MARKET_CLOSED priority, slip actions). Mutation-checked: threshold 51, 49, strict >,
+      no −100=+100 scale, server check off — each fails. Phone check screen: sportsbook-odds-changed. CLAUDE.md line.
+- [x] 3 My Bets → Finished: src/lib/betFilters.js (pure: sorts, filters, `summarize`, `activeFilterCount`,
+      `cleanView`/`readSavedView`/`saveView` in try/catch), src/components/FinishedBets.jsx (sort select, Filters
+      panel with count badge + Clear all + Done, summary line with green/red net, list 50 at a time with "Show N
+      more"), MyBetsPage merges history + listener. Profit = returned − stake (cash out value; push/void = stake back;
+      loss −stake). Category: custom-game / Challenge / crypto legs count as those, not their league. Live = placedAt ≥
+      a leg's startTime. Dates in Central Time (calendar arithmetic, DST-safe). Battles unchanged.
+      Data decision (Spark reads): the live listener (newest 200, existing uid + placedAt index) stays. Only when it is
+      full does `useBetHistory` (src/hooks/useBetHistory.js) load the older bets, startAfter the listener's oldest doc,
+      100 per getDocs, all pages, once per browser session (kept in module memory, so reopening My Bets reads nothing).
+      Under 200 bets: 0 extra reads; otherwise (N − 200) reads once per session. Filters/sort/summary are exact over
+      every finished bet because everything is in memory. Rejected: paging 50 with Load more (filters/summary would
+      only cover what was loaded, or every filter change would re-query); a status/settledAt query (needs a new
+      composite index for no read savings, since the summary needs every finished bet anyway). NO new index, so no
+      Firebase console step. Listener bets are remembered in the same cache so a bet sliding out of the 200 window
+      never drops out of Finished.
+      Tests: test/betFilters.test.js (5, in `npm test`): profit, sorts, every filter + combined, summary/win rate,
+      remembered view. Mutation-checked (loss profit, parlay any→all, inclusive "to", win rate counting pushes).
+      interact.mjs: 263-bet player sees all 260 finished after exactly one history query; Lost filter + stake sort,
+      remembered across reload, Clear all; a <200-bet player makes no extra query. Phone screens: my-bets-filters,
+      my-bets-filters-dates, my-bets-history. Mock Firestore gained startAfter and a getDocs counter.
+- [x] 4 Crypto chart scrubber (src/components/crypto/CryptoChart.jsx, still hand-built SVG): React pointer handlers
+      only (no document listeners/timers; removed with the element). Touch: pointerdown starts (pointer capture, in
+      try/catch), drag moves, up/cancel hides; `touch-action: pan-y` so vertical swipes scroll (the browser cancels the
+      pointer → hidden). Mouse: hover follows, leaving hides. Remembers the minute's TIMESTAMP (`scrubT`), so the 10 s
+      refresh keeps it on that minute or the nearest; state set only when the minute changes; geometry read through a
+      ref. Label: time ("2:11 AM") + price (`chartPrice`: cents ≥ $100, 4 decimals ≥ $1, 6 below) + "Target $X" /
+      "Hourly target $X" for a line within 6% of the price range; `labelBox` flips left near the right edge and stays
+      inside. interact.mjs check (touch drag, target, flip, refresh that drops the held minute, lift, mouse hover/leave);
+      mutation-checked (no timestamp hold, no flip, no target line, no hide on lift: each fails). Phone screen
+      crypto-coin-scrub.
+- [x] 5 Checks: test:all (31 + 97 + 21 + 104 + 15 + 11 + 9 = 288), lint, build, interact.mjs (incl. My Bets history and
+      the chart scrubber), dealcheck.mjs, phone check 108 screens × 320/375/414 clean. Version 0.13.0. Merged wip → main.
+      No firestore.rules change and no new index. Harness server stopped.
+
 ## Batch (Will, 2026-10-18): Phase 1 fixes (0.11.0), then Phase 2 crypto markets (0.12.0)
 Spec: Will's message of 2026-10-18 00:03 CT. Two phases, each merged to main on its own, in order.
 Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after Phase 1 is merged.
@@ -121,10 +177,14 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: Phases 1 and 2 are merged. Wait for Will's test results, and his answer to Q1.
+Nothing queued: 0.13.0 is merged. Wait for Will's test results.
 
 ## Open questions
-- Q1 (2026-10-18, Phase 1 item 1b): Kalshi's `updated_time` does NOT move when a market trades. Checked against the
+None open.
+
+## Answered
+- Q1 — ANSWERED by Will 2026-10-18 01:56: remove guard (b) entirely, no latest-trade replacement (0.13.0 item 1).
+  Original question (2026-10-18, Phase 1 item 1b): Kalshi's `updated_time` does NOT move when a market trades. Checked against the
   real API on 2026-10-18 ~05:10Z:
   - KXBTC15M-26OCT180115-15: ask moved 0.48 → 0.45 and ~500k contracts traded, `updated_time` stayed at
     05:00:00.596Z (the open time).

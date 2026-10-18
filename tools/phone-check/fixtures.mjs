@@ -282,3 +282,23 @@ export function cryptoCoin(id, { noChart = false } = {}) {
     chart: noChart ? null : { from: iso(from), to: iso(from + 60 * MIN), points },
   };
 }
+
+// ---------- My Bets history: a player with more bets than the live listener's 200 ----------
+// 3 open + 260 finished bets for u7, placed an hour apart going back; every 4th one lost, every 10th a push.
+export function heavyBets(uid = 'u7', finished = 260) {
+  const list = [];
+  for (let i = 0; i < 3; i += 1) {
+    list.push({ id: `${uid}-open-${i}`, uid, username: 'heavy', type: 'single', status: 'open', stakeCents: 500, potentialPayoutCents: 954, payoutCents: 0, combinedAmerican: -110, placedAt: iso(now - (i + 1) * 60000), version: 0,
+      legs: [leg({ gameId: '401', marketType: 'spread', selection: 'away', line: 2.5, label: 'Jaguars +2.5' })] });
+  }
+  for (let i = 0; i < finished; i += 1) {
+    const status = i % 10 === 9 ? 'push' : i % 4 === 3 ? 'lost' : 'won';
+    const stake = 100 * (1 + (i % 7));
+    list.push({ id: `${uid}-f-${String(i).padStart(3, '0')}`, uid, username: 'heavy', type: i % 5 === 0 ? 'parlay' : 'single', status, stakeCents: stake,
+      potentialPayoutCents: Math.floor(stake * 1.909), payoutCents: status === 'won' ? Math.floor(stake * 1.909) : status === 'push' ? stake : 0,
+      combinedAmerican: -110, placedAt: iso(now - (i + 2) * H), settledAt: iso(now - (i + 2) * H + 3 * H), version: 1,
+      legs: [leg({ league: i % 3 === 0 ? 'mlb' : 'nfl', gameId: `g${i}`, marketType: i % 2 ? 'total' : 'moneyline', selection: i % 2 ? 'over' : 'home', label: i % 2 ? 'Over 8.5' : 'Guardians ML', gameLabel: i % 3 === 0 ? 'Rays @ Guardians' : 'Jaguars @ Texans', result: status === 'won' ? 'win' : status === 'lost' ? 'loss' : 'push', startTime: iso(now - (i + 2) * H + 30 * 60000) })] });
+  }
+  return list;
+}
+export const heavyUser = { id: 'u7', username: 'heavy', displayName: 'Heavy Hitter', role: 'player', balanceCents: 5000, stats: { won: 0, lost: 0 }, disabled: false };

@@ -75,7 +75,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Before any game in the bet starts:** stake × 0.90.
 - **Once a game has started:** potential payout × the Kalshi bid for every undecided leg × 0.90 (legs already won count as 1; pushed/voided legs drop out of the payout). DraftKings lines use the Kalshi market at the same line; with no exact match or no bid, it shows "Cash out unavailable right now".
 - No cash out once a leg has lost, or when every game is final (settlement pays it). Never on a bet with a custom-game or Challenge leg (singles or parlays, before or after the start); My Bets shows no cash out row on those. Battles have no cash out.
-- A live game uses only Kalshi markets updated since it started; playoff games are matched to Kalshi by series game number (a postponed game keeps its own markets).
+- Playoff games are matched to Kalshi by series game number (a postponed game keeps its own markets); when the match is unclear, the game gets no Kalshi price.
 
 **Cash out $X** → confirm. The server re-prices with fresh ESPN and Kalshi data; if the value moved it shows the new amount to confirm again, and it never pays a different amount silently. A cashed-out bet moves to Finished as **Cashed out $X**, counts as neither won nor lost, writes a `cashout` ledger entry (once per bet), and is final: settlement skips it and **Admin → Bets** shows it (Status filter **Cashed out**) without regrade buttons.
 
@@ -117,6 +117,13 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Shooter:** only the shooter can roll, and only with a line bet. Roll carries `rollSeq`, so a double tap rolls once and other players' bets never block it. The clock starts at the first bet after a come-out roll, or right after each roll while a Point is on; at zero the server rolls (or, on a come-out with no line bet, passes the dice). Seven-out: dice to the next seat clockwise.
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
+
+## 0.13.0
+
+- **Odds changes:** if a pick's price moved 50 points or more from what you saw (−100 and +100 count as the same point), nothing is placed and a popup shows "Old → New" with **Accept new odds** / **Remove pick(s)**. Smaller moves are accepted at the new price as before.
+- **My Bets → Finished:** sorted by when each bet settled (newest first), with a sort menu, a **Filters** panel (result, date placed, category, bet type, market, live/pre-game, stake range, search, Poster's bets) and a summary line (bets, staked, returned, net, win rate). Covers every finished bet; sort and filters are remembered for the session.
+- **Crypto chart:** touch and drag (or hover with a mouse) to read any minute's time and price.
+- Live games price from their Kalshi markets again (the 0.11.0 freshness check is gone; playoff game-number matching stays).
 
 ## Crypto markets (0.12.0)
 

@@ -34,6 +34,10 @@ async function routeApi(page, mode) {
       if (body?.action !== 'spin') return json(route, 200, { ok: true, applied: false, seat: 1, seated: true, serverNow: Date.now() });
       return json(route, 200, { ok: true, duplicate: false, stops: [14, 5, 4], symbols: ['R7', 'R7', 'R7'], line: { id: 'red7x3', label: 'Red 7 · Red 7 · Red 7', pays: 300 }, betCents: 200, winCents: 60000, balanceCents: 69440, serverNow: Date.now() });
     }
+    if (u.pathname === '/api/bets' && body?.mode && mode.oddsChanged) {
+      const changes = (body.legs ?? []).slice(0, 2).map((l, i) => ({ legId: l.legId, oldAmerican: l.quotedAmerican, newAmerican: i ? -175 : 165, quote: { american: i ? -175 : 165, decimal: i ? 1.5714 : 2.65, line: l.line ?? null, source: 'espn', ref: null } }));
+      return json(route, 409, { error: { code: 'ODDS_CHANGED', message: 'Some odds moved. Accept the new odds or remove the picks.', oddsChanges: changes, lineChanges: [], closedLegs: [] } });
+    }
     if (u.pathname === '/api/bets' && body?.action === 'cashoutQuote') {
       return json(route, 200, { ok: true, quotes: {
         b1: { available: true, valueCents: mode.quoteCents ?? 2147, mode: 'live' },
@@ -118,6 +122,7 @@ const scenarios = [
   S('sportsbook-slip-bar', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await clickPrices(p, 3); } }),
   S('sportsbook-slip-open', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await clickPrices(p, 3); await openSlip(p); } }),
   S('sportsbook-slip-parlay', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await clickPrices(p, 3); await openSlip(p); await p.getByRole('tab', { name: 'Parlay' }).click(); } }),
+  S('sportsbook-odds-changed', '/sportsbook', { admin: false, user: 'u1', oddsChanged: true, act: async (p) => { await clickPrices(p, 2); await openSlip(p); for (const input of await p.locator('.stake-field input').all()) await input.fill('5'); await p.getByRole('button', { name: /^Place/ }).click(); await p.waitForTimeout(400); } }),
   S('sportsbook-empty', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: 'NBA' }).click(); await p.waitForTimeout(300); } }),
   S('sportsbook-error', '/sportsbook', { admin: false, user: 'u1', apiDown: true }),
   S('game-detail', '/sportsbook/nfl/401', { admin: false, user: 'u1' }),
@@ -126,6 +131,9 @@ const scenarios = [
   S('my-bets-cashout-changed', '/my-bets', { admin: false, user: 'u1', changed: true, act: async (p) => { await p.getByRole('button', { name: 'Cash out $21.47' }).click(); await p.getByRole('dialog').getByRole('button', { name: 'Cash out $21.47' }).click(); await p.waitForTimeout(300); } }),
   S('my-bets-cashout-unavailable', '/my-bets', { admin: false, user: 'u1', unavailable: true, act: async (p) => { await p.getByRole('button', { name: 'Cash out $21.47' }).click(); await p.getByRole('dialog').getByRole('button', { name: 'Cash out $21.47' }).click(); await p.waitForTimeout(300); } }),
   S('my-bets-cashout-done', '/my-bets', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('button', { name: 'Cash out $21.47' }).click(); await p.getByRole('dialog').getByRole('button', { name: 'Cash out $21.47' }).click(); await p.waitForTimeout(300); } }),
+  S('my-bets-filters', '/my-bets', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('button', { name: /^Filters/ }).click(); await p.locator('.filters-panel').getByRole('button', { name: 'Won', exact: true }).click(); await p.locator('.filters-panel').getByRole('button', { name: 'NFL', exact: true }).click(); await p.waitForTimeout(150); } }),
+  S('my-bets-filters-dates', '/my-bets', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('button', { name: /^Filters/ }).click(); await p.getByLabel('Date placed').selectOption('custom'); await p.getByPlaceholder('Team, game, Challenge or coin').fill('zzz'); await p.waitForTimeout(150); } }),
+  S('my-bets-history', '/my-bets', { admin: false, user: 'u7', fs: { ...fsDefault, users: [...F.users, F.heavyUser], bets: F.heavyBets('u7', 260) }, act: async (p) => { await p.waitForTimeout(500); } }),
   S('my-bets-empty', '/my-bets', { admin: false, user: 'u9', fs: { ...fsDefault, users: [...F.users, { id: 'u9', username: 'newbie', balanceCents: 10000, stats: { won: 0, lost: 0 } }] } }),
   S('my-bets-error', '/my-bets', { admin: false, user: 'u1', fs: { ...fsDefault, bets: { error: 'The query requires an index.' } } }),
   S('leaderboard', '/leaderboard', { admin: false, user: 'u1' }),
@@ -177,6 +185,7 @@ const scenarios = [
   S('sportsbook-crypto', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: 'Crypto' }).click(); await p.waitForTimeout(400); } }),
   S('sportsbook-crypto-pick', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: 'Crypto' }).click(); await p.waitForTimeout(400); await p.locator('.crypto-card .odds-button').first().click(); await openSlip(p); } }),
   S('crypto-coin', '/sportsbook/crypto/btc', { admin: false, user: 'u1' }),
+  S('crypto-coin-scrub', '/sportsbook/crypto/btc', { admin: false, user: 'u1', act: async (p) => { await p.evaluate(() => { const svg = document.querySelector('svg.crypto-chart'); const r = svg.getBoundingClientRect(); for (const [type, f] of [['pointerdown', 0.1], ['pointermove', 0.2]]) svg.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 3, pointerType: 'touch', isPrimary: true, clientX: r.left + r.width * f, clientY: r.top + r.height / 2 })); }); await p.waitForTimeout(150); } }),
   S('crypto-coin-pick', '/sportsbook/crypto/btc', { admin: false, user: 'u1', act: async (p) => { await p.locator('.crypto-ladder .odds-button').nth(3).click(); await p.waitForTimeout(200); } }),
   S('crypto-coin-closing', '/sportsbook/crypto/eth', { admin: false, user: 'u1' }),
   S('crypto-coin-15m-only', '/sportsbook/crypto/near', { admin: false, user: 'u1' }),

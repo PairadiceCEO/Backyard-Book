@@ -22,6 +22,8 @@ export function BetSlipProvider({ children }) {
       serverRejected: (details) => dispatch({ type: 'serverRejected', ...details }),
       accept: (legId) => dispatch({ type: 'accept', legId }),
       acceptAll: () => dispatch({ type: 'acceptAll' }),
+      acceptOdds: (changes) => dispatch({ type: 'acceptOdds', changes }),
+      removeMany: (legIds) => dispatch({ type: 'removeMany', legIds }),
       clear: () => dispatch({ type: 'clear' }),
       dismissNotice: () => dispatch({ type: 'dismissNotice' }),
     };
