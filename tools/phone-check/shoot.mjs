@@ -19,6 +19,10 @@ async function routeApi(page, mode) {
     const body = req.postDataJSON?.() ?? null;
     if (mode.apiDown) return json(route, 502, { error: { code: 'UPSTREAM_UNAVAILABLE', message: "ESPN didn't answer. Try again in a moment." } });
     if (u.pathname === '/api/board') {
+      if (u.searchParams.get('league') === 'crypto') {
+        if (u.searchParams.get('game')) return json(route, 200, F.cryptoCoin(u.searchParams.get('game'), { noChart: Boolean(mode.noChart) }));
+        return json(route, 200, F.cryptoBoard());
+      }
       if (u.searchParams.get('game')) return json(route, 200, F.gameDetail(u.searchParams.get('game')));
       if (u.searchParams.get('league') === 'custom') return json(route, 200, F.customBoard());
       if (u.searchParams.get('league') === 'live') return json(route, 200, F.liveBoard(Boolean(mode.noLive)));
@@ -170,6 +174,13 @@ const scenarios = [
   S('cr-dont-odds', '/casino/craps', { admin: false, user: 'u1', fs: withTable(crDont) }),
   S('sportsbook-live', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: 'Live' }).click(); await p.waitForTimeout(400); } }),
   S('sportsbook-live-empty', '/sportsbook', { admin: false, user: 'u1', noLive: true, act: async (p) => { await p.getByRole('tab', { name: 'Live' }).click(); await p.waitForTimeout(400); } }),
+  S('sportsbook-crypto', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: 'Crypto' }).click(); await p.waitForTimeout(400); } }),
+  S('sportsbook-crypto-pick', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: 'Crypto' }).click(); await p.waitForTimeout(400); await p.locator('.crypto-card .odds-button').first().click(); await openSlip(p); } }),
+  S('crypto-coin', '/sportsbook/crypto/btc', { admin: false, user: 'u1' }),
+  S('crypto-coin-pick', '/sportsbook/crypto/btc', { admin: false, user: 'u1', act: async (p) => { await p.locator('.crypto-ladder .odds-button').nth(3).click(); await p.waitForTimeout(200); } }),
+  S('crypto-coin-closing', '/sportsbook/crypto/eth', { admin: false, user: 'u1' }),
+  S('crypto-coin-15m-only', '/sportsbook/crypto/near', { admin: false, user: 'u1' }),
+  S('crypto-coin-no-chart', '/sportsbook/crypto/sol', { admin: false, user: 'u1', noChart: true }),
   S('cr-solo', '/casino/craps', { admin: false, user: 'u1', fs: withTable(crSolo) }),
   S('sportsbook-custom', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: /^Custom/ }).click(); await p.waitForTimeout(400); } }),
   S('battle-new', '/sportsbook/battles/new', { admin: false, user: 'u1', act: async (p) => { await p.getByLabel('Title').fill('Saturday golf'); await p.getByRole('button', { name: 'Dan' }).click(); await p.getByRole('button', { name: 'Ann' }).click(); await p.getByRole('button', { name: '70 / 30' }).click(); await p.waitForTimeout(150); } }),

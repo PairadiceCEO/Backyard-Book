@@ -7,7 +7,9 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useBetSlip } from '../context/BetSlipContext.jsx';
 import { apiRequest, makeRequestId } from '../lib/api.js';
 import { formatAmerican, formatMoney, parseDollarsToCents } from '../lib/format.js';
+import { formatStrike } from '../../shared/crypto/coins.js';
 import {
+  CRYPTO_PARLAY_MESSAGE,
   MIN_PARLAY_LEGS,
   combinedAmerican,
   combinedDecimal,
@@ -24,8 +26,9 @@ function stakeCents(input) {
   return parseDollarsToCents(input);
 }
 
-function lineText(marketType, line) {
+function lineText(marketType, line, leg) {
   if (marketType === 'total') return String(line);
+  if (marketType === 'crypto') return formatStrike(leg?.crypto?.kind, line);
   return formatSignedLine(line);
 }
 
@@ -51,6 +54,7 @@ export default function BetSlip() {
 
   const balanceCents = profile?.balanceCents ?? 0;
   const flagged = legs.filter((l) => l.flag);
+  const hasCrypto = legs.some((l) => l.marketType === 'crypto');
   const lineFlags = legs.filter((l) => l.flag?.type === 'lineChanged');
 
   const parsedLegs = legs.map((l) => ({ ...l, stakeCents: stakeCents(l.stake) }));
@@ -171,12 +175,14 @@ export default function BetSlip() {
                   aria-selected={mode === 'parlay'}
                   className={mode === 'parlay' ? 'sub-tab active' : 'sub-tab'}
                   onClick={() => slip.setMode('parlay')}
-                  disabled={legs.length < MIN_PARLAY_LEGS}
-                  title={legs.length < MIN_PARLAY_LEGS ? 'Add at least 2 picks for a parlay' : undefined}
+                  disabled={legs.length < MIN_PARLAY_LEGS || hasCrypto}
+                  title={hasCrypto ? CRYPTO_PARLAY_MESSAGE : legs.length < MIN_PARLAY_LEGS ? 'Add at least 2 picks for a parlay' : undefined}
                 >
                   Parlay
                 </button>
               </div>
+
+              {hasCrypto ? <p className="muted small">{CRYPTO_PARLAY_MESSAGE}</p> : null}
 
               <ul className="slip-legs">
                 {legs.map((leg) => (
@@ -203,7 +209,7 @@ export default function BetSlip() {
                     {leg.flag?.type === 'lineChanged' ? (
                       <div className="slip-flag">
                         <span>
-                          Line moved: {lineText(leg.marketType, leg.flag.oldLine)} → {lineText(leg.marketType, leg.flag.newLine)} (
+                          Line moved: {lineText(leg.marketType, leg.flag.oldLine, leg)} → {lineText(leg.marketType, leg.flag.newLine, leg)} (
                           {formatAmerican(leg.flag.newAmerican)})
                         </span>
                         <span className="row-actions">

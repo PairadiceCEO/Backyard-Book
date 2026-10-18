@@ -1,4 +1,4 @@
-// Polls /api/board for one league every 30 seconds.
+// Polls /api/board for one league every 30 seconds (league null: nothing is loaded).
 // Responses for a league the user has already switched away from are ignored.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -22,6 +22,7 @@ export function useBoard(league) {
 
   const load = useCallback(async () => {
     const target = league;
+    if (!target) return;
     if (inFlightRef.current === target) return; // a request for this league is already running
     inFlightRef.current = target;
     try {

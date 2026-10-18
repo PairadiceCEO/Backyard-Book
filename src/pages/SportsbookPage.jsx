@@ -1,9 +1,10 @@
 // League tabs and the game board, refreshed every 30 seconds. Boards list only games that haven't finished.
-// The Live tab has every game in progress, grouped by league; the Custom tab has the admin's custom games
-// (every league), Battles and Challenges.
+// The Live tab has every game in progress, grouped by league; the Crypto tab has Kalshi's crypto markets (its own
+// 10-second refresh); the Custom tab has the admin's custom games (every league), Battles and Challenges.
 
 import { useMemo, useState } from 'react';
-import LeagueTabs, { BOARD_TABS, CUSTOM_TAB, LIVE_TAB } from '../components/LeagueTabs.jsx';
+import LeagueTabs, { BOARD_TABS, CRYPTO_TAB, CUSTOM_TAB, LIVE_TAB } from '../components/LeagueTabs.jsx';
+import CryptoBoard from './crypto/CryptoBoard.jsx';
 import CustomBoard from './battles/CustomBoard.jsx';
 import { useBattles } from '../context/BattlesContext.jsx';
 import GameCard from '../components/GameCard.jsx';
@@ -27,11 +28,13 @@ function readSavedLeague() {
 
 export default function SportsbookPage() {
   const [league, setLeague] = useState(readSavedLeague);
+  const crypto = league === CRYPTO_TAB.id;
   const { needsMeCount } = useBattles();
   const custom = league === CUSTOM_TAB.id;
   const live = league === LIVE_TAB.id;
-  // Every tab loads its own board and polls (every 30 s) only while it is showing.
-  const { games, fetchedAt, stale, partial, kalshiStatus, error, loading, retry } = useBoard(league);
+  // Every tab loads its own board and polls (every 30 s) only while it is showing. The Crypto tab has its own
+  // data hook (CryptoBoard), so the game board isn't asked for while it shows.
+  const { games, fetchedAt, stale, partial, kalshiStatus, error, loading, retry } = useBoard(crypto ? null : league);
 
   const groups = useMemo(() => {
     if (!games || custom) return [];
@@ -46,6 +49,15 @@ export default function SportsbookPage() {
     } catch {
       // Ignore storage errors; the choice just won't be remembered.
     }
+  }
+
+  if (crypto) {
+    return (
+      <section className="page">
+        <LeagueTabs value={league} onChange={changeLeague} customBadge={needsMeCount} />
+        <CryptoBoard />
+      </section>
+    );
   }
 
   if (custom) {

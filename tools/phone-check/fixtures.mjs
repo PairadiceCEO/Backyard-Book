@@ -232,3 +232,53 @@ export const challengeSettlePreview = {
   ],
   wouldSettle: [], staysOpen: [{ id: 'bx' }],
 };
+
+// ---------- Crypto tab and coin page ----------
+const MIN = 60 * 1000;
+const cq = (price, strike, ticker, side) => {
+  const american = price >= 0.5 ? -Math.round((price / (1 - price)) * 100) : Math.round(((1 - price) / price) * 100);
+  return { american, decimal: 1 / price, line: strike, source: 'kalshi', ref: { provider: 'Kalshi', ticker, side, price } };
+};
+function cryptoSection(kind, eventTicker, closeInMs, extra = {}) {
+  const close = now + closeInMs;
+  return {
+    kind, eventTicker, gameId: `crypto:${eventTicker}`,
+    openTime: iso(close - (kind === '15m' ? 15 : 60) * MIN), closeTime: iso(close),
+    bettingClosesAt: iso(close - MIN), bettingOpen: closeInMs > MIN, ...extra,
+  };
+}
+function row(eventTicker, suffix, strike, yesPrice, open = true) {
+  const t = `${eventTicker}-${suffix}`;
+  return { ticker: t, strike, yes: open ? cq(yesPrice, strike, t, 'yes') : null, no: open ? cq(1.01 - yesPrice, strike, t, 'no') : null };
+}
+function coinFixture(id, name, symbol, price, { fifteen = true, hourly = true, fifteenCloseMs = 6 * MIN + 12000, hourlyCloseMs = 38 * MIN, base = price, step = price * 0.002 } = {}) {
+  const e15 = `KX${symbol}15M-26OCT181930`;
+  const eH = `KX${symbol}D-26OCT1820`;
+  const open15 = fifteenCloseMs > MIN;
+  const ladder = [-3, -2, -1, 0, 1, 2, 3].map((i) => row(eH, `T${(base + i * step).toFixed(2)}`, Number((base + i * step - 0.01).toFixed(2)), Math.min(0.95, Math.max(0.05, 0.5 - i * 0.14))));
+  return {
+    id, name, symbol, product: `${symbol}-USD`, kinds: hourly ? ['15m', 'hourly'] : ['15m'], price, kalshiError: false,
+    fifteen: fifteen ? { ...cryptoSection('15m', e15, fifteenCloseMs), market: row(e15, '30', Number((price * 0.9995).toFixed(2)), 0.56, open15) } : null,
+    hourly: hourly ? { ...cryptoSection('hourly', eH, hourlyCloseMs), main: ladder[3], ladder } : null,
+  };
+}
+const cryptoCoins = () => [
+  coinFixture('btc', 'Bitcoin', 'BTC', 81950.12, { base: 82000, step: 250 }),
+  coinFixture('eth', 'Ethereum', 'ETH', 1873.41, { fifteenCloseMs: 40 * 1000, base: 1875, step: 5 }),
+  coinFixture('sol', 'Solana', 'SOL', 103.2453, { fifteen: false, base: 103.5, step: 0.25 }),
+  coinFixture('near', 'NEAR', 'NEAR', 4.9346, { hourly: false }),
+];
+export function cryptoBoard() {
+  return { league: 'crypto', fetchedAt: new Date().toISOString(), serverNow: Date.now(), coins: cryptoCoins() };
+}
+export function cryptoCoin(id, { noChart = false } = {}) {
+  const coin = cryptoCoins().find((c) => c.id === id) ?? cryptoCoins()[0];
+  const from = Math.floor(now / (60 * MIN)) * 60 * MIN;
+  const points = [];
+  for (let t = from; t <= now; t += MIN) points.push({ t, c: coin.price * (1 + 0.0012 * Math.sin((t - from) / (7 * MIN)) - 0.0004 * ((t - from) / (60 * MIN))) });
+  if (points.length < 2) points.unshift({ t: from - MIN, c: coin.price });
+  return {
+    league: 'crypto', fetchedAt: new Date().toISOString(), serverNow: Date.now(), coin,
+    chart: noChart ? null : { from: iso(from), to: iso(from + 60 * MIN), points },
+  };
+}

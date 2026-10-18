@@ -4188,3 +4188,173 @@ fieldset.field legend {
 .challenge-editor .outcome-row {
   grid-template-columns: minmax(0, 1fr) 5.5rem;
 }
+
+/* Crypto tab and coin page */
+
+.crypto-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.crypto-card-head,
+.crypto-hero {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.crypto-coin {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.crypto-symbol {
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.crypto-price {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.crypto-hero {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.crypto-hero-price {
+  font-size: 2rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.crypto-market {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.55rem;
+}
+
+.card > .crypto-market:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.crypto-market-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+}
+
+.crypto-countdown {
+  font-size: 0.85rem;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.crypto-countdown.closed {
+  color: var(--text-muted);
+}
+
+.crypto-picks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.crypto-picks .odds-cell {
+  min-height: 3rem;
+}
+
+.crypto-closed span:last-child {
+  font-weight: 700;
+}
+
+.crypto-chart-card {
+  padding: 0.6rem;
+}
+
+.crypto-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.crypto-chart.unavailable {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 8rem;
+  color: var(--text-muted);
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+.chart-dot {
+  fill: var(--accent);
+}
+
+.chart-axis {
+  stroke: var(--border);
+}
+
+.chart-tick,
+.chart-level-label,
+.chart-mark-label {
+  font-size: 10px;
+  fill: var(--text-muted);
+}
+
+.chart-level,
+.chart-mark {
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+}
+
+.chart-level.target,
+.chart-mark.target {
+  stroke: var(--gold);
+}
+
+.chart-level.strike,
+.chart-mark.strike {
+  stroke: var(--accent);
+}
+
+.chart-level-label.target,
+.chart-mark-label.target {
+  fill: var(--gold);
+}
+
+.chart-level-label.strike,
+.chart-mark-label.strike {
+  fill: var(--accent);
+}
+
+.crypto-ladder .totals-row {
+  grid-template-columns: minmax(5.5rem, 1.3fr) 1fr 1fr;
+}
+
+.crypto-ladder .totals-line {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.crypto-ladder .totals-row.main-strike .totals-line {
+  color: var(--accent);
+  font-weight: 700;
+}

@@ -33,7 +33,8 @@ Vercel deploys the live site from `main`.
   board, casino, settle, shop), cron jobs at most daily
   (`/api/settle` runs once a day; players' visits trigger the rest).
 - Firebase Auth + Firestore on the Spark plan (50k reads / 20k writes a day): keep reads and writes lean.
-- Data: ESPN (scores, DraftKings lines) and Kalshi (live prices) public APIs.
+- Data: ESPN (scores, DraftKings lines), Kalshi (live prices, crypto markets) and Coinbase (crypto prices) public APIs.
+  Crypto data is cached in function memory only (10 s), never in Firestore.
 - `package-lock.json` is committed: Vercel installs exactly those versions. Change dependencies with `npm install`
   and commit the updated lockfile.
 
@@ -70,6 +71,7 @@ Vercel deploys the live site from `main`.
   accepted automatically.
 - Win rate = won ÷ (won + lost). Pushes, voids, cash outs and Battles don't count; Challenge bets do.
 - A Challenge's poster may bet on it; that bet is tagged "Poster's bet".
+- Crypto bets: singles only, betting closes 60 s before the market closes, settled by Kalshi's result (never our chart).
 
 ## Working with Will
 - Will works in the browser only (no terminal). Claude pushes to GitHub.
