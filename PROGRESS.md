@@ -57,7 +57,7 @@ Spec summary:
 - [x] A5 Full suite (26 + 87 + 21 + scratchpad sportsbook suites), lint, build, interact.mjs (incl. leave-all),
       dealcheck.mjs, phone check 66 screens × 320/375/414 clean; merged wip → main (0.8.0)
 
-## Current phase: B — Battles (started 2026-10-17 18:55)
+## Phase B — Battles — COMPLETE (2026-10-17), merged to main (0.9.0), ready for Will to test
 
 ### Approved plan (B/C), with Will's changes
 Battles `battles/{id}`: title, description, creatorUid/Name, format 'ffa' | 'teams', teams [{id, name}],
@@ -111,10 +111,13 @@ Battles in My Bets, admin Battles tab (disputed first) with edit log.
       BattleDetailPage (accept/decline/keep/withdraw/cancel/result/dispute, logs), BattleCard in My Bets, admin
       Battles tab (filters, disputed first, result/payout/void previews via MoneyConfirmModal), nav badge.
       Harness: battle fixtures + 11 scenarios; firestore mock supports array-contains.
-- [ ] B6 Full suite, build, lint, phone check, merge, live test steps (incl. console rules step)
+- [x] B6 Full suite (26 + 87 + 21 + 84 + 15), lint, build, interact.mjs, dealcheck.mjs, phone check 77 screens ×
+      320/375/414 clean; merged wip → main. Will must publish firestore.rules (battles block).
 
 ## Next
-B6: full suite, build, lint, phone check, merge, report (tell Will to publish firestore.rules).
+Phase C — Challenges + section 6 (admin odds edits on custom games / Challenges / Battle payout, edit logs).
+Start from a fresh `wip` off main once Will has tested B (or when he says go). Plan is above (approved);
+remember Will's change 1: posters CAN bet, `posterBet: true` set by the server, "Poster's bet" tag.
 
 ## Open questions
 None.
