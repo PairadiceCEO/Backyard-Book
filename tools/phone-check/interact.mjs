@@ -256,13 +256,13 @@ await check('My Bets: a player under 200 bets costs no extra reads', async () =>
 });
 
 // ---------- Crypto chart scrubber ----------
-await check('crypto chart: touch-drag scrubs (time + price + target), keeps its minute through the 10 s refresh, lifts away; mouse hover too', async () => {
+await check('crypto chart: touch-drag scrubs (time + price + target), keeps its minute through the 10 s refresh, moves to the oldest point once its minute rolls off, lifts away; mouse hover too', async () => {
   const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   const first = F.cryptoCoin('btc');
-  // A full hour of 1-minute closes, so the right-edge flip is always exercised.
+  // A full window of 1-minute closes (the last 60 minutes, ending now), so the right-edge flip is always exercised.
   const hourFrom = Date.parse(first.chart.from);
-  first.chart.points = Array.from({ length: 60 }, (_, i) => ({ t: hourFrom + i * 60000, c: 81900 + 120 * Math.sin(i / 6) + i }));
+  first.chart.points = Array.from({ length: 61 }, (_, i) => ({ t: hourFrom + i * 60000, c: 81900 + 120 * Math.sin(i / 6) + i }));
   // Put the 15-min target right on one minute's close, so scrubbing there shows "Target $X".
   const onTarget = first.chart.points[Math.floor(first.chart.points.length / 2)];
   first.coin.fifteen.market.strike = Number(onTarget.c.toFixed(2));
@@ -275,9 +275,16 @@ await check('crypto chart: touch-drag scrubs (time + price + target), keeps its 
       answers += 1;
       // The refresh drops the minute being scrubbed (and nudges every price): the scrubber moves to the nearest minute.
       if (answers === 1) return json(route, 200, first);
-      const scrubbed = Number(page.__scrubbedT);
-      const points = first.chart.points.filter((p) => p.t !== scrubbed).map((p) => ({ ...p, c: p.c + 1 }));
-      return json(route, 200, { ...first, serverNow: Date.now(), chart: { ...first.chart, points } });
+      if (!page.__rolled) {
+        const scrubbed = Number(page.__scrubbedT);
+        const points = first.chart.points.filter((p) => p.t !== scrubbed).map((p) => ({ ...p, c: p.c + 1 }));
+        return json(route, 200, { ...first, serverNow: Date.now(), chart: { ...first.chart, points } });
+      }
+      // Later refreshes roll the window 10 minutes forward: the held minute scrolls off the left edge.
+      const shift = 10 * 60000;
+      const kept = first.chart.points.filter((p) => p.t >= hourFrom + shift);
+      const added = Array.from({ length: 10 }, (_, i) => ({ t: kept[kept.length - 1].t + (i + 1) * 60000, c: 81950 + i }));
+      return json(route, 200, { ...first, serverNow: Date.now(), chart: { from: new Date(hourFrom + shift).toISOString(), to: new Date(Date.parse(first.chart.to) + shift).toISOString(), points: [...kept, ...added] } });
     }
     return json(route, 200, { ok: true, ran: false });
   });
@@ -330,6 +337,13 @@ await check('crypto chart: touch-drag scrubs (time + price + target), keeps its 
   const minutes = (s) => { const [hm, ap] = s.split(' '); const [h, m] = hm.split(':').map(Number); return ((h % 12) + (ap === 'PM' ? 12 : 0)) * 60 + m; };
   assert.ok(Math.abs(minutes(after[0]) - minutes(held)) <= 1, `stayed on its minute or the nearest (${held} → ${after[0]})`);
   assert.notEqual(after[1], before[1], 'shows the refreshed price');
+
+  // The window rolls on: once the held minute has scrolled off the left edge, the scrubber sits on the oldest point.
+  page.__rolled = true;
+  await page.waitForTimeout(10600);
+  const rolled = await label();
+  const oldest = new Date(hourFrom + 10 * 60000).toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' });
+  assert.equal(rolled[0], oldest, `moved to the oldest point (${held} → ${rolled[0]})`);
 
   await fire('pointerup', 0.05);
   assert.equal(await page.locator('.chart-scrub').count(), 0, 'lifting the finger hides it');

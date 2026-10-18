@@ -1,5 +1,5 @@
-// One coin, like a game's alternate-lines page: the current Coinbase price in big text, this hour's 1-minute
-// chart (15-min target and hourly main strike as labeled lines, both close times marked), the 15-minute
+// One coin, like a game's alternate-lines page: the current Coinbase price in big text, the last 60 minutes of
+// 1-minute closes (15-min target and hourly main strike as labeled lines; both close times as text with countdowns), the 15-minute
 // Up / Down market and every hourly strike with Above / Below. Refreshes every 10 s.
 
 import { useMemo } from 'react';
@@ -46,6 +46,27 @@ function HourlyLadder({ coin, section, nowMs }) {
   );
 }
 
+// The markets' close times, with live countdowns, above the chart (the chart ends at now, so they aren't drawn on it):
+// "15-min closes 7:30 PM (4:12)" and "Hourly closes 8:00 PM (34:12)".
+function CloseTimes({ fifteen, hourly, nowMs }) {
+  const items = [];
+  if (fifteen) items.push({ key: '15m', kind: 'target', name: '15-min', closeTime: fifteen.closeTime });
+  if (hourly) items.push({ key: 'hourly', kind: 'strike', name: 'Hourly', closeTime: hourly.closeTime });
+  if (items.length === 0) return null;
+  return (
+    <div className="crypto-close-times">
+      {items.map((item) => {
+        const left = countdownText(item.closeTime, nowMs);
+        return (
+          <span key={item.key} className={`crypto-close-time ${item.kind}`}>
+            {item.name} closes {formatCloseClock(item.closeTime)} ({left ?? 'closed'})
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function CryptoCoinPage() {
   const { coin: coinId } = useParams();
   const { data, offsetMs, error, notFound, loading, retry } = useCryptoData(coinId);
@@ -62,12 +83,6 @@ export default function CryptoCoinPage() {
     if (hourly?.main?.strike != null) list.push({ value: hourlyStrikeValue(hourly.main.strike), label: 'Hourly', kind: 'strike' });
     return list;
   }, [fifteen?.market?.strike, hourly?.main?.strike]);
-  const marks = useMemo(() => {
-    const list = [];
-    if (fifteen?.closeTime) list.push({ t: Date.parse(fifteen.closeTime), label: `15m ${formatCloseClock(fifteen.closeTime)}`, kind: 'target' });
-    if (hourly?.closeTime) list.push({ t: Date.parse(hourly.closeTime), label: `Hourly ${formatCloseClock(hourly.closeTime)}`, kind: 'strike' });
-    return list;
-  }, [fifteen?.closeTime, hourly?.closeTime]);
 
   return (
     <section className="page">
@@ -102,8 +117,9 @@ export default function CryptoCoinPage() {
             <div className="crypto-hero-price">{coin.price !== null ? formatCryptoPrice(coin.price) : '—'}</div>
           </div>
           <div className="card crypto-chart-card">
-            <CryptoChart chart={chart} levels={levels} marks={marks} />
-            {chart ? <p className="muted small">1-minute closes this hour · refreshes every 10 s</p> : null}
+            <CloseTimes fifteen={fifteen} hourly={hourly} nowMs={nowMs} />
+            <CryptoChart chart={chart} levels={levels} />
+            {chart ? <p className="muted small">1-minute closes, last 60 minutes · refreshes every 10 s</p> : null}
           </div>
           <div className="card">
             <FifteenMarket coin={coin} section={fifteen} nowMs={nowMs} />

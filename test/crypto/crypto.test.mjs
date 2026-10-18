@@ -81,6 +81,7 @@ async function fetchImpl(u) {
     const product = decodeURIComponent(p.pathname.split('/')[2]);
     if (p.pathname.endsWith('/ticker')) return world.price[product] ? ok({ price: world.price[product], time: iso(0) }) : { ok: false, status: 404, json: async () => ({}) };
     if (p.pathname.endsWith('/candles')) {
+      world.candleQuery = { start: p.searchParams.get('start'), end: p.searchParams.get('end'), granularity: p.searchParams.get('granularity') };
       const from = Date.parse(p.searchParams.get('start'));
       const rows = [];
       for (let t = from; t <= nowMs; t += MIN) rows.unshift([t / 1000, 81000, 82000, 81500, 81500 + (t - from) / MIN, 1.2]);
@@ -172,13 +173,22 @@ test('board: soonest open 15-min market with a target, hourly main strike (YES a
   assert.ok(world.calls.length > before, 'refreshed after 10 s');
 });
 
-test('coin page: full tradable hourly ladder and this hour\'s 1-minute candles; betting closed in the last 60 s', async () => {
+test('coin page: full tradable hourly ladder and the last 60 minutes of 1-minute candles (rolling); betting closed in the last 60 s', async () => {
   const page = await crypto.getCryptoCoin('btc', { nowMs, fetchImpl });
   assert.deepEqual(page.coin.hourly.ladder.map((r) => r.strike), [81499.99, 81999.99, 82499.99], 'strikes priced $0.99 / $0.01 are left out');
-  assert.equal(page.chart.from, '2026-10-18T00:00:00.000Z');
-  assert.equal(page.chart.to, '2026-10-18T01:00:00.000Z');
-  assert.equal(page.chart.points.length, 21);
+  assert.equal(page.chart.from, '2026-10-17T23:20:00.000Z', 'now − 60 min');
+  assert.equal(page.chart.to, '2026-10-18T00:20:00.000Z', 'ends at now');
+  assert.deepEqual(world.candleQuery, { start: '2026-10-17T23:20:00.000Z', end: '2026-10-18T00:20:00.000Z', granularity: '60' }, 'Coinbase asked for exactly that window');
+  assert.equal(page.chart.points.length, 61);
   assert.ok(page.chart.points.every((p, i, a) => i === 0 || p.t > a[i - 1].t), 'oldest first');
+  assert.ok(page.chart.points.every((p) => p.t >= Date.parse(page.chart.from) && p.t <= Date.parse(page.chart.to)));
+  // Within 10 s: the same answer from memory. After that it rolls forward.
+  const calls = world.calls.length;
+  assert.equal((await crypto.getCryptoCoin('btc', { nowMs: nowMs + 5000, fetchImpl })).chart.from, page.chart.from);
+  assert.equal(world.calls.length, calls);
+  const later = await crypto.getCryptoCoin('btc', { nowMs: nowMs + 3 * MIN, fetchImpl });
+  assert.equal(later.chart.from, '2026-10-17T23:23:00.000Z');
+  assert.equal(later.chart.to, '2026-10-18T00:23:00.000Z');
   await assert.rejects(crypto.getCryptoCoin('ltc', { nowMs, fetchImpl }), (e) => e.status === 404);
 
   crypto.clearCryptoCache();

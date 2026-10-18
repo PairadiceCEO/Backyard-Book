@@ -1,5 +1,6 @@
-// Hand-built SVG line chart of Coinbase 1-minute closes for the current hour, with labeled horizontal lines (the
-// 15-min target, the hourly main strike) and vertical marks at the close times. Scales to its container's width
+// Hand-built SVG line chart of Coinbase 1-minute closes for the last 60 minutes (ending now, rolling with each refresh),
+// with labeled horizontal lines (the 15-min target, the hourly main strike); `marks` can draw vertical marks at times
+// inside the window. Scales to its container's width
 // (viewBox), so it fits 320–414 px phones. No library.
 //
 // Scrubber: touching the chart (or hovering it with a mouse) shows a vertical line and a dot at the nearest 1-minute
@@ -7,7 +8,7 @@
 // finger, or the mouse leaving, hides it. The chart has touch-action: pan-y, so vertical swipes still scroll the page
 // (the browser then cancels the pointer and the scrubber hides) while horizontal drags scrub.
 // The scrubber remembers the point's TIMESTAMP, so the 10-second data refresh keeps it on the same minute (or the
-// nearest one if that minute is gone) instead of jumping.
+// nearest one if that minute is gone — once it scrolls off the left edge, that is the oldest point) instead of jumping.
 //
 // Loop safety: React pointer handlers only (removed with the element on unmount), no document listeners or timers;
 // state is set only from pointer events and only when the chosen minute changes; geometry is memoized on the data.
@@ -158,7 +159,7 @@ export default function CryptoChart({ chart, levels = [], marks = [] }) {
       className={scrub ? 'crypto-chart scrubbing' : 'crypto-chart'}
       viewBox={`0 0 ${W} ${H}`}
       role="img"
-      aria-label={scrub ? `${formatCloseClock(new Date(scrub.t))}: ${chartPrice(scrub.c)}` : 'Price over the current hour, 1-minute closes'}
+      aria-label={scrub ? `${formatCloseClock(new Date(scrub.t))}: ${chartPrice(scrub.c)}` : 'Price over the last 60 minutes, 1-minute closes'}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}

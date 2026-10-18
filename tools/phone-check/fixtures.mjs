@@ -275,13 +275,14 @@ export function cryptoBoard() {
 }
 export function cryptoCoin(id, { noChart = false } = {}) {
   const coin = cryptoCoins().find((c) => c.id === id) ?? cryptoCoins()[0];
-  const from = Math.floor(now / (60 * MIN)) * 60 * MIN;
+  // The last 60 minutes, ending now (the server's rolling window).
+  const from = now - 60 * MIN;
   const points = [];
   for (let t = from; t <= now; t += MIN) points.push({ t, c: coin.price * (1 + 0.0012 * Math.sin((t - from) / (7 * MIN)) - 0.0004 * ((t - from) / (60 * MIN))) });
   if (points.length < 2) points.unshift({ t: from - MIN, c: coin.price });
   return {
     league: 'crypto', fetchedAt: new Date().toISOString(), serverNow: Date.now(), coin,
-    chart: noChart ? null : { from: iso(from), to: iso(from + 60 * MIN), points },
+    chart: noChart ? null : { from: iso(from), to: iso(now), points },
   };
 }
 

@@ -22,9 +22,13 @@ stop dev/harness servers at the end.
       missing, wide gap, closed, settled, result set, leg graded, another event's ticker incl. Kalshi answer without
       event_ticker, unconfigured series, wrong ticker answered). Mutation-checked: 0.90 → 0.95, 0.90 dropped, 60 s
       cutoff, ticker check, gap check — each fails a test. CLAUDE.md + README cash out lines; phone fixture b9.
-- [ ] 2 Crypto chart: rolling last 60 minutes ending now (candles request = that window), close times as text above
-      the chart with live countdowns, target lines + scrubber kept (held minute; once it scrolls off → oldest point).
-      Phone check coin screens updated.
+- [x] 2 Crypto chart, rolling: `fetchCoinbaseCandles(product)` asks Coinbase for exactly now − 60 min → now
+      (granularity 60) and returns { from, to, points }; cached per product for 10 s (window taken at fetch time, so
+      the rolling start never defeats the cache). getCryptoCoin returns that window. Coin page: close times as text
+      above the chart, "15-min closes 12:38 PM (6:00)" / "Hourly closes 1:10 PM (37:48)", live countdowns; nothing
+      drawn for them on the chart. Targets and scrubber unchanged; the held minute moves to the oldest point once it
+      rolls off (nearest point). Tests: window, exact Coinbase request, 10 s memory, rolls after 3 min. interact.mjs
+      scrubber check now also rolls the window 10 min and expects the oldest point. Fixtures use the rolling window.
 - [ ] 3 Player props (Kalshi, pre-game only): series discovery (Sports list read to the end) → checked-in config
       (series → league, stat label), included/left-out list here; matching only by the mapped winner event's ticker
       suffix; pre-game rule ('pre' and server clock < startTime); pricing (configured series, mapped event, active,
@@ -212,7 +216,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.14.0: item 2 (rolling chart), then 3, 4, checks.
+0.14.0: item 3 (player props), then 4, checks.
 
 ## Open questions
 None open.
