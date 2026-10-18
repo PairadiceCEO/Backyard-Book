@@ -114,10 +114,41 @@ Battles in My Bets, admin Battles tab (disputed first) with edit log.
 - [x] B6 Full suite (26 + 87 + 21 + 84 + 15), lint, build, interact.mjs, dealcheck.mjs, phone check 77 screens ×
       320/375/414 clean; merged wip → main. Will must publish firestore.rules (battles block).
 
+## Current phase: C — Challenges + admin odds edits (started 2026-10-17)
+
+### Design
+- `challenges/{id}` (id = `{posterUid}_{clientRequestId}`): posterUid/Name, title, description, outcomes
+  [{id 'o1'…'o6', label, american}], closeTime, status pending | open | rejected | settled | void, winner,
+  rejectNote, approvedAt/By, settledAt/By, betCount, posterBets [{betId, outcomeId, label, stakeCents,
+  american, parlay, at}] (public: everyone sees the poster's bets on their own Challenge), edits [{by, byName,
+  at, what}], version. Rules: readable by anyone signed in; no client writes.
+- Posting: `/api/battles` action `postChallenge` (keeps 7 functions). 2–6 outcomes, American odds (±100+),
+  close time in Central Time (same date/clock fields as custom games), at least 10 min ahead, ≤ 60 days.
+- Admin (`/api/admin`): challengeApprove (optionally with edits), challengeReject {note}, challengeEdit
+  (pending: anything; open: odds and close time only — wording is fixed once bets can exist), challengeSettle
+  {winner} and challengeVoid (preview with every wallet change via settlement dryRun, then settle the
+  Challenge's bets at once, like custom games' final score / cancel).
+- Betting: legs `{ league: 'challenge', gameId: 'challenge:{id}', marketType: 'challenge', selection: 'oN' }`;
+  priced fresh from the doc (must be open and before closeTime on the server clock); parlays allow one leg
+  per Challenge (conflictKey). Poster may bet (Will's change 1): the server sets `posterBet: true` on the bet
+  and appends to the Challenge's posterBets in the placement transaction. Graded from the admin's winner;
+  count toward win rate like any bet. Cash out: stake × 0.9 before close; none after (no market price).
+- Section 6: admin custom-game edits are logged on the doc (`edits`: who, what, when; odds diffs spelled out)
+  and shown on the game's page and in Admin → Custom games; Challenge edits logged and shown; Battle payout
+  edits already logged (Phase B). Placed bets keep their odds (they're stored on the leg).
+
+### Checklist
+- [ ] C1 shared/challenges.js; betRules: 'challenge' market (selections o1–o6, no line)
+- [ ] C2 server/challenges.js + routing (postChallenge, admin actions) + firestore.rules
+- [ ] C3 betting: pricing, placeBet (posterBet, betCount, posterBets), gameResults, grading, cashout
+- [ ] C4 custom-game edit log (update / final / cancel) + normalizeCustomGame carries `edits`
+- [ ] C5 tests test/challenges/*.test.mjs (incl. Will's poster-bet test)
+- [ ] C6 phones: Custom tab Challenges, Post a Challenge, Challenge page, slip picks, "Poster's bet" tags
+      (My Bets, Challenge page, admin Challenges + Bets), admin Challenges tab, custom-game edit logs
+- [ ] C7 full suite, build, lint, phone check, merge, report (Will publishes firestore.rules again)
+
 ## Next
-Phase C — Challenges + section 6 (admin odds edits on custom games / Challenges / Battle payout, edit logs).
-Start from a fresh `wip` off main once Will has tested B (or when he says go). Plan is above (approved);
-remember Will's change 1: posters CAN bet, `posterBet: true` set by the server, "Poster's bet" tag.
+C1.
 
 ## Open questions
 None.
