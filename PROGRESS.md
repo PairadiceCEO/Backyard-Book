@@ -5,6 +5,29 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.13.0 (Will, 2026-10-18 01:56 CT) — IN PROGRESS
+Spec: Will's attachment of 2026-10-18 01:56. One phase on a fresh wip off main; merge after every CLAUDE.md check.
+
+### Checklist
+- [ ] 1 Q1 answer: remove the stale-market guard (b) entirely (`freshForLive`, `liveSinceMs` uses, updatedAt
+      plumbing) from board, alternate ladders, game detail, priceLeg and cash out bids. No latest-trade check.
+      Keep game-number matching, "when unsure, no price" and the cash out mapping check. Tests: stale tests replaced
+      by "a live game's correctly mapped market is priced (board, bet time, live cash out)". CLAUDE.md line.
+- [ ] 2 ODDS_CHANGED: `oddsDistance()` + `ODDS_CONFIRM_POINTS = 50` in shared/oddsMath.js (f(a) = a − 100 for
+      a ≥ +100, a + 100 for a ≤ −100). placeBets refuses with 409 ODDS_CHANGED { oddsChanges: [{ legId,
+      oldAmerican, newAmerican, quote }] } when any leg moved ≥ 50 (every market type, each parlay leg);
+      LINE_CHANGED / MARKET_CLOSED first; under 50 unchanged. Phone popup "Old +100 → New +155", "Accept new odds"
+      / "Remove pick(s)". Tests incl. the examples, 50 vs 49, parlay refused with no wallet change, resubmit;
+      mutation-check the threshold. CLAUDE.md line.
+- [ ] 3 My Bets → Finished: sort menu (settled newest default / oldest, placed newest, stake, profit); collapsible
+      Filters panel (result, date placed incl. custom Central dates, category, bet type, market, live/pre-game,
+      stake range, text search, poster's bets) with count badge + Clear all; summary line (bets, staked, returned,
+      net, win rate); sessionStorage. Data: every finished bet, lean reads (see decision below). Battles unchanged.
+- [ ] 4 Crypto chart scrubber: touch (touch-action: pan-y, drag, lift hides) and mouse hover; line + dot + time and
+      price label kept inside the chart (flips near edges), "Target $X" near a target line; survives the 10 s refresh
+      on the same timestamp (or the nearest); listeners removed on unmount; phone-check screen.
+- [ ] 5 Checks (test:all, lint, build, interact.mjs, dealcheck.mjs, phone check) → merge as 0.13.0; stop servers.
+
 ## Batch (Will, 2026-10-18): Phase 1 fixes (0.11.0), then Phase 2 crypto markets (0.12.0)
 Spec: Will's message of 2026-10-18 00:03 CT. Two phases, each merged to main on its own, in order.
 Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after Phase 1 is merged.
@@ -121,10 +144,14 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: Phases 1 and 2 are merged. Wait for Will's test results, and his answer to Q1.
+0.13.0 item 1.
 
 ## Open questions
-- Q1 (2026-10-18, Phase 1 item 1b): Kalshi's `updated_time` does NOT move when a market trades. Checked against the
+None open.
+
+## Answered
+- Q1 — ANSWERED by Will 2026-10-18 01:56: remove guard (b) entirely, no latest-trade replacement (0.13.0 item 1).
+  Original question (2026-10-18, Phase 1 item 1b): Kalshi's `updated_time` does NOT move when a market trades. Checked against the
   real API on 2026-10-18 ~05:10Z:
   - KXBTC15M-26OCT180115-15: ask moved 0.48 → 0.45 and ~500k contracts traded, `updated_time` stayed at
     05:00:00.596Z (the open time).
