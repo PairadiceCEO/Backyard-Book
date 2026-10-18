@@ -3,6 +3,7 @@
 // Which market a leg refers to is decided by the server, not the browser: the server's own cached
 // board says which Kalshi ticker/side backs a leg. Prices and lines are then fetched fresh:
 //   custom game → its Firestore doc, closed once the server clock reaches the start time
+//   Challenge   → its Firestore doc: open (admin-approved) and before its close time on the server clock
 //   pre-game    → fresh ESPN odds; if ESPN doesn't price it, the board's Kalshi market, re-fetched
 //   live        → the Kalshi market (re-fetched); if the board still held ESPN's pre-game line,
 //                 the game's live Kalshi market is looked up fresh
@@ -21,6 +22,9 @@ import {
   marketMatchesLeg,
   quoteFromMarket,
 } from './sources/kalshi.js';
+import { marketHasLine } from '../shared/betRules.js';
+import { makeQuote } from '../shared/oddsMath.js';
+import { CHALLENGE_LEAGUE, CHALLENGE_MARKET, challengeDocId, isChallengeLeg } from '../shared/challenges.js';
 
 const BOARD_TTL_MS = 30 * 1000;
 
@@ -71,6 +75,12 @@ export function createPricingContext({ now = new Date(), fetchImpl = fetch, getB
         return snap.exists ? snap.data() : null;
       });
     },
+    challenge(docId) {
+      return once(`challenge:${docId}`, async () => {
+        const snap = await adminDb().collection('challenges').doc(docId).get();
+        return snap.exists ? snap.data() : null;
+      });
+    },
   };
   return ctx;
 }
@@ -81,7 +91,7 @@ function closed(reason) {
 
 function compare(leg, quote, game) {
   if (!quote) return closed('This market is no longer available.');
-  if (leg.marketType !== 'moneyline' && !sameLine(leg.line, quote.line)) {
+  if (marketHasLine(leg.marketType) && !sameLine(leg.line, quote.line)) {
     return { status: 'lineChanged', quote, game };
   }
   return { status: 'ok', quote, game };
@@ -96,8 +106,37 @@ async function kalshiFromBoardQuote(ctx, boardQuote, marketType) {
 
 // leg: { league, gameId, marketType, selection, line }
 // Returns { status: 'ok' | 'lineChanged', quote, game } or { status: 'closed', reason }.
+function toMs(value) {
+  if (!value) return null;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.toDate === 'function') return value.toDate().getTime();
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+// A Challenge outcome, priced from the Challenge doc. game carries what the stored leg needs.
+async function priceChallengeLeg(leg, ctx) {
+  const { league, gameId, marketType, selection } = leg;
+  const data = await ctx.challenge(challengeDocId(gameId));
+  if (!data || league !== CHALLENGE_LEAGUE || marketType !== CHALLENGE_MARKET) return closed('This Challenge no longer exists.');
+  if (data.status === 'pending') return closed("This Challenge hasn't been approved yet.");
+  if (data.status !== 'open') return closed('This Challenge is closed.');
+  const closeMs = toMs(data.closeTime);
+  if (closeMs === null || ctx.now.getTime() >= closeMs) return closed('Betting on this Challenge closed at its close time.');
+  const outcome = (data.outcomes ?? []).find((o) => o.id === selection);
+  if (!outcome) return closed('That outcome is no longer offered.');
+  const quote = makeQuote(outcome.american, { source: 'challenge', ref: { provider: 'Challenge' } });
+  if (!quote) return closed('That outcome has no price.');
+  return {
+    status: 'ok',
+    quote,
+    game: { kind: 'challenge', id: String(gameId), title: data.title, startTime: new Date(closeMs).toISOString(), outcomeLabel: outcome.label, posterUid: data.posterUid },
+  };
+}
+
 export async function priceLeg(leg, ctx) {
   const { league, gameId, marketType, selection } = leg;
+  if (isChallengeLeg(leg)) return priceChallengeLeg(leg, ctx);
 
   if (String(gameId).startsWith('custom:')) {
     const docId = String(gameId).slice('custom:'.length);

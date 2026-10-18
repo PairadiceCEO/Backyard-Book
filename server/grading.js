@@ -53,11 +53,12 @@ export function resultFromCustomGame(game) {
   return { status: 'final', homeScore, awayScore, ...names, statusText: 'Final', reason: '' };
 }
 
-// "Rays 3 @ Guardians 5 · Final/10"
+// "Rays 3 @ Guardians 5 · Final/10" (a Challenge: "Winner: Yes")
 export function scoreText(result) {
   if (!result) return null;
   if (result.status === 'void') return result.statusText || 'Canceled';
   if (result.status !== 'final') return null;
+  if (result.winner) return `Winner: ${result.winnerLabel ?? result.winner}`;
   return `${result.awayName} ${result.awayScore} @ ${result.homeName} ${result.homeScore} · ${result.statusText || 'Final'}`;
 }
 
@@ -79,9 +80,14 @@ export function gradeLeg(leg, result) {
     return { result: 'void', reason: result.reason || 'Game postponed or canceled.', scoreText: scoreText(result), finalScore: null };
   }
 
+  const { marketType, selection } = leg;
+  // A Challenge: the admin's winning outcome wins, every other outcome loses.
+  if (marketType === 'challenge') {
+    if (!result.winner) return { result: 'pending', reason: 'Challenge has no winner yet.', scoreText: null, finalScore: null };
+    return { result: selection === result.winner ? 'win' : 'loss', reason: '', scoreText: scoreText(result), finalScore: null };
+  }
   const finalScore = { home: result.homeScore, away: result.awayScore };
   const base = { reason: '', scoreText: scoreText(result), finalScore };
-  const { marketType, selection } = leg;
   const line = leg.line === null || leg.line === undefined ? null : Number(leg.line);
 
   if (marketType === 'moneyline' || marketType === 'spread') {

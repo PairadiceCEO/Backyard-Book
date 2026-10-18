@@ -1,8 +1,10 @@
-// POST /api/battles  { action, ...fields }  (signed-in players)
+// POST /api/battles  { action, ...fields }  (signed-in players): Battles and Challenge posting
 //   create   { clientRequestId, title, description, format, stakeDollars, payoutBps, teams?, players }
 //   accept | decline | withdraw | keep | cancel   { battleId }
 //   result   { battleId, places: { [uid | teamId]: n } }   (the creator, once the Battle is live)
 //   dispute  { battleId, note }                            (any player, within 48 h of the result)
+//   postChallenge { clientRequestId, title, description, outcomes: [{ label, american }], closeDate, closeClock }
+//            (any player; the admin approves it before anyone can bet)
 // Every action that moves money is one Firestore transaction with deterministic ledger ids.
 
 import { HttpError, readJsonBody, withHandler } from '../server/http.js';
@@ -17,6 +19,7 @@ import {
   setBattleResult,
   withdrawBattle,
 } from '../server/battles.js';
+import { postChallenge } from '../server/challenges.js';
 
 const ACTIONS = {
   create: createBattle,
@@ -27,6 +30,7 @@ const ACTIONS = {
   cancel: cancelBattle,
   result: setBattleResult,
   dispute: disputeBattle,
+  postChallenge,
 };
 
 export default withHandler(['POST'], async (req) => {

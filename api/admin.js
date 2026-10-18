@@ -3,7 +3,8 @@
 // Admin only: ping, createUser, updateUser, setDisabled, resetPassword, adjustWallet,
 //   gradeBet, setLegResult (preview with confirm: false, apply with confirm: true + expectedVersion),
 //   createCustomGame, updateCustomGame, finalizeCustomGame, cancelCustomGame (preview / confirm), deleteCustomGame,
-//   battleSetResult, battleSetPayout, battleVoid (preview with confirm: false, apply with confirm: true + expectedVersion).
+//   battleSetResult, battleSetPayout, battleVoid (preview with confirm: false, apply with confirm: true + expectedVersion),
+//   challengeApprove, challengeReject, challengeEdit, challengeSettle / challengeVoid (preview / confirm).
 
 import { HttpError, readJsonBody, withHandler } from '../server/http.js';
 import { requireAdmin } from '../server/auth.js';
@@ -18,6 +19,7 @@ import {
   updateCustomGame,
 } from '../server/admin/customGames.js';
 import { adminSetBattlePayout, adminSetBattleResult, adminVoidBattle } from '../server/battles.js';
+import { approveChallenge, editChallenge, rejectChallenge, settleChallenge, voidChallenge } from '../server/challenges.js';
 
 const ADMIN_ACTIONS = {
   ping: async (_body, caller) => ({ ok: true, admin: true, username: caller.user.username }),
@@ -36,6 +38,11 @@ const ADMIN_ACTIONS = {
   battleSetResult: adminSetBattleResult,
   battleSetPayout: adminSetBattlePayout,
   battleVoid: adminVoidBattle,
+  challengeApprove: approveChallenge,
+  challengeReject: rejectChallenge,
+  challengeEdit: editChallenge,
+  challengeSettle: settleChallenge,
+  challengeVoid: voidChallenge,
 };
 
 export default withHandler(['POST'], async (req) => {
