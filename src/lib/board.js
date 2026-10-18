@@ -22,3 +22,16 @@ export function groupByDay(games) {
   }
   return groups;
 }
+
+// Live tab: games grouped by league in the app's league order (leagues = [{ id, label }]), each group by start
+// time. Leagues with no game in progress are left out.
+export function groupByLeague(games, leagues) {
+  const groups = [];
+  for (const league of leagues) {
+    const inLeague = games
+      .filter((g) => g.league === league.id)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime() || String(a.id).localeCompare(String(b.id)));
+    if (inLeague.length) groups.push({ key: league.id, label: league.label, games: inLeague });
+  }
+  return groups;
+}

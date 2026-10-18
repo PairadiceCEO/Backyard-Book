@@ -174,6 +174,12 @@ h3 {
   cursor: pointer;
 }
 
+.sub-tab .live-dot {
+  display: inline-block;
+  margin-right: 0.35rem;
+  vertical-align: 0.05em;
+}
+
 .sub-tab.active {
   background: var(--accent);
   border-color: var(--accent);

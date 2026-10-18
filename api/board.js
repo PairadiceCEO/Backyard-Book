@@ -1,13 +1,15 @@
-// GET /api/board?league=mlb|nfl|nhl|ncaaf|nba            → the league's games and main lines
-// GET /api/board?league=custom                            → the admin's custom games (every league)
+// GET /api/board?league=mlb|nfl|nhl|ncaaf|nba            → the league's games that haven't finished, main lines
+// GET /api/board?league=custom                            → the admin's custom games (every league), not finished
+// GET /api/board?league=live                              → every ESPN game in progress, all leagues
 // GET /api/board?league=…&game={id}                       → one game plus every posted alternate line
-// Both read one 30-second cache shared by all players.
+// All read one 30-second cache per league shared by all players. The cache keeps finished games (settlement,
+// pricing and game pages from My Bets need them); only the lists leave them out.
 
 import { HttpError, withHandler } from '../server/http.js';
 import { requireUser } from '../server/auth.js';
 import { getLeague } from '../server/leagues.js';
 import { getOrRefresh } from '../server/cache.js';
-import { CUSTOM_BOARD_ID, CUSTOM_BOARD_KEY, buildBoard, buildCustomBoard } from '../server/board.js';
+import { CUSTOM_BOARD_ID, CUSTOM_BOARD_KEY, LIVE_BOARD_ID, buildBoard, buildCustomBoard, getLiveBoard, listedGames } from '../server/board.js';
 import { getGameDetail } from '../server/gameDetail.js';
 
 const BOARD_TTL_MS = 30 * 1000;
@@ -25,14 +27,28 @@ export default withHandler(['GET'], async (req) => {
 
   const leagueId = readParam(req, 'league').toLowerCase();
   const custom = leagueId === CUSTOM_BOARD_ID;
-  if (!custom && !getLeague(leagueId)) {
-    throw new HttpError(400, 'BAD_LEAGUE', 'league must be one of: mlb, nfl, nhl, ncaaf, nba, custom.');
+  const live = leagueId === LIVE_BOARD_ID;
+  if (!custom && !live && !getLeague(leagueId)) {
+    throw new HttpError(400, 'BAD_LEAGUE', 'league must be one of: live, mlb, nfl, nhl, ncaaf, nba, custom.');
   }
   const gameId = readParam(req, 'game');
   if (gameId.length > 120) throw new HttpError(400, 'BAD_GAME', 'Invalid game id.');
+  if (live && gameId) throw new HttpError(400, 'BAD_GAME', "A live game's page is under its own league.");
 
   try {
     if (gameId) return await getGameDetail(leagueId, gameId);
+
+    if (live) {
+      const board = await getLiveBoard();
+      return {
+        league: LIVE_BOARD_ID,
+        fetchedAt: new Date(board.fetchedAtMs).toISOString(),
+        stale: board.stale,
+        partial: board.partial,
+        kalshiStatus: board.kalshiStatus,
+        games: board.games,
+      };
+    }
 
     const result = custom
       ? await getOrRefresh(CUSTOM_BOARD_KEY, BOARD_TTL_MS, () => buildCustomBoard())
@@ -43,7 +59,8 @@ export default withHandler(['GET'], async (req) => {
       stale: result.stale === true,
       partial: result.value.partial === true,
       kalshiStatus: result.value.kalshiStatus || 'ok',
-      games: result.value.games, // alternate lines stay in the cache; the game page asks for them
+      // Only games that haven't finished; alternate lines stay in the cache (the game page asks for them).
+      games: listedGames(result.value.games),
     };
   } catch (err) {
     if (err instanceof HttpError) throw err;
