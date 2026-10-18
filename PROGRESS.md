@@ -47,9 +47,16 @@ Spec: Will's attachment of 2026-10-18 01:56. One phase on a fresh wip off main; 
       interact.mjs: 263-bet player sees all 260 finished after exactly one history query; Lost filter + stake sort,
       remembered across reload, Clear all; a <200-bet player makes no extra query. Phone screens: my-bets-filters,
       my-bets-filters-dates, my-bets-history. Mock Firestore gained startAfter and a getDocs counter.
-- [ ] 4 Crypto chart scrubber: touch (touch-action: pan-y, drag, lift hides) and mouse hover; line + dot + time and
-      price label kept inside the chart (flips near edges), "Target $X" near a target line; survives the 10 s refresh
-      on the same timestamp (or the nearest); listeners removed on unmount; phone-check screen.
+- [x] 4 Crypto chart scrubber (src/components/crypto/CryptoChart.jsx, still hand-built SVG): React pointer handlers
+      only (no document listeners/timers; removed with the element). Touch: pointerdown starts (pointer capture, in
+      try/catch), drag moves, up/cancel hides; `touch-action: pan-y` so vertical swipes scroll (the browser cancels the
+      pointer → hidden). Mouse: hover follows, leaving hides. Remembers the minute's TIMESTAMP (`scrubT`), so the 10 s
+      refresh keeps it on that minute or the nearest; state set only when the minute changes; geometry read through a
+      ref. Label: time ("2:11 AM") + price (`chartPrice`: cents ≥ $100, 4 decimals ≥ $1, 6 below) + "Target $X" /
+      "Hourly target $X" for a line within 6% of the price range; `labelBox` flips left near the right edge and stays
+      inside. interact.mjs check (touch drag, target, flip, refresh that drops the held minute, lift, mouse hover/leave);
+      mutation-checked (no timestamp hold, no flip, no target line, no hide on lift: each fails). Phone screen
+      crypto-coin-scrub.
 - [ ] 5 Checks (test:all, lint, build, interact.mjs, dealcheck.mjs, phone check) → merge as 0.13.0; stop servers.
 
 ## Batch (Will, 2026-10-18): Phase 1 fixes (0.11.0), then Phase 2 crypto markets (0.12.0)
@@ -168,7 +175,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.13.0 item 4 (chart scrubber).
+0.13.0 checks and merge.
 
 ## Open questions
 None open.

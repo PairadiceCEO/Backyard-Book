@@ -185,6 +185,7 @@ const scenarios = [
   S('sportsbook-crypto', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: 'Crypto' }).click(); await p.waitForTimeout(400); } }),
   S('sportsbook-crypto-pick', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: 'Crypto' }).click(); await p.waitForTimeout(400); await p.locator('.crypto-card .odds-button').first().click(); await openSlip(p); } }),
   S('crypto-coin', '/sportsbook/crypto/btc', { admin: false, user: 'u1' }),
+  S('crypto-coin-scrub', '/sportsbook/crypto/btc', { admin: false, user: 'u1', act: async (p) => { await p.evaluate(() => { const svg = document.querySelector('svg.crypto-chart'); const r = svg.getBoundingClientRect(); for (const [type, f] of [['pointerdown', 0.1], ['pointermove', 0.2]]) svg.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 3, pointerType: 'touch', isPrimary: true, clientX: r.left + r.width * f, clientY: r.top + r.height / 2 })); }); await p.waitForTimeout(150); } }),
   S('crypto-coin-pick', '/sportsbook/crypto/btc', { admin: false, user: 'u1', act: async (p) => { await p.locator('.crypto-ladder .odds-button').nth(3).click(); await p.waitForTimeout(200); } }),
   S('crypto-coin-closing', '/sportsbook/crypto/eth', { admin: false, user: 'u1' }),
   S('crypto-coin-15m-only', '/sportsbook/crypto/near', { admin: false, user: 'u1' }),

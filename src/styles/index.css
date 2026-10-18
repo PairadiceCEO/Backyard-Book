@@ -4287,6 +4287,39 @@ fieldset.field legend {
   display: block;
   width: 100%;
   height: auto;
+  /* Vertical swipes scroll the page; horizontal drags move the scrubber. */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: crosshair;
+}
+
+.scrub-line {
+  stroke: var(--text);
+  stroke-width: 1;
+  opacity: 0.7;
+}
+
+.scrub-dot {
+  fill: var(--text);
+  stroke: var(--bg);
+  stroke-width: 2;
+}
+
+.scrub-box {
+  fill: var(--surface-2);
+  stroke: var(--border);
+}
+
+.scrub-text {
+  font-size: 11px;
+  fill: var(--text-muted);
+}
+
+.scrub-text.price {
+  fill: var(--text);
+  font-weight: 700;
 }
 
 .crypto-chart.unavailable {

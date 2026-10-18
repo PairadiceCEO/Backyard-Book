@@ -255,6 +255,93 @@ await check('My Bets: a player under 200 bets costs no extra reads', async () =>
   await context.close();
 });
 
+// ---------- Crypto chart scrubber ----------
+await check('crypto chart: touch-drag scrubs (time + price + target), keeps its minute through the 10 s refresh, lifts away; mouse hover too', async () => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  const first = F.cryptoCoin('btc');
+  // A full hour of 1-minute closes, so the right-edge flip is always exercised.
+  const hourFrom = Date.parse(first.chart.from);
+  first.chart.points = Array.from({ length: 60 }, (_, i) => ({ t: hourFrom + i * 60000, c: 81900 + 120 * Math.sin(i / 6) + i }));
+  // Put the 15-min target right on one minute's close, so scrubbing there shows "Target $X".
+  const onTarget = first.chart.points[Math.floor(first.chart.points.length / 2)];
+  first.coin.fifteen.market.strike = Number(onTarget.c.toFixed(2));
+  let answers = 0;
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: [], customGames: [], battles: [] } });
+  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/board' && u.searchParams.get('league') === 'crypto') {
+      answers += 1;
+      // The refresh drops the minute being scrubbed (and nudges every price): the scrubber moves to the nearest minute.
+      if (answers === 1) return json(route, 200, first);
+      const scrubbed = Number(page.__scrubbedT);
+      const points = first.chart.points.filter((p) => p.t !== scrubbed).map((p) => ({ ...p, c: p.c + 1 }));
+      return json(route, 200, { ...first, serverNow: Date.now(), chart: { ...first.chart, points } });
+    }
+    return json(route, 200, { ok: true, ran: false });
+  });
+  await page.goto(BASE + '/sportsbook/crypto/btc', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('svg.crypto-chart');
+  const fire = (type, frac, pointerType = 'touch') =>
+    page.evaluate(({ type, frac, pointerType }) => {
+      const svg = document.querySelector('svg.crypto-chart');
+      const r = svg.getBoundingClientRect();
+      svg.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 7, pointerType, isPrimary: true, relatedTarget: type === 'pointerout' ? document.body : null, clientX: r.left + (r.width * (8 + frac * 324)) / 340, clientY: r.top + r.height / 2 }));
+    }, { type, frac, pointerType });
+  const label = () => page.locator('.chart-scrub text').allTextContents(); // SVG text has no innerText
+
+  assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('svg.crypto-chart')).touchAction), 'pan-y');
+  assert.equal(await page.locator('.chart-scrub').count(), 0, 'hidden until touched');
+  await fire('pointerdown', 0.05);
+  let texts = await label();
+  assert.match(texts[0], /^\d{1,2}:\d{2} [AP]M$/, `time first (${texts[0]})`);
+  assert.match(texts[1], /^\$\d{2},\d{3}\.\d{2}/, `price second (${texts[1]})`);
+  const atStart = texts[0];
+  await fire('pointermove', 0.12);
+  texts = await label();
+  assert.notEqual(texts[0], atStart, 'dragging moves it');
+
+  // Near the right edge the label flips to the left of the line.
+  const pts = first.chart.points;
+  const lastFrac = (pts[pts.length - 1].t - Date.parse(first.chart.from)) / (Date.parse(first.chart.to) - Date.parse(first.chart.from));
+  await fire('pointermove', 0.99);
+  const box = await page.evaluate(() => ({ box: Number(document.querySelector('.scrub-box').getAttribute('x')), w: Number(document.querySelector('.scrub-box').getAttribute('width')), line: Number(document.querySelector('.scrub-line').getAttribute('x1')) }));
+  assert.ok(lastFrac > 0.9 && box.box + box.w <= box.line, 'flipped left of the line near the right edge');
+  assert.ok(box.box >= 0 && box.box + box.w <= 340, 'inside the chart');
+  const fracOf = (t) => (t - Date.parse(first.chart.from)) / (Date.parse(first.chart.to) - Date.parse(first.chart.from));
+  await fire('pointermove', fracOf(onTarget.t));
+  texts = await label();
+  assert.ok(texts.some((t) => /^Target \$/.test(t)), `on the 15-min target the label shows it (${texts.join(' | ')})`);
+  await fire('pointermove', fracOf(first.chart.points[0].t));
+
+  // Hold on one minute through the 10-second refresh, which drops that minute: it moves to the nearest one.
+  const from = Date.parse(first.chart.from);
+  const span = Date.parse(first.chart.to) - from;
+  const target = from + 0.05 * span;
+  page.__scrubbedT = pts.reduce((best, p) => (Math.abs(p.t - target) < Math.abs(best.t - target) ? p : best), pts[0]).t;
+  await fire('pointermove', 0.05);
+  const held = (await label())[0];
+  const before = await label();
+  await page.waitForTimeout(10600); // the coin page refreshes every 10 s
+  assert.ok(answers >= 2, 'refreshed');
+  const after = await label();
+  assert.ok(after.length >= 2, 'still showing after the refresh');
+  const minutes = (s) => { const [hm, ap] = s.split(' '); const [h, m] = hm.split(':').map(Number); return ((h % 12) + (ap === 'PM' ? 12 : 0)) * 60 + m; };
+  assert.ok(Math.abs(minutes(after[0]) - minutes(held)) <= 1, `stayed on its minute or the nearest (${held} → ${after[0]})`);
+  assert.notEqual(after[1], before[1], 'shows the refreshed price');
+
+  await fire('pointerup', 0.05);
+  assert.equal(await page.locator('.chart-scrub').count(), 0, 'lifting the finger hides it');
+
+  // Mouse: follows the hover, hides when the mouse leaves.
+  await fire('pointermove', 0.08, 'mouse');
+  assert.equal(await page.locator('.chart-scrub').count(), 1, 'hover shows it');
+  await fire('pointerout', 0.08, 'mouse'); // how a browser reports the mouse leaving (React turns it into onPointerLeave)
+  assert.equal(await page.locator('.chart-scrub').count(), 0, 'leaving hides it');
+  await context.close();
+});
+
 await browser.close();
 console.log(results.join('\n'));
 if (results.some((r) => r.startsWith('FAIL'))) process.exit(1);
