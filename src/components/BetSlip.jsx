@@ -10,6 +10,8 @@ import { formatAmerican, formatMoney, parseDollarsToCents } from '../lib/format.
 import { formatStrike } from '../../shared/crypto/coins.js';
 import {
   CRYPTO_PARLAY_MESSAGE,
+  PROP_PARLAY_MESSAGE,
+  hasPropSameGame,
   MIN_PARLAY_LEGS,
   combinedAmerican,
   combinedDecimal,
@@ -31,6 +33,7 @@ function stakeCents(input) {
 function lineText(marketType, line, leg) {
   if (marketType === 'total') return String(line);
   if (marketType === 'crypto') return formatStrike(leg?.crypto?.kind, line);
+  if (marketType === 'prop') return Number.isFinite(line) ? `${Math.round(line + 0.5)}+` : '';
   return formatSignedLine(line);
 }
 
@@ -71,7 +74,7 @@ export default function BetSlip() {
   const parlayStakeCents = stakeCents(parlayStake);
   const draft = {
     mode,
-    legs: parsedLegs.map((l) => ({ gameId: l.gameId, marketType: l.marketType, selection: l.selection, stakeCents: l.stakeCents ?? undefined })),
+    legs: parsedLegs.map((l) => ({ gameId: l.gameId, marketType: l.marketType, selection: l.selection, kalshi: l.kalshi, stakeCents: l.stakeCents ?? undefined })),
     stakeCents: parlayStakeCents ?? undefined,
   };
   const problems = slipProblems(draft, { balanceCents });
@@ -217,6 +220,7 @@ export default function BetSlip() {
               </div>
 
               {hasCrypto ? <p className="muted small">{CRYPTO_PARLAY_MESSAGE}</p> : null}
+              {mode === 'parlay' && hasPropSameGame(draft.legs) ? <p className="warning-text small">{PROP_PARLAY_MESSAGE}</p> : null}
 
               <ul className="slip-legs">
                 {legs.map((leg) => (

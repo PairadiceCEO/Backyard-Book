@@ -37,15 +37,18 @@ export function makePick(game, marketType, selection, quote) {
 }
 
 function applyQuote(leg, quote) {
+  // A prop's new strike is another threshold: N = strike + 0.5.
+  const prop = leg.prop ? { ...leg.prop, threshold: Number.isFinite(quote.line) ? Math.round(quote.line + 0.5) : leg.prop.threshold } : null;
   return {
     ...leg,
-    legId: makeLegId({ league: leg.league, gameId: leg.gameId, marketType: leg.marketType, selection: leg.selection, line: quote.line, source: quote.source }),
+    prop,
+    legId: makeLegId({ league: leg.league, gameId: leg.gameId, marketType: leg.marketType, selection: leg.selection, line: quote.line, source: quote.source, ticker: quote.ref?.ticker ?? leg.kalshi?.ticker ?? '' }),
     kalshi: kalshiRef(quote),
     line: quote.line,
     american: quote.american,
     decimal: quote.decimal,
     source: quote.source,
-    label: pickLabel({ marketType: leg.marketType, selection: leg.selection, line: quote.line, homeName: leg.homeName, awayName: leg.awayName, crypto: leg.crypto ?? null }),
+    label: pickLabel({ marketType: leg.marketType, selection: leg.selection, line: quote.line, homeName: leg.homeName, awayName: leg.awayName, crypto: leg.crypto ?? null, prop }),
     flag: null,
   };
 }
