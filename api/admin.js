@@ -4,7 +4,8 @@
 //   gradeBet, setLegResult (preview with confirm: false, apply with confirm: true + expectedVersion),
 //   createCustomGame, updateCustomGame, finalizeCustomGame, cancelCustomGame (preview / confirm), deleteCustomGame,
 //   battleSetResult, battleSetPayout, battleVoid (preview with confirm: false, apply with confirm: true + expectedVersion),
-//   challengeApprove, challengeReject, challengeEdit, challengeSettle / challengeVoid (preview / confirm).
+//   challengeApprove, challengeReject, challengeEdit, challengeSettle / challengeVoid (preview / confirm),
+//   chatDelete (casino chat message), walletActivity (a player's ledger for the last 24 h, read only).
 
 import { HttpError, readJsonBody, withHandler } from '../server/http.js';
 import { requireAdmin } from '../server/auth.js';
@@ -20,6 +21,8 @@ import {
 } from '../server/admin/customGames.js';
 import { adminSetBattlePayout, adminSetBattleResult, adminVoidBattle } from '../server/battles.js';
 import { approveChallenge, editChallenge, rejectChallenge, settleChallenge, voidChallenge } from '../server/challenges.js';
+import { deleteChatMessage } from '../server/casinoChat.js';
+import { walletActivity } from '../server/admin/walletActivity.js';
 
 const ADMIN_ACTIONS = {
   ping: async (_body, caller) => ({ ok: true, admin: true, username: caller.user.username }),
@@ -43,6 +46,8 @@ const ADMIN_ACTIONS = {
   challengeEdit: editChallenge,
   challengeSettle: settleChallenge,
   challengeVoid: voidChallenge,
+  chatDelete: deleteChatMessage,
+  walletActivity,
 };
 
 export default withHandler(['POST'], async (req) => {
