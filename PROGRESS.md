@@ -5,7 +5,7 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.15.0 (Will, 2026-10-20 10:22 CT) — IN PROGRESS on wip
+## Phase 0.15.0 (Will, 2026-10-20 10:22 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 10:22. One phase on a fresh wip off main (d09682b); merge after every
 CLAUDE.md check; stop dev/harness servers at the end.
 
@@ -73,8 +73,16 @@ CLAUDE.md check; stop dev/harness servers at the end.
       80 px tall (fails at 375×667), dock off (fails at 320×568), subscription never removed (fails cleanup).
       Phone screens added: cr-full, cr-my-roll, cx-point, cx-comeout, cx-watch, cx-full, cx-my-roll (existing cr-point,
       cr-comeout, cr-watch, cr-takedown, cr-chips, cr-come-hard, cr-dont-odds, cr-solo, cr-crapless kept).
-- [ ] 4 Checks: test:all, lint, build, interact.mjs (incl. no-scroll), dealcheck.mjs, phone check. Version 0.15.0.
-      Merge wip → main. Tonight's prop games for Will's test steps. Servers stopped.
+- [x] 4 Checks: test:all (31 + 97 + 21 + 104 + 15 + 11 + 11 + 11 = 301), lint (scratch flat config, see item 1),
+      build, interact.mjs (15 checks incl. the props tab, the craps/crapless no-scroll checks and Sit down),
+      dealcheck.mjs (6), phone check 125 screens × 320/375/414 clean. Version 0.15.0. Merged wip → main.
+      No firestore.rules change, no new index, no new /api function (still 7). Harness server stopped.
+      interact.mjs note: in one full run "three quick taps on Player" (Baccarat batching, untouched by this phase) saw 2
+      requests instead of 1; it passed 5 runs in a row on its own and the next full run passed 15/15. Timing flake in
+      this container (the 0.11.0 note describes the same check's timing sensitivity); not changed.
+      Tonight's props: Kalshi couldn't be re-checked from this session (the shell can't reach Kalshi and the web
+      request needed an approval that timed out). Kalshi had props this morning (0.14.0 check, ~09:45 CT) for NBA
+      BOS@DET, PHI@NYK, OKC@SAS and NHL goals on tonight's 11 games; schedule re-confirmed from public listings.
 
 ## Phase 0.14.0 (Will, 2026-10-18 12:25 CT; re-sent 2026-10-20 09:33) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-18 12:25. One phase on a fresh wip off main; merge after every CLAUDE.md check;
@@ -336,7 +344,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.15.0 item 1 (prop parlay rule), then 2 (props tab), then 3 (craps layout), then 4 (checks + merge).
+Nothing queued: 0.15.0 is merged. Wait for Will's test results.
 
 ## Open questions
 None open.
