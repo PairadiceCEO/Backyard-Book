@@ -5,6 +5,28 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.17.0 (Will, 2026-10-20 15:07 CT) — IN PROGRESS on wip
+Spec: Will's attachment of 2026-10-20 15:07 (items 1–2). One phase on a fresh wip off main (1576556, Analytics in);
+merge after every CLAUDE.md check; stop servers at the end.
+
+### Checklist
+- [ ] 1 Casino chat, one room per game (slots, blackjack, baccarat, craps, crapless), never mixed.
+      `casinoChat/{game}/messages/{uid}_{requestId}` { uid, name, text, createdAt, deleted }; /api/casino action
+      `chat` (no new function): room check, disabled refused, text cleaned (control characters out), 1–200
+      characters; rate 1 per 2 s and 20 a minute per player across rooms (`chatRate/{uid}`, same transaction);
+      create() so a retry posts once. firestore.rules: signed-in read, no client writes. Phone: Chat button + unread
+      badge on every game page (craps: top bar / dock), drawer (room name, last 30 of 24 h, oldest on top, name +
+      Central time, mine styled, auto-scroll only at the bottom, 200 counter, Send + Enter, plain text, "Message
+      removed"); closed = listen to the newest 1, open = newest 30; listeners removed; unread per room in localStorage.
+      Admin `chatDelete` + Delete with confirm. Prune > 24 h in the cron and at most hourly in other settlement runs,
+      batches ≤ 500. Tests + mutation checks; phone screens; craps no-scroll still passes; chat never leaves the seat.
+- [ ] 2 Admin → Wallet activity: `walletActivity` { uid, cursor? } (admin only, read only, ledger createdAt ≥ now − 24 h,
+      50 a page); summary by aggregation queries; indexes listed; missing index named, not a crash. Tab next to Shop
+      purchases: player picker, summary (Sportsbook, Casino + per game, Other), filters, rows (time with seconds,
+      where, what, Wagered, Won, balance after, bet link), cards ≤ 520 px, balance chain check (groups by
+      transaction), wallet comparison. Tests + mutation check; phone screens.
+- [ ] 3 Checks: test:all, lint, build, interact.mjs, dealcheck.mjs, phone check. Version 0.17.0. Merge.
+
 ## Vercel Web Analytics on main (Will, 2026-10-20 15:07 CT, item 0 of the 0.17.0 message) — COMPLETE (2026-10-20), merged to main
 - 0.16.0 was already merged (a178963, every CLAUDE.md check passed) before this message arrived, so item 0's "finish
   0.16.0" was done; PR #1 (`vercel/install-and-configure-vercel-w-rhdtqy`, 823bf95) was still unmerged, so it was
@@ -432,7 +454,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Phase 0.17.0 (casino chats + admin wallet activity) on a fresh wip off main.
+0.17.0 item 1 (casino chat), then 2 (wallet activity), then 3 (checks + merge).
 
 ## Open questions
 None open.
