@@ -24,7 +24,7 @@ async function openPage(path, tables, onCasino) {
   const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: tables } });
-  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
   await page.route('**/api/**', async (route) => {
     const u = new URL(route.request().url());
     if (u.pathname === '/api/casino') return onCasino(route, route.request().postDataJSON());
@@ -261,7 +261,7 @@ async function openCraps(path, tables, { width = 375, height = 800, uid = 'u1', 
     });
   }
   await page.addInitScript((h) => { window.__H = h; }, { user: { uid }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: tables } });
-  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
   await page.route('**/api/**', async (route) => {
     const u = new URL(route.request().url());
     if (u.pathname === '/api/casino' && onCasino) return onCasino(route, route.request().postDataJSON());
@@ -374,7 +374,7 @@ async function openRich(path, tables, onCasino) {
   const page = await context.newPage();
   const users = F.users.map((u) => (u.id === 'u1' ? { ...u, balanceCents: 1_000_000 } : u));
   await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: tables } });
-  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
   await page.route('**/api/**', async (route) => {
     const u = new URL(route.request().url());
     if (u.pathname === '/api/casino') return onCasino(route, route.request().postDataJSON());
@@ -456,7 +456,7 @@ await check('My Bets: a player with 263 bets sees all 260 finished (one extra qu
   const page = await context.newPage();
   const bets = F.heavyBets('u7', 260);
   await page.addInitScript((h) => { window.__H = window.__H ?? h; }, { user: { uid: 'u7' }, admin: false, fs: { users: [...F.users, F.heavyUser], bets, ledger: [], customGames: F.customGames, battles: [] } });
-  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
   await page.route('**/api/**', (route) => json(route, 200, { ok: true, ran: false, quotes: {} }));
   await page.goto(BASE + '/my-bets', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.querySelector('.finished-summary')?.textContent.startsWith('260 bets'), null, { timeout: 4000 });
@@ -501,7 +501,7 @@ await check('crypto chart: touch-drag scrubs (time + price + target), keeps its 
   first.coin.fifteen.market.strike = Number(onTarget.c.toFixed(2));
   let answers = 0;
   await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: [], customGames: [], battles: [] } });
-  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url());
     if (u.pathname === '/api/board' && u.searchParams.get('league') === 'crypto') {
@@ -597,7 +597,7 @@ await check('line wheel: starts on the main line, centered; tap / arrow key / sw
   let answers = 0;
   let dropLine = null;
   await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: [], customGames: [], battles: [] } });
-  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url());
     if (u.pathname === '/api/board' && u.searchParams.get('props')) return json(route, 200, F.propsPage('401'));
@@ -717,7 +717,7 @@ await check('props tab: game page alone fetches no props; tab opens them; rememb
   let propsCalls = 0;
   let detailCalls = 0;
   await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: [], customGames: [], battles: [] } });
-  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url());
     if (u.pathname === '/api/board' && u.searchParams.get('props')) { propsCalls += 1; return json(route, 200, F.propsPage(u.searchParams.get('game'))); }
@@ -809,7 +809,7 @@ await check('props tab works with sessionStorage blocked', async () => {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(() => { Object.defineProperty(window, 'sessionStorage', { get() { throw new Error('blocked'); } }); });
   await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: [], customGames: [], battles: [] } });
-  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url());
     if (u.pathname === '/api/board' && u.searchParams.get('props')) return json(route, 200, F.propsPage('401'));

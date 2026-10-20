@@ -5,6 +5,20 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Vercel Web Analytics on main (Will, 2026-10-20 15:07 CT, item 0 of the 0.17.0 message) — IN PROGRESS on wip
+- 0.16.0 was already merged (a178963, every CLAUDE.md check passed) before this message arrived, so item 0's "finish
+  0.16.0" was done; PR #1 (`vercel/install-and-configure-vercel-w-rhdtqy`, 823bf95) was still unmerged, so it was
+  merged into wip (clean): `@vercel/analytics` ^2.0.1 (package.json + lockfile, 2.0.1 installed with npm ci) and
+  `<Analytics />` once in src/App.jsx after </Routes>, in a fragment. Every CLAUDE.md check re-run with it in place,
+  then merged to main.
+- Harness: dev mode loads https://va.vercel-scripts.com/v1/script.debug.js, which the offline harness can't reach (the
+  live site loads /_vercel/insights/script.js from its own domain). `offlineRoute` (fixtures.mjs) now answers that one
+  URL with a stub and still aborts every other outside request (shoot, interact, dealcheck). shoot.mjs now fails a
+  screen on ANY console message or failed request mentioning Vercel/analytics (unfiltered), and unless the script
+  loaded exactly once on the page.
+- CLAUDE.md: the Analytics line under "Stack and limits" and the Production-from-main line under "Working with Will".
+- [ ] Checks: test:all 312, lint, build, interact.mjs 16/16, dealcheck 6/6 pass with Analytics; phone check running.
+
 ## Phase 0.16.0 (Will, 2026-10-20 11:47 CT; full spec re-sent 11:48 and 14:30) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 11:48 (the 11:47 message was cut off mid-sentence; the attachment is the whole
 spec). One phase on a fresh wip off main (c3769b4); merge after every CLAUDE.md check; stop servers at the end.
@@ -417,7 +431,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.16.0 is merged. Wait for Will's test results.
+Analytics merge: phone check running; then merge to main, then Phase 0.17.0 (casino chats + admin wallet activity).
 
 ## Open questions
 None open.

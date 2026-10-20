@@ -347,3 +347,16 @@ export function propsPage(id, { none = false } = {}) {
     props: { open: true, reason: tabs.length ? null : 'No player props for this game.', tabs },
   };
 }
+
+// ---------- Offline routing (0.17.0) ----------
+// The harness never reaches the internet. Every outside https request is aborted, except Vercel Web Analytics' script
+// (dev mode loads https://va.vercel-scripts.com/v1/script.debug.js; the live site loads /_vercel/insights/script.js
+// from its own domain): that one gets an empty stub, so <Analytics /> runs without a failed load and the phone check
+// can count it (exactly one load per page = rendered once).
+export const ANALYTICS_SCRIPT = /^https:\/\/va\.vercel-scripts\.com\//;
+export function offlineRoute(route) {
+  if (ANALYTICS_SCRIPT.test(route.request().url())) {
+    return route.fulfill({ status: 200, contentType: 'application/javascript', body: 'window.__analyticsLoads = (window.__analyticsLoads || 0) + 1;' });
+  }
+  return route.abort();
+}

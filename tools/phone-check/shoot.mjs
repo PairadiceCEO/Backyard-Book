@@ -314,14 +314,20 @@ for (const sc of scenarios) {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|ERR_/.test(m.text())) errors.push(m.text()); });
+    // Vercel Web Analytics: any console message or failed request from it is an error (no filter), and on a signed-in
+    // app page its script must have loaded exactly once (<Analytics /> rendered once in App.jsx).
+    page.on('console', (m) => { if (/vercel|analytics/i.test(m.text()) && m.type() !== 'debug') errors.push(`analytics console ${m.type()}: ${m.text().slice(0, 120)}`); });
+    page.on('requestfailed', (r) => { if (/vercel/i.test(r.url())) errors.push(`analytics request failed: ${r.url()}`); });
     await page.addInitScript((h) => { window.__H = h; }, { user: sc.user ? { uid: sc.user } : null, admin: sc.admin, fs: typeof sc.fs === 'function' ? sc.fs() : sc.fs });
     await routeApi(page, sc);
-    await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+    await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
     await page.goto(BASE + sc.path, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(700);
     if (sc.act) await sc.act(page);
     await page.waitForTimeout(250);
     const m = await measure(page);
+    const analyticsLoads = await page.evaluate(() => window.__analyticsLoads ?? 0);
+    if (analyticsLoads !== 1) errors.push(`analytics script loaded ${analyticsLoads} times (expected 1)`);
     report[sc.name][width] = { ...m, errors };
     if (width === 375) await page.screenshot({ path: `${out}/${sc.name}.png`, fullPage: !/slip|confirm|preview/.test(sc.name) });
     await context.close();
