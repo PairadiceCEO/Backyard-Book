@@ -5,7 +5,7 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.17.0 (Will, 2026-10-20 15:07 CT) — IN PROGRESS on wip
+## Phase 0.17.0 (Will, 2026-10-20 15:07 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 15:07 (items 1–2). One phase on a fresh wip off main (1576556, Analytics in);
 merge after every CLAUDE.md check; stop servers at the end.
 
@@ -85,7 +85,11 @@ merge after every CLAUDE.md check; stop servers at the end.
       chain, Casino → Blackjack filter, Open bet → Bets). Phone screens: admin-activity-pick, admin-activity,
       admin-activity-jump, admin-activity-missing-index, admin-activity-building, admin-activity-casino,
       admin-activity-open-bet.
-- [ ] 3 Checks: test:all, lint, build, interact.mjs, dealcheck.mjs, phone check. Version 0.17.0. Merge.
+- [x] 3 Checks: test:all (31 + 106 + 21 + 104 + 16 + 11 + 11 + 12 + 9 + 9 = 330), lint (scratch flat config), build,
+      interact.mjs 22/22 (craps/crapless no-scroll with the Chat button at every size), dealcheck.mjs 6/6, phone check
+      147 screens × 320/375/414 clean (Analytics loaded once on every screen, no console errors). Version 0.17.0.
+      firestore.rules CHANGED (Will publishes); 3 new composite indexes on ledger (Will creates). No new /api function
+      (still 7). Merged wip → main. Harness server stopped.
 
 ## Vercel Web Analytics on main (Will, 2026-10-20 15:07 CT, item 0 of the 0.17.0 message) — COMPLETE (2026-10-20), merged to main
 - 0.16.0 was already merged (a178963, every CLAUDE.md check passed) before this message arrived, so item 0's "finish
@@ -514,7 +518,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.17.0 item 1 (casino chat), then 2 (wallet activity), then 3 (checks + merge).
+Nothing queued: 0.17.0 is merged. Wait for Will's test results (he must publish firestore.rules and create 3 ledger indexes).
 
 ## Open questions
 None open.
