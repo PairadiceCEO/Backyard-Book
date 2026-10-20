@@ -84,6 +84,7 @@ export function gameDetail(id) {
   const sp = (lines, side) => lines.map((l) => kq(l < 0 ? 100 + Math.round(-l * 40) : -100 - Math.round(l * 30), l, `KXNFLSPREAD-X-${side}${Math.abs(l)}`, l < 0 ? 'yes' : 'no'));
   return {
     league: 'nfl', fetchedAt: new Date().toISOString(), stale: false, kalshiStatus: 'ok', game,
+    propsCount: game.id === '401' ? 5 : 0,
     ladders: {
       spreads: { home: sp([-10.5, -6.5, -3.5, -2.5, -1.5, 1.5, 2.5, 3.5, 7.5], 'HOU'), away: sp([-7.5, -3.5, -2.5, -1.5, 1.5, 2.5, 3.5, 6.5, 10.5], 'JAC') },
       totals: [35.5, 38.5, 41.5, 42.5, 44.5, 47.5, 50.5].map((line, i) => ({ line, over: kq(-250 + i * 60, line, `KXNFLTOTAL-X-${line}`, 'yes'), under: kq(200 - i * 55, line, `KXNFLTOTAL-X-${line}`, 'no') })),
@@ -305,3 +306,44 @@ export function heavyBets(uid = 'u7', finished = 260) {
   return list;
 }
 export const heavyUser = { id: 'u7', username: 'heavy', displayName: 'Heavy Hitter', role: 'player', balanceCents: 5000, stats: { won: 0, lost: 0 }, disabled: false };
+
+// ---------- Player props page (game 401, Jaguars @ Texans, pre-game) ----------
+function propRow(series, code, threshold, yesPrice, volume) {
+  const t = `${series}-26OCT18JACHOU-${code}-${threshold}`;
+  const withPrice = (q, price) => ({ ...q, ref: { ...q.ref, price } });
+  const row = {
+    ticker: t, threshold, strike: threshold - 0.5,
+    yes: kq(yesPrice >= 0.5 ? -Math.round((yesPrice / (1 - yesPrice)) * 100) : Math.round(((1 - yesPrice) / yesPrice) * 100), threshold - 0.5, t, 'yes'),
+    no: kq(yesPrice <= 0.5 ? -Math.round(((1 - yesPrice) / yesPrice) * 100) : Math.round((yesPrice / (1 - yesPrice)) * 100), threshold - 0.5, t, 'no'),
+    labels: series === 'KXNFLTD' && threshold === 1 ? { yes: '1+ TD', no: 'No TD' } : { yes: `${threshold}+`, no: `Under ${threshold}` },
+    volume,
+  };
+  return { ...row, yes: withPrice(row.yes, yesPrice), no: withPrice(row.no, Number((1.01 - yesPrice).toFixed(2))) };
+}
+function propPlayer(series, code, name, team, teamSide, ladder) {
+  const rows = ladder.map(([th, p]) => propRow(series, code, th, p));
+  let main = 0;
+  rows.forEach((r, i) => { if (Math.abs(r.yes.ref.price - 0.5) < Math.abs(rows[main].yes.ref.price - 0.5)) main = i; });
+  return { key: code, name, team, teamSide, volume: 1000, rows, mainTicker: rows[main].ticker };
+}
+export function propsPage(id, { none = false } = {}) {
+  const game = nflGames.find((g) => g.id === id) ?? nflGames[0];
+  const tabs = none ? [] : [
+    { series: 'KXNFLRSHYDS', stat: 'Rush Yds', anytime: false, players: [
+      propPlayer('KXNFLRSHYDS', 'JACTETIENNE1', 'Travis Etienne Jr.', 'Jaguars', 'away', [[25, 0.86], [40, 0.71], [50, 0.56], [60, 0.43], [75, 0.27], [100, 0.1]]),
+      propPlayer('KXNFLRSHYDS', 'HOUJMIXON28', 'Joe Mixon', 'Texans', 'home', [[40, 0.8], [60, 0.58], [70, 0.46], [80, 0.34], [100, 0.16]]),
+    ] },
+    { series: 'KXNFLRECYDS', stat: 'Rec Yds', anytime: false, players: [
+      propPlayer('KXNFLRECYDS', 'JACBTHOMAS7', 'Brian Thomas Jr.', 'Jaguars', 'away', [[40, 0.74], [60, 0.52], [80, 0.31]]),
+      propPlayer('KXNFLRECYDS', 'HOUNCOLLINS12', 'Nico Collins', 'Texans', 'home', [[50, 0.7], [70, 0.49], [90, 0.3]]),
+    ] },
+    { series: 'KXNFLTD', stat: 'TD', anytime: true, players: [
+      propPlayer('KXNFLTD', 'HOUJMIXON28', 'Joe Mixon', 'Texans', 'home', [[1, 0.48]]),
+      propPlayer('KXNFLTD', 'JACTETIENNE1', 'Travis Etienne Jr.', 'Jaguars', 'away', [[1, 0.41]]),
+    ] },
+  ];
+  return {
+    league: 'nfl', fetchedAt: new Date().toISOString(), stale: false, kalshiStatus: 'ok', game, serverNow: Date.now(),
+    props: { open: true, reason: tabs.length ? null : 'No player props for this game.', tabs },
+  };
+}

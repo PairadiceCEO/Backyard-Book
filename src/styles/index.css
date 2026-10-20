@@ -4649,7 +4649,7 @@ fieldset.field legend {
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
-  padding: 4px calc(50% - 32px);
+  padding: 6px 0;
   scrollbar-width: none;
   /* Horizontal drags move the wheel; vertical swipes still scroll the page (pan-x alone would trap them). */
   touch-action: pan-x pan-y;
@@ -4661,6 +4661,15 @@ fieldset.field legend {
 
 .wheel-track::-webkit-scrollbar {
   display: none;
+}
+
+/* Spacers so the first and last chips can sit in the middle. Sized against the track itself (a percentage
+   padding would be measured against the row and push the › button out of the card). 32px = half a chip,
+   6px = the gap. */
+.wheel-track::before,
+.wheel-track::after {
+  content: '';
+  flex: 0 0 calc(50% - 38px);
 }
 
 .wheel-track:focus-visible {
@@ -4681,12 +4690,12 @@ fieldset.field legend {
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
-  transform: scale(0.9);
+  /* Never scaled below full size, so every chip stays at least 44 px tall; only the selected one grows. */
   transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .wheel-chip.selected {
-  transform: scale(1.06);
+  transform: scale(1.1);
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);

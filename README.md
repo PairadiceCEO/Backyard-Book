@@ -119,6 +119,13 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
 
+## 0.14.0
+
+- **Crypto cash out:** open crypto bets show "Live cash out value" = potential payout × the fresh Kalshi bid for your side × 0.90, until 60 s before the market closes.
+- **Crypto chart:** always the last 60 minutes, ending now; close times shown as text with countdowns above it.
+- **Player props** (Kalshi, pre-game only): a **Player props** button on a game's page opens tabs per stat, one row per player with a line wheel over that player's thresholds and **50+** / **Under 50** buttons. Props close at the game's start, can't be parlayed with another pick from the same game, and are settled by Kalshi's result (a player who doesn't play is a void).
+- **Line wheel:** alternate spreads and totals (and each props player) are one swipeable row of lines; the middle line is selected and its two bets sit underneath. ‹ › and the arrow keys step one line.
+
 ## 0.13.0
 
 - **Odds changes:** if a pick's price moved 50 points or more from what you saw (−100 and +100 count as the same point), nothing is placed and a popup shows "Old → New" with **Accept new odds** / **Remove pick(s)**. Smaller moves are accepted at the new price as before.

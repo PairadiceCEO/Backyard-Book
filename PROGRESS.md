@@ -5,7 +5,7 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.14.0 (Will, 2026-10-18 12:25 CT) — IN PROGRESS
+## Phase 0.14.0 (Will, 2026-10-18 12:25 CT; re-sent 2026-10-20 09:33) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-18 12:25. One phase on a fresh wip off main; merge after every CLAUDE.md check;
 stop dev/harness servers at the end.
 
@@ -60,13 +60,38 @@ stop dev/harness servers at the end.
       Tests: test/props/props.test.mjs (9, `npm run test:props`, in test:all). Mutation-checked: clock cutoff (2 fail),
       state check (2), suffix helper (2), bet-time suffix check (1), same-game parlay rule (1), non-yes/no → void (2),
       cash out gap (1). CLAUDE.md props line.
-- [ ] 4 LineWheel (src/components/LineWheel.jsx): scroll-snap chips, centered = selected, two bet buttons, starts on
-      the main line, arrows + keys, aria labels, slip dot, keeps its line across refreshes, IntersectionObserver /
-      debounced scroll end (no setState per frame), pan-x, ≥ 44 px chips. Used for alt spreads + totals and each
-      props player row. Props page /sportsbook/{league}/{gameId}/props (stat tabs, player rows sorted by team then
-      most-traded, search, single-threshold rows without a wheel); game page "Player props" button when pre-game with
-      a tradable prop. Phone check: wheels (main, non-main, pick in slip), props page with and without props.
-- [ ] 5 Checks (test:all, lint, build, interact.mjs, dealcheck.mjs, phone check) → merge as 0.14.0; stop servers.
+- [x] 4 LineWheel (src/components/LineWheel.jsx), no library: one row of chips, CSS scroll-snap (x mandatory),
+      centered chip = selected (larger, accent), chips fade to the edges (mask), two bet buttons under it. Starts on
+      the main line (spreads/totals: the main board line, else the nearest Kalshi strike; props: YES ask nearest
+      $0.50). Tap a chip to center it; ‹ › buttons and ←/→ keys (track focusable) step one line. Centered chip found
+      on a debounced scroll end (120 ms) plus `scrollend` — never per frame; listeners/timer removed on unmount. On a
+      refresh it keeps its line; a vanished line moves to the nearest by value, re-centered instantly (layout effect
+      keyed on the set of lines, not prices). Slip pick: button stays pressed, chip shows a gold dot. aria: selected
+      chip "Total 44.5, Over −110, Under −110", plus a polite live region. `touch-action: pan-x pan-y` on the track:
+      the spec's "pan-x" alone would stop vertical swipes on the wheel from scrolling the page, which the spec also
+      forbids, so I kept the requirement (vertical swipes scroll) — decision. Chips ≥ 44 px (non-selected chips are
+      never scaled down; the selected one grows). Spacers are ::before/::after sized against the track (a % padding
+      pushed the › button out of the card — caught in review and now asserted by interact.mjs).
+      Game page: spread wheel (chips from the home side, lowest → highest; buttons "Browns −3.5" / "Ravens +3.5";
+      only lines with both sides tradable) and total wheel ("Over 44.5" / "Under 44.5"); main-line card unchanged;
+      "Player props (N players) ›" button when pre-game and N > 0 (N = distinct players, not players × stat tabs).
+      Props page /sportsbook/{league}/{gameId}/props (src/pages/PlayerPropsPage.jsx, src/lib/props.js): stat tabs,
+      search, one card per player (name, team) sorted by team then most-traded; a wheel per player, or just the two
+      buttons for a single threshold ("1+ TD" / "No TD"); 30 s poll; closed / none states. Slip: same-game prop parlay
+      warning (PROP_PARLAY_MESSAGE), prop line text, LINE_CHANGED on a prop updates its threshold.
+      Phone check: game-detail-wheels-moved, game-detail-wheel-pick, props-page, props-page-pick, props-page-td,
+      props-page-none, props-parlay-same-game. interact.mjs "line wheel" check: main line + centered, sorted chips,
+      pan-y, snap, 44 px, arrows inside the card, aria, tap / arrow key / swipe select, slip dot, a 30 s refresh that
+      drops the selected line → nearest and still centered, props rows (start nearest $0.50, single-threshold
+      buttons, search).
+      Also fixed: test/sportsbook/phase6b "/api/board … ladders" read the real clock against Oct 18 Kalshi fixtures
+      and started failing on Oct 20 (outside the 1-day lookback); the clock is now pinned in that test.
+- [x] 5 Checks: test:all (31 + 97 + 21 + 104 + 15 + 11 + 11 + 9 = 299), lint, build, interact.mjs (10 checks incl.
+      the wheel), dealcheck.mjs, phone check 115 screens × 320/375/414 clean. Version 0.14.0. Merged wip → main.
+      No firestore.rules change, no new index. Harness server stopped.
+      Props to test with (Kalshi, checked 2026-10-20 ~09:45 CT): NBA tonight BOS@DET, PHI@NYK, OKC@SAS (rebounds etc.;
+      KXNBAPTS had no events yet); NHL tonight 11 games (goals, e.g. COL@NJ, TB@VGK, BOS@DAL); MLB World Series opener
+      Fri Oct 23 TB vs MIL (HR). No NFL week-8 prop events listed yet.
 
 ## Phase 0.13.0 (Will, 2026-10-18 01:56 CT; re-sent 11:31) — COMPLETE (2026-10-18), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-18 01:56. One phase on a fresh wip off main; merge after every CLAUDE.md check.
@@ -240,7 +265,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.14.0: item 4 (LineWheel; alt-lines page; props page + game-page button), then checks.
+Nothing queued: 0.14.0 is merged. Wait for Will's test results.
 
 ## Open questions
 None open.

@@ -184,7 +184,7 @@ test('props page: each game shows its own props; tabs, players sorted by team th
 
   // Main game page: a "Player props" count only before the game.
   const page = await getGameDetail('mlb', 'g4', { fetchImpl, now: () => NOW });
-  assert.equal(page.propsCount, 3);
+  assert.equal(page.propsCount, 2, 'distinct players (José Ramírez has both an HR and a Hits row)');
   // 30 s memory cache, nothing in Firestore.
   const before = world.calls.length;
   await getGameDetail('mlb', 'g4', { fetchImpl, now: () => new Date(NOW.getTime() + 10e3), props: true });

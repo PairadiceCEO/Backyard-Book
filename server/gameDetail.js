@@ -68,7 +68,8 @@ export async function getGameDetail(leagueId, gameId, { fetchImpl = fetch, now =
   if (game.source === 'espn' && propsOpen(game, nowMs) && game.kalshi?.gameEvent) {
     try {
       const loaded = await loadGameProps(game, { nowMs, fetchImpl });
-      propsCount = loaded.tabs.reduce((sum, tab) => sum + tab.players.length, 0);
+      // Distinct players (one player usually has several stat tabs).
+      propsCount = new Set(loaded.tabs.flatMap((tab) => tab.players.map((p) => `${p.team ?? ''}|${p.name}`))).size;
     } catch (err) {
       console.error(`props count ${leagueId}/${gameId} failed:`, err.message);
     }
