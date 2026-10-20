@@ -45,9 +45,31 @@ spec). One phase on a fresh wip off main (c3769b4); merge after every CLAUDE.md 
       separators ($1,250). interact.mjs: the no-scroll check now also asserts the six chips at every size; new check
       "no maximum bets" ($100 + $100 + $25 → one $225 bet on Blackjack, Baccarat Banker, Craps/Crapless Pass, Slots;
       six chips; no old limit text; help text present).
-- [ ] 4 Tests: old-maximum tests rewritten; new tests (big bets accepted / refused for lack of funds with no wallet
-      change, double/split need funds, Odds > 2× refused, $1,000,001 refused, chips $25/$100 ok and $3 chip refused,
-      $50,000 Battle); casino tests mutation-checked. CLAUDE.md "Deliberate decisions" lines.
+- [x] 4 Tests. Rewritten (they asserted the old maximums): casino1 slots amounts ($11 → $1,000,001 BET_TOO_LARGE,
+      plus 2^53 and 1e300); casino2 Baccarat ($11 → ceiling); casino3 Blackjack ($11 → ceiling); casino4 craps
+      ("limits" → chips and amounts: $21 Pass accepted, $11 / $0 / $2.50 refused as one chip, wallet; batch refusals
+      now Odds-before-point and the ceiling; the Odds test's "$11 Place" → BAD_CHIP); casino5 (multi-seat Blackjack and
+      Baccarat lose their $10 checks; "limit messages" → "the only craps caps left"; "every limit at the table" → "big
+      craps bets": $500 Pass, $31 Field / Hard 4, $562 on the felt, $1,000 Odds behind $500, $50 Come moves whole).
+      casino4/casino6 `bet` helpers send a chip amount through `bet` and any other amount through `bets` (as the phone).
+      New test/casino/casino7.test.mjs (9): rules (chips, amount, ceiling, old names gone); Blackjack $500 accepted /
+      refused with no wallet, ledger or table change; double and split refused at $499.99, double works with funds;
+      Baccarat $500 Banker accepted / refused; craps and crapless $500 Pass + $1,000 Odds accepted / refused, Odds
+      $1,001 refused; $25 / $100 chips, "$3 chip" BAD_CHIP vs $1 + $2 = $3 Pass and a $3 batch; craps ceiling per
+      change and per spot (exactly $1,000,000 ok); Blackjack / Baccarat totals from big chips; Slots $250 spin accepted /
+      refused, ceiling, $3 total ok. Battles: $50,000 Battle among three ($150,000 pot paid in full), short wallets
+      refused with nothing taken, $1,000,000 ok / $1,000,001 refused. Sportsbook (test/props): $50,000 single accepted,
+      a second refused for funds, $1,000,001 single and parlay refused before pricing, exactly $1,000,000 ok, slip
+      mirror, payout guard.
+      Mutation-checked (each fails a test): $10 cap back (6), no ceiling (7), ceiling $1 higher (7), Odds 2× dropped (6),
+      $20 line limit back (5), chip check off (3), no $25/$100 chips (2), craps spot ceiling off (2), Come $20 give-back
+      back (1), Battle ceiling off (1), Battle $10,000 back (1), sportsbook ceiling off (1), payout guard off (1), the
+      phone's $10 Baccarat cap back (interact "no maximum bets"). Survived alone, by design: double without requireFunds,
+      split without requireFunds (the transaction's final overdraft check in applyCasinoEntries still refuses with
+      INSUFFICIENT_BALANCE and writes nothing) and the craps per-change ceiling (limitProblem's per-spot ceiling still
+      refuses); with both layers removed each fails (3, 2 and 2 tests).
+      CLAUDE.md: "$60 craps total" line removed; "No maximum bets anywhere…" and "Chips: $1, $2, $5, $10, $25 and $100
+      on every game." added (there was no chips line before, so "update" = add).
 - [ ] 5 Checks: test:all, lint, build, interact.mjs, dealcheck.mjs, phone check. Version 0.16.0. Merge wip → main.
 
 ## Phase 0.15.0 (Will, 2026-10-20 10:22 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
