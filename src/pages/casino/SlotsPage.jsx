@@ -19,6 +19,8 @@ import { friendlyError } from '../../components/StatusViews.jsx';
 import { PAYTABLE } from '../../../shared/casino/slotMachine.js';
 import { ChipRack, ChipStack, chipsFor } from '../../components/casino/Chips.jsx';
 import { BET_CEILING_CENTS, BET_CEILING_MESSAGE, BET_HELP_TEXT, CASINO_MIN_BET_DOLLARS, isValidBetAmount } from '../../../shared/casino/constants.js';
+import { ChatButton, ChatDrawer } from '../../components/casino/CasinoChat.jsx';
+import { useCasinoChat } from '../../hooks/useCasinoChat.js';
 
 const BET_STORAGE_KEY = 'backyardbook.slotBet';
 const MIN_SPIN_MS = 900; // reels spin at least this long, even if the server answers sooner
@@ -42,6 +44,7 @@ function readSavedBet() {
 
 export default function SlotsPage() {
   const { profile } = useAuth();
+  const chat = useCasinoChat('slots'); // this game's chat room (0.17.0)
   const { setHeldCents } = useWalletDisplay();
   const balanceCents = Number(profile?.balanceCents) || 0;
 
@@ -177,6 +180,7 @@ export default function SlotsPage() {
           ‹ Casino
         </Link>
         <h2 className="section-title">7s Slots</h2>
+        <ChatButton chat={chat} />
       </div>
 
       <div className="card slot-machine">
@@ -272,6 +276,7 @@ export default function SlotsPage() {
           </ul>
         </div>
       ) : null}
+      <ChatDrawer chat={chat} />
     </section>
   );
 }

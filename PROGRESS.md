@@ -5,6 +5,92 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.17.0 (Will, 2026-10-20 15:07 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
+Spec: Will's attachment of 2026-10-20 15:07 (items 1–2). One phase on a fresh wip off main (1576556, Analytics in);
+merge after every CLAUDE.md check; stop servers at the end.
+
+### Checklist
+- [x] 1 Casino chat. shared/casino/chat.js (rooms, 200 chars, `cleanChatText`: tabs/new lines → space, other C0/DEL/C1
+      control characters dropped, trimmed; length in characters, an emoji is one; rate rules). server/casinoChat.js
+      `sendChat` = /api/casino action `chat` (router; no new function): room check (400 BAD_ROOM), requestId, text
+      (EMPTY_MESSAGE / MESSAGE_TOO_LONG "Messages can be up to 200 characters"), then one transaction: users/{uid}
+      (missing/disabled refused), chatRate/{uid}, the message doc; an existing {uid}_{requestId} → duplicate: true (no
+      rate used); rate: < 2 s since the last or 20 in the last minute → 429 SLOW_DOWN "Slow down a little"; message
+      { uid, name (displayName, else username), text, createdAt (server), deleted: false } with create(), and chatRate
+      { recent: last-minute times } set in the same transaction. Seated or not doesn't matter. `deleteChatMessage` =
+      /api/admin `chatDelete` (admin only): deleted: true, text '', deletedAt, deletedBy; idempotent; 404 if gone.
+      server/casinoChatPrune.js `pruneCasinoChat` from settleOpenBets (not dry runs): the cron always, other runs once
+      an hour (meta/chatPrune); per room `createdAt < now − 24 h`, 500 a batch, ≤ 10 batches per room per run (single-
+      field index, automatic). Kept apart from casinoChat.js so settlement doesn't load sign-in code (sportsbook tests
+      mock auth.js narrowly); the chat checks the profile itself (same answers as auth.js checkProfile).
+      firestore.rules: `casinoChat/{game}/messages/{id}` read if signed in, write never; chatRate falls under the
+      server-only catch-all. Will must publish the rules.
+      Phone: src/hooks/useCasinoChat.js (one onSnapshot: newest 1 while closed, newest 30 while open, `createdAt ≥ now −
+      24 h`, desc then reversed; removed on close/unmount; unread: localStorage `bb.chatSeen.{room}` (try/catch) and,
+      when the newest is newer, one getCountFromServer of `createdAt > seen` (1 read); single-field queries, no new
+      index). src/components/casino/CasinoChat.jsx: ChatButton (badge, "Chat, N unread"), ChatDrawer (portal over the
+      page and nav; room title; oldest on top; name + "8:42 PM" Central; mine = "You", right, green; removed = "Message
+      removed"; auto-scroll only when at the bottom; input + Send + Enter; n/200 counter, red and Send off over 200;
+      failed send retried with the same requestId; Escape / backdrop / × close; body scroll locked while open; admin
+      Delete → inline confirm → chatDelete). Text is React text: no HTML, no links. Slots/Blackjack/Baccarat: button
+      in the header (icon-only under 420 px; header items don't wrap inside). Craps/Crapless: compact button in the top
+      bar; on phones (< 720 px) the bar is two rows (controls on top; last roll + shooter on one line under them).
+      Decision: the badge's count comes from one count query (the spec's "listen to the newest 1" gives presence, not a
+      number). Decision: the Chat button stays in the top bar at 320×568 too (Roll moves to the dock there, so it fits).
+      Tests (test/chat, `npm run test:chat`, 9): rooms, validation, disabled/no profile, rate (2 s, 20/min, across rooms,
+      counter written only with a message), requestId once, admin delete (403 for a player via /api/admin), prune
+      (24 h edge, 1,203 in batches, hourly gate, cron), settlement prunes, rules (test/chat/rulesEval.mjs: the emulator
+      can't be downloaded here, so a small evaluator of our firestore.rules, checked against known answers for other
+      collections: chat read signed-in only; create/update/delete refused for players, admin and signed-out; chatRate
+      closed). Mutation-checked: no 2 s gap, 1,999 ms, 21 a minute, no per-minute cap, counter per room, server rate
+      check off, room check off, extra room, sendChat skipping the room check — each fails. phase7's fake gained
+      subcollections/range filters/batch delete (settlement now walks the chat); casino fakeFirestore gained range
+      operators, chained where, orderBy, startAfter, aggregation, batch.
+      interact.mjs: no-scroll check now also requires the Chat button on screen (all sizes; lowest control 521/607 at
+      375×667); new: rooms + listener limits (1 / 30 / 1 / 0 after leaving, all five games), drawer content + badge +
+      unread memory + auto-scroll both ways, send/Enter/counter/refusal/retry id/storage blocked, craps: open/close never
+      leaves and the felt doesn't move, admin delete with confirm. Phone mock: nested paths, >=/>/< on timestamps,
+      Timestamp, getCountFromServer, live listeners (emit / liveListeners). Phone-side mutations (closed listens to 30,
+      listener never removed, always auto-scroll, seen never saved) each fail. Phone screens: chat-{slots, blackjack,
+      baccarat, craps, crapless} closed and -open, craps watching open, admin open + confirm, typing 205, empty room.
+- [x] 2 Admin → Wallet activity. server/admin/walletActivity.js = /api/admin `walletActivity` { uid, cursor? } (admin
+      only via api/admin's requireAdmin; read only, nothing written). Entries: ledger uid == X and createdAt ≥ now −
+      24 h, createdAt desc, 50 a page (+1 to know there's more), cursor = the last entry's id (its snapshot; must be the
+      same player's). Summary (first page only) by aggregation (count + sum(amountCents)): 1 over the window (total,
+      catches unknown types), 9 per non-casino type, 15 per casino type × game. shared/walletActivity.js: categories
+      (Sportsbook = stake/payout/cashout; Casino = casino_* by game; Other = battle_*, shop, admin_*), Wagered = debit
+      types, Won/returned = credit types, admin = signed, shown as its own column (net); `whereOf` ("Blackjack seat 3"
+      from the note); `checkBalances`: oldest → newest, groups of identical createdAt (exact seconds.nanoseconds key)
+      chained in whatever order fits; a link that doesn't add up → jump { expected, ledger says }, the walk then
+      continues from what the ledger says; the window's first group is "start of 24 h" (or "load more to check" while
+      pages remain); newest balance after vs the wallet now.
+      Indexes (all collection `ledger`, scope Collection): ENTRIES uid Asc + createdAt Desc; BY_TYPE uid Asc + type Asc
+      + createdAt Asc; BY_GAME uid Asc + type Asc + game Asc + createdAt Asc. A missing (or building) index is caught
+      (FAILED_PRECONDITION "requires an index") and returned in `missingIndexes` with its fields and Firebase's link;
+      whatever doesn't need it still loads.
+      Screen: src/pages/admin/AdminWalletActivity.jsx, tab "Wallet activity" after "Shop purchases": player picker
+      (users read once, as Shop purchases), Refresh, missing-index card with click-by-click steps, summary table
+      (Sportsbook, Casino + each game, Other + Battles/Shop/Admin, Total; net green/red), balance check card (✓ or N
+      jumps; wallet comparison), filters All/Sportsbook/Casino/Battles/Shop/Admin + Game, rows (time with seconds,
+      Central, plus the day when not today; where; note; Wagered; Won; balance after; ✓ / start / load more / red
+      jump), "Open bet ›" → Admin → Bets with that bet shown first (AdminBets `focusBetId`), Load more. ≤ 520 px: rows
+      are cards. Filters only change what's shown; the check always covers everything loaded.
+      Tests (test/activity, `npm run test:activity`, 9): window edge (24 h in, 24 h + 1 s out), other players excluded,
+      pages 50/50/23 with no gaps, read only, bad cursor, admin only via /api/admin, summary math (incl. a type it
+      doesn't know), good chain + wallet match, broken chain (expected vs ledger, flagged once, resumes), a same-
+      transaction group in either order (and a wrong number in it), wallet mismatch, missing index (per-game and main),
+      other errors still thrown. Mutation-checked: no transaction groups, group walked in ledger order only, never
+      flags, window start as a jump, no wallet comparison, expected without the amount, resume from expected — each
+      fails. interact.mjs "wallet activity" (pick, summary, seconds, Load more sends the cursor and finishes the
+      chain, Casino → Blackjack filter, Open bet → Bets). Phone screens: admin-activity-pick, admin-activity,
+      admin-activity-jump, admin-activity-missing-index, admin-activity-building, admin-activity-casino,
+      admin-activity-open-bet.
+- [x] 3 Checks: test:all (31 + 106 + 21 + 104 + 16 + 11 + 11 + 12 + 9 + 9 = 330), lint (scratch flat config), build,
+      interact.mjs 22/22 (craps/crapless no-scroll with the Chat button at every size), dealcheck.mjs 6/6, phone check
+      147 screens × 320/375/414 clean (Analytics loaded once on every screen, no console errors). Version 0.17.0.
+      firestore.rules CHANGED (Will publishes); 3 new composite indexes on ledger (Will creates). No new /api function
+      (still 7). Merged wip → main. Harness server stopped.
+
 ## Vercel Web Analytics on main (Will, 2026-10-20 15:07 CT, item 0 of the 0.17.0 message) — COMPLETE (2026-10-20), merged to main
 - 0.16.0 was already merged (a178963, every CLAUDE.md check passed) before this message arrived, so item 0's "finish
   0.16.0" was done; PR #1 (`vercel/install-and-configure-vercel-w-rhdtqy`, 823bf95) was still unmerged, so it was
@@ -432,7 +518,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Phase 0.17.0 (casino chats + admin wallet activity) on a fresh wip off main.
+Nothing queued: 0.17.0 is merged. Wait for Will's test results (he must publish firestore.rules and create 3 ledger indexes).
 
 ## Open questions
 None open.

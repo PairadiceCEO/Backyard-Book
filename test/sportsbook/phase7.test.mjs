@@ -29,26 +29,37 @@ function ref(path) {
     async get() { await tick(); return snap(path); },
     async set(v, opts) { write(path, opts?.merge ? { ...(store.get(path) ?? {}), ...v } : v); },
     async update(v) { write(path, { ...store.get(path), ...v }); },
+    collection: (name) => collectionOf(`${path}/${name}`), // subcollections (the casino chat prune walks them)
   };
 }
+const val = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : v);
+const OPS = { '==': (a, b) => val(a) === val(b), '<': (a, b) => a != null && val(a) < val(b), '>=': (a, b) => a != null && val(a) >= val(b) };
 function makeQuery(name, filters = [], max = Infinity) {
   return {
     where: (field, op, value) => makeQuery(name, [...filters, [field, op, value]], max),
+    orderBy: () => makeQuery(name, filters, max),
     limit: (n) => makeQuery(name, filters, n),
     async get() {
       await tick();
       const docs = [...store.keys()]
-        .filter((p) => p.startsWith(`${name}/`) && p.split('/').length === 2)
-        .filter((p) => filters.every(([f, op, v]) => op === '==' && store.get(p)[f] === v))
+        .filter((p) => p.startsWith(`${name}/`) && p.split('/').length === name.split('/').length + 1)
+        .filter((p) => filters.every(([f, op, v]) => OPS[op]?.(store.get(p)[f], v)))
         .slice(0, max)
-        .map(snap);
-      return { docs, size: docs.length, forEach: (fn) => docs.forEach(fn) };
+        .map((p) => ({ ...snap(p), ref: ref(p) }));
+      return { docs, size: docs.length, empty: docs.length === 0, forEach: (fn) => docs.forEach(fn) };
     },
   };
 }
+function collectionOf(name) {
+  return { doc: (id) => ref(`${name}/${id}`), where: (...a) => makeQuery(name).where(...a), limit: (n) => makeQuery(name).limit(n) };
+}
 class AlreadyExists extends Error { constructor() { super('ALREADY_EXISTS'); this.code = 6; } }
 const fakeDb = {
-  collection: (name) => ({ doc: (id) => ref(`${name}/${id}`), where: (...a) => makeQuery(name).where(...a), limit: (n) => makeQuery(name).limit(n) }),
+  collection: (name) => collectionOf(name),
+  batch() {
+    const dels = [];
+    return { delete: (r) => dels.push(r.path), async commit() { for (const p of dels) { store.delete(p); versions.set(p, ++clock); } } };
+  },
   async runTransaction(fn) {
     for (let attempt = 0; attempt < 20; attempt += 1) {
       const reads = new Map();

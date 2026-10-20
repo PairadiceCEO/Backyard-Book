@@ -29,6 +29,8 @@ import { useWalletDisplay } from '../../context/WalletDisplayContext.jsx';
 import { useCasinoTable, useCountdown, useDeadlineTick, useHeartbeat, useLeaveOnExit, useRollAnimation, useTableCall } from '../../hooks/useCasinoTable.js';
 import { useChipBetting } from '../../hooks/useChipBetting.js';
 import { useMediaQuery } from '../../hooks/useMediaQuery.js';
+import { useCasinoChat } from '../../hooks/useCasinoChat.js';
+import { ChatButton, ChatDrawer } from '../../components/casino/CasinoChat.jsx';
 import { newRequestId, tableAction } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
 import { DICE_ANIMATION_MS } from '../../../shared/casino/constants.js';
@@ -151,6 +153,7 @@ export default function CrapsPage({ game }) {
   const [busy, setBusy] = useState('');
   const [actionError, setActionError] = useState('');
   const docked = useMediaQuery(DOCK_QUERY);
+  const chat = useCasinoChat(game); // Craps and Crapless each have their own room (0.17.0)
 
   useEffect(() => {
     tableAction(game, 'tick').catch(() => {});
@@ -383,6 +386,7 @@ export default function CrapsPage({ game }) {
             <span className="craps-full">Table full</span>
           )
         ) : null}
+        <ChatButton chat={chat} compact />
       </div>
 
       {mySeat ? (
@@ -533,6 +537,8 @@ export default function CrapsPage({ game }) {
           </div>
         </div>
       ) : null}
+
+      <ChatDrawer chat={chat} />
     </section>
   );
 }

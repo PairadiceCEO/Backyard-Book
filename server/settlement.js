@@ -12,6 +12,7 @@ import { adminDb } from './firebaseAdmin.js';
 import { gameKey, loadGameResults } from './gameResults.js';
 import { gradeBet } from './grading.js';
 import { sweepExpiredBattles } from './battles.js';
+import { pruneCasinoChat } from './casinoChatPrune.js';
 
 export const THROTTLE_MS = 60 * 1000;
 export const REVIEW_AFTER_MS = 72 * 60 * 60 * 1000;
@@ -304,6 +305,14 @@ export async function settleOpenBets({
   } catch (err) {
     summary.errors += 1;
     console.error('settlement: Battle expiry sweep failed:', err.message);
+  }
+
+  // Casino chat keeps 24 hours: the daily cron always prunes, any other run at most once an hour.
+  try {
+    summary.chatPruned = await pruneCasinoChat({ db, now, force: trigger === 'cron' });
+  } catch (err) {
+    summary.errors += 1;
+    console.error('settlement: chat prune failed:', err.message);
   }
   return summary;
 }

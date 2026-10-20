@@ -360,3 +360,82 @@ export function offlineRoute(route) {
   }
   return route.abort();
 }
+
+// ---------- Casino chat (0.17.0) ----------
+// casinoChat/{room}/messages for the phone check: a mix of players, my own (u1 = Mike), a removed one, a long one, a
+// link and some HTML (shown as plain text), all within the last 24 hours; plus one older than 24 h that must not show.
+export function chatMessages(room, { count = 7 } = {}) {
+  const t = Date.now();
+  const lines = [
+    ['u2', 'Dan', 'Anyone else running cold tonight?'],
+    ['u1', 'Mike the Bookie Slayer', `Pressing the ${room === 'craps' || room === 'crapless' ? '6 and 8' : 'Player side'}. Feeling it.`],
+    ['u4', 'Ann', 'https://example.com/not-a-link <b>not bold</b>'],
+    ['u0', 'Will', 'Remember: the wallet is the only limit now 😄'],
+    ['u2', 'Dan', 'x'.repeat(40) + ' a long message that has to wrap nicely on a 320 px phone without pushing anything sideways at all, ok'],
+    ['u5', 'Bo', ''],
+    ['u1', 'Mike the Bookie Slayer', 'gl all'],
+  ];
+  const list = lines.slice(0, count).map(([uid, name, text], i) => ({
+    id: `${uid}_m${i}`,
+    uid,
+    name,
+    text,
+    deleted: i === 5,
+    createdAt: new Date(t - (count - i) * 7 * 60 * 1000).toISOString(),
+  }));
+  list.push({ id: 'u2_old', uid: 'u2', name: 'Dan', text: 'from yesterday (must not show)', deleted: false, createdAt: new Date(t - 25 * 3600 * 1000).toISOString() });
+  return list;
+}
+export const CHAT_ROOMS = ['slots', 'blackjack', 'baccarat', 'craps', 'crapless'];
+export function chatFs() {
+  return Object.fromEntries(CHAT_ROOMS.map((r) => [`casinoChat/${r}/messages`, chatMessages(r)]));
+}
+
+// ---------- Admin → Wallet activity (0.17.0) ----------
+// /api/admin walletActivity answers for Mike (u1): mode 'ok' (a clean chain), 'jump' (one balance jump and a wallet
+// mismatch), 'missing' (the main index missing: no entries, no summary), 'summaryMissing' (entries, no summary).
+export function walletActivity(mode = 'ok', { cursor = null } = {}) {
+  const t = Date.now();
+  const at = (minAgo, sameAs = null) => {
+    const ms = t - minAgo * 60 * 1000;
+    return { createdAt: new Date(ms).toISOString(), createdKey: sameAs ?? `${Math.floor(ms / 1000)}.${String((ms % 1000) * 1e6).padStart(9, '0')}` };
+  };
+  const rows = [];
+  let bal = 9640;
+  const add = (id, type, amountCents, note, extra = {}, when = at(600 - rows.length * 20)) => {
+    bal += amountCents;
+    rows.push({ id, type, amountCents, balanceAfterCents: extra.balanceAfterCents ?? bal, note, betId: extra.betId ?? null, battleId: null, game: extra.game ?? null, roundId: null, ...when });
+    if (extra.balanceAfterCents !== undefined) bal = extra.balanceAfterCents;
+  };
+  add('shop_u1_a', 'shop', 2500, 'Shop +$25');
+  add('stake_b1', 'stake', -1000, 'Jaguars -2.5', { betId: 'u1_req_b1' });
+  add('stake_b2', 'stake', -500, 'Parlay (3 legs)', { betId: 'u1_req_b2' });
+  const roll = at(480);
+  add('cbet_craps_1', 'casino_bet', -2000, 'Craps roll 57: bets $20.00', { game: 'craps' }, roll);
+  add('cpay_craps_1', 'casino_payout', 3400, 'Craps roll 57: Pass wins, Odds on 6 win', { game: 'craps' }, roll);
+  add('cbet_bj_1', 'casino_bet', -10000, 'Blackjack hand 12, seat 3: bet now $100.00', { game: 'blackjack' });
+  add('cpay_bj_1', 'casino_payout', 25000, 'Blackjack hand 12, seat 3: blackjack pays 3:2', { game: 'blackjack' });
+  add('cbet_slots_1', 'casino_bet', -500, '7s Slots spin $5', { game: 'slots' });
+  add('payout_b1', 'payout', 1909, 'Jaguars -2.5: won', { betId: 'u1_req_b1' }, at(200));
+  add('battle_stake_x', 'battle_stake', -5000, 'Battle "Saturday golf": stake', {}, at(150));
+  add('admin_adj', 'admin_adjust', 10000, 'Birthday bonus', {}, at(90));
+  if (mode === 'jump') add('cashout_b2', 'cashout', 1200, 'Parlay (3 legs): cashed out', { betId: 'u1_req_b2', balanceAfterCents: bal + 1700 }, at(30));
+  else add('cashout_b2', 'cashout', 1200, 'Parlay (3 legs): cashed out', { betId: 'u1_req_b2' }, at(30));
+  const entries = rows.reverse(); // newest first
+  const wallet = mode === 'jump' ? entries[0].balanceAfterCents - 300 : entries[0].balanceAfterCents;
+  const bucket = (count, w, won, adj = 0) => ({ count, wageredCents: w, wonCents: won, adjustedCents: adj, netCents: won - w + adj });
+  const games = { slots: bucket(1, 500, 0), blackjack: bucket(2, 10000, 25000), baccarat: bucket(0, 0, 0), craps: bucket(2, 2000, 3400), crapless: bucket(0, 0, 0) };
+  const sum = (list) => list.reduce((a, b) => bucket(a.count + b.count, a.wageredCents + b.wageredCents, a.wonCents + b.wonCents, a.adjustedCents + b.adjustedCents), bucket(0, 0, 0));
+  const casino = { ...sum(Object.values(games)), games };
+  const sportsbook = bucket(4, 1500, 3109);
+  const parts = { battles: bucket(1, 5000, 0), shop: bucket(1, 0, 2500), admin: bucket(1, 0, 0, 10000) };
+  const other = { ...sum(Object.values(parts)), parts };
+  const summary = { all: sum([sportsbook, casino, other]), sportsbook, casino, other, unclassified: { count: 0, netCents: 0 } };
+  const ENTRIES = { id: 'ENTRIES', collection: 'ledger', fields: [['uid', 'Ascending'], ['createdAt', 'Descending']], usedFor: 'the entry list and the 24 h total', link: 'https://console.firebase.google.com/v1/r/project/backyard-book/firestore/indexes?create_composite=example', building: false };
+  const BY_GAME = { id: 'BY_GAME', collection: 'ledger', fields: [['uid', 'Ascending'], ['type', 'Ascending'], ['game', 'Ascending'], ['createdAt', 'Ascending']], usedFor: 'the summary per casino game', link: null, building: true };
+  const base = { ok: true, player: { uid: 'u1', name: 'Mike the Bookie Slayer', username: 'mike', balanceCents: wallet }, since: new Date(t - 24 * 3600e3).toISOString(), serverNow: new Date(t).toISOString() };
+  if (mode === 'missing') return { ...base, entries: null, nextCursor: null, summary: null, missingIndexes: [ENTRIES] };
+  if (mode === 'summaryMissing') return { ...base, entries, nextCursor: null, summary: null, missingIndexes: [BY_GAME] };
+  void cursor;
+  return { ...base, entries, nextCursor: null, summary, missingIndexes: [] };
+}

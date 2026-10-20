@@ -74,6 +74,23 @@ export function formatCentralClock(value) {
   return clockFormatter.format(date);
 }
 
+const shortClockFormatter = new Intl.DateTimeFormat('en-US', { timeZone: DISPLAY_TIME_ZONE, hour: 'numeric', minute: '2-digit' });
+const secondsClockFormatter = new Intl.DateTimeFormat('en-US', { timeZone: DISPLAY_TIME_ZONE, hour: 'numeric', minute: '2-digit', second: '2-digit' });
+
+// "8:42 PM" (Central, no zone name): chat messages.
+export function formatCentralShortClock(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return shortClockFormatter.format(date);
+}
+
+// "8:42:07 PM" (Central, with seconds): Admin → Wallet activity rows.
+export function formatCentralSeconds(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return secondsClockFormatter.format(date);
+}
+
 const dayFormatter = new Intl.DateTimeFormat('en-US', {
   timeZone: DISPLAY_TIME_ZONE,
   weekday: 'long',

@@ -31,7 +31,7 @@ export function makeFakeDb() {
   }
   function snap(path) {
     const d = store.get(path);
-    return { exists: d !== undefined, id: path.split('/').pop(), data: () => clone(d) };
+    return { exists: d !== undefined, id: path.split('/').pop(), ref: { path }, data: () => clone(d) };
   }
   function docRef(path) {
     return {
@@ -45,33 +45,93 @@ export function makeFakeDb() {
       async delete() { await network(); write(path, undefined); bump('writes', path); },
     };
   }
-  // Whole-collection reads and equality queries (direct children only), outside transactions.
-  function query(path, filter, max = Infinity) {
+  // Queries outside transactions (direct children only): where (==, !=, <, <=, >, >=, in), chained; orderBy (asc /
+  // desc, then document id); limit; startAfter(docSnapshot); get(); aggregate({ alias: count() | sum(field) }).get()
+  // (one read per 1,000 matches, at least one, like Firestore). Timestamps compare by toMillis().
+  const cmpVal = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : v);
+  const OPS = {
+    '==': (a, b) => cmpVal(a) === cmpVal(b),
+    '!=': (a, b) => a !== undefined && cmpVal(a) !== cmpVal(b),
+    '<': (a, b) => a !== undefined && a !== null && cmpVal(a) < cmpVal(b),
+    '<=': (a, b) => a !== undefined && a !== null && cmpVal(a) <= cmpVal(b),
+    '>': (a, b) => a !== undefined && a !== null && cmpVal(a) > cmpVal(b),
+    '>=': (a, b) => a !== undefined && a !== null && cmpVal(a) >= cmpVal(b),
+    in: (a, b) => Array.isArray(b) && b.some((x) => cmpVal(x) === cmpVal(a)),
+  };
+  function query(path, spec = { filters: [], orders: [], max: Infinity, after: null }) {
+    const next = (patch) => query(path, { ...spec, ...patch });
+    const matches = () => {
+      let rows = [...store.entries()]
+        .filter(([p]) => p.startsWith(`${path}/`) && !p.slice(path.length + 1).includes('/'))
+        .filter(([, d]) => spec.filters.every(([f, op, v]) => OPS[op](d?.[f], v)));
+      if (spec.orders.length) {
+        const cmp = (a, b) => {
+          for (const [f, dir] of spec.orders) {
+            const x = cmpVal(a[1]?.[f]);
+            const y = cmpVal(b[1]?.[f]);
+            if (x < y) return dir === 'desc' ? 1 : -1;
+            if (x > y) return dir === 'desc' ? -1 : 1;
+          }
+          const last = spec.orders[spec.orders.length - 1][1];
+          return (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0) * (last === 'desc' ? -1 : 1);
+        };
+        rows.sort(cmp);
+      }
+      if (spec.after) {
+        const i = rows.findIndex(([p]) => p === spec.after);
+        rows = i >= 0 ? rows.slice(i + 1) : rows;
+      }
+      return rows;
+    };
     return {
-      limit: (n) => query(path, filter, n),
+      where: (field, op, value) => {
+        if (!OPS[op]) throw new Error(`fake Firestore: unsupported operator ${op}`);
+        return next({ filters: [...spec.filters, [field, op, value]] });
+      },
+      orderBy: (field, dir = 'asc') => next({ orders: [...spec.orders, [field, dir]] }),
+      limit: (n) => next({ max: n }),
+      startAfter: (snapOrRef) => next({ after: snapOrRef?.ref?.path ?? snapOrRef?.path ?? null }),
       async get() {
         await network();
         await pause();
-        const docs = [...store.entries()]
-          .filter(([p, d]) => p.startsWith(`${path}/`) && !p.slice(path.length + 1).includes('/') && filter(d))
-          .slice(0, max)
+        const docs = matches()
+          .slice(0, spec.max)
           .map(([p, d]) => {
             bump('reads', p);
-            return { id: p.split('/').pop(), exists: true, data: () => clone(d) };
+            return { id: p.split('/').pop(), exists: true, ref: docRef(p), data: () => clone(d) };
           });
         return { docs, size: docs.length, empty: docs.length === 0, forEach: (fn) => docs.forEach(fn) };
       },
+      aggregate: (aggSpec) => ({
+        async get() {
+          await network();
+          await pause();
+          const rows = matches().slice(0, spec.max);
+          counts.reads += Math.max(1, Math.ceil(rows.length / 1000));
+          counts.aggregations = (counts.aggregations ?? 0) + 1;
+          const out = {};
+          for (const [alias, field] of Object.entries(aggSpec)) {
+            const kind = field?.aggregateType ?? field?._aggregateType ?? field?.type;
+            const fieldName = field?._field ?? field?.field ?? field?._fieldPath?.toString?.() ?? field?.fieldPath;
+            if (kind === 'count') out[alias] = rows.length;
+            else if (kind === 'sum') out[alias] = rows.reduce((sum, [, d]) => sum + (Number(d?.[String(fieldName)]) || 0), 0);
+            else throw new Error(`fake Firestore: unsupported aggregate ${JSON.stringify(field)}`);
+          }
+          return { data: () => out };
+        },
+      }),
     };
   }
   function collectionRef(path) {
+    const q = query(path);
     return {
       path,
       doc: (id) => docRef(`${path}/${id}`),
-      where: (field, op, value) => {
-        if (op !== '==') throw new Error(`fake Firestore: only == queries (${op})`);
-        return query(path, (d) => d?.[field] === value);
-      },
-      get: () => query(path, () => true).get(),
+      where: q.where,
+      orderBy: q.orderBy,
+      limit: q.limit,
+      get: () => q.get(),
+      aggregate: q.aggregate,
     };
   }
   class AlreadyExists extends Error { constructor(p) { super(`ALREADY_EXISTS ${p}`); this.code = 6; } }
@@ -86,6 +146,26 @@ export function makeFakeDb() {
         bump('reads', r.path);
         return snap(r.path);
       });
+    },
+    // Batched writes: all applied together on commit.
+    batch() {
+      const ops = [];
+      return {
+        create: (r, d) => ops.push(['create', r.path, d]),
+        set: (r, d, opts = {}) => ops.push([opts.merge ? 'merge' : 'set', r.path, d]),
+        update: (r, d) => ops.push(['update', r.path, d]),
+        delete: (r) => ops.push(['delete', r.path]),
+        async commit() {
+          await network();
+          await pause();
+          for (const [k, p] of ops) if (k === 'create' && store.has(p)) throw new AlreadyExists(p);
+          for (const [k, p, d] of ops) {
+            write(p, k === 'delete' ? undefined : k === 'update' || k === 'merge' ? { ...(store.get(p) ?? {}), ...d } : d);
+            bump('writes', p);
+          }
+          counts.commits += 1;
+        },
+      };
     },
     async runTransaction(fn) {
       for (let attempt = 0; attempt < 30; attempt += 1) {

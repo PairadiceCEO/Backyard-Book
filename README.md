@@ -119,6 +119,12 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
 
+## 0.17.0
+
+- **Casino chat:** every game (Slots, Blackjack, Baccarat, Craps, Crapless) has its own chat room behind a **Chat** button with an unread badge. Messages are plain text, up to 200 characters, kept 24 hours; at most one every 2 seconds and 20 a minute per player. The admin can delete any message ("Message removed"). New Firestore rules: publish `firestore.rules`.
+- **Admin → Wallet activity:** pick a player to see every wallet change of the last 24 hours with the balance after each one, a summary (Sportsbook, Casino per game, Other), filters, and a check that every balance adds up and matches the wallet. Needs three composite indexes on `ledger` (the tab names any that are missing).
+- **Vercel Web Analytics** is on (`<Analytics />` in App.jsx).
+
 ## 0.16.0
 
 - **No maximum bets** on any game: Blackjack, Baccarat, Craps, Crapless, Slots, Battles and the sportsbook. Minimum $1, whole dollars; the wallet balance is the only cap. A single bet or stake over $1,000,000 is refused ("That bet is larger than the table allows."), a technical guard, not a game limit. Craps Odds stay at 2× the line bet.

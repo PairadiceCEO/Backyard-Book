@@ -27,7 +27,14 @@ service cloud.firestore {
       match /{sub=**} { allow read, write: if false; }
     }
 
-    // usernames, cache, meta and anything not listed: server only.
+    // Casino chat (0.17.0): one room per game; anyone signed in reads; only the server writes, ever.
+    // chatRate/{uid} (the server's rate counter) is covered by the server-only rule below.
+    match /casinoChat/{game}/messages/{messageId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // usernames, cache, meta, chatRate and anything not listed: server only.
     match /{document=**}     { allow read, write: if false; }
   }
 }
