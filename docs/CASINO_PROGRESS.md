@@ -84,3 +84,8 @@ No maximum on any casino bet, slot spin or Battle stake: minimum $1, whole dolla
 larger than the table allows."). Craps Odds stay at 2× the line bet. Chips $1, $2, $5, $10, $25, $100 on every game and
 Slots. The old limits in the entries above ($1–$10 a bet, $10 a spot, craps $20 / $30 / $60) no longer apply. Details in
 PROGRESS.md 0.16.0.
+
+## 0.17.0 (2026-10-20): casino chat
+One chat room per game (casinoChat/{game}/messages), written only by /api/casino action `chat`; a Chat button with an
+unread badge on every game page (craps: in the top bar, which is two rows on phones) and a drawer over the page.
+Craps no-scroll check now also requires the Chat button on screen. Details in PROGRESS.md 0.17.0 item 1.

@@ -5239,3 +5239,192 @@ fieldset.field legend {
     text-overflow: ellipsis;
   }
 }
+
+/* ===================== Admin → Wallet activity (0.17.0) ===================== */
+.wallet-activity {
+  gap: 0.6rem;
+}
+
+.net-pos {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.net-neg {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.activity-summary-scroll {
+  overflow-x: auto;
+}
+
+.activity-summary table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-summary th,
+.activity-summary td {
+  padding: 0.3rem 0.4rem;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.activity-summary th[scope='row'],
+.activity-summary thead th:first-child {
+  text-align: left;
+}
+
+.activity-summary tr.sub th {
+  padding-left: 1.1rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.activity-summary tbody tr:last-child th,
+.activity-summary tbody tr:last-child td {
+  font-weight: 800;
+  border-bottom: none;
+}
+
+.missing-index code {
+  font-size: 0.85em;
+}
+
+.missing-index-item p {
+  margin: 0.25rem 0;
+}
+
+.balance-check {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.balance-check.bad {
+  border-color: var(--danger);
+}
+
+.check-ok {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.check-jump {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.activity-game {
+  max-width: 16rem;
+}
+
+.activity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-row {
+  display: grid;
+  grid-template-columns: 7.5rem 8rem minmax(0, 1fr) 6rem 6rem 7rem 9rem;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.activity-row.jump {
+  background: rgba(255, 107, 107, 0.1);
+  border-left: 3px solid var(--danger);
+}
+
+.activity-head {
+  font-weight: 700;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.activity-row .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-what {
+  overflow-wrap: anywhere;
+}
+
+.activity-label {
+  display: none;
+}
+
+.link-button {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  min-height: 40px;
+  min-width: 44px;
+}
+
+/* Phones (≤ 520 px): each entry is a card. */
+@media (max-width: 520px) {
+  .activity-head {
+    display: none;
+  }
+  .activity-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.15rem 0.5rem;
+    margin-bottom: 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+  .activity-time {
+    grid-column: 1;
+  }
+  .activity-where {
+    grid-column: 2;
+    text-align: right;
+    font-weight: 700;
+  }
+  .activity-what,
+  .activity-check {
+    grid-column: 1 / -1;
+  }
+  .activity-row .num {
+    text-align: left;
+  }
+  .activity-row .num:empty {
+    display: none;
+  }
+  .activity-label {
+    display: inline;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .activity-summary table {
+    font-size: 0.78rem;
+  }
+  .activity-summary th,
+  .activity-summary td {
+    padding: 0.3rem 0.25rem;
+  }
+}

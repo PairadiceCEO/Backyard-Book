@@ -167,7 +167,8 @@ function AdminBetCard({ bet, flagged, busy, onAction }) {
   );
 }
 
-export default function AdminBets() {
+// focusBetId (from Admin → Wallet activity's "Open bet ›"): that bet is shown first, with a way back to the full list.
+export default function AdminBets({ focusBetId = null, onClearFocus = null }) {
   const { bets, error, loaded, retry } = useAllBets();
   const nowMs = useNowMs();
   const [player, setPlayer] = useState('all');
@@ -228,6 +229,27 @@ export default function AdminBets() {
       {notice ? <div className="card success-text small">{notice}</div> : null}
       {error ? <ErrorState title="Couldn't load bets" message={error} onRetry={retry} /> : null}
       {!loaded ? <LoadingState label="Loading bets…" rows={3} /> : null}
+
+      {focusBetId ? (
+        <div className="card focus-bet">
+          <div className="filter-row">
+            <strong>Bet {focusBetId}</strong>
+            {onClearFocus ? (
+              <button type="button" className="btn small" onClick={onClearFocus}>
+                Show all bets
+              </button>
+            ) : null}
+          </div>
+          {loaded && !bets.some((b) => b.id === focusBetId) ? (
+            <p className="muted small">That bet isn't among the newest {MAX_BETS} loaded here.</p>
+          ) : null}
+          {bets
+            .filter((b) => b.id === focusBetId)
+            .map((bet) => (
+              <AdminBetCard key={`focus-${bet.id}`} bet={bet} flagged={needsReview(bet, nowMs)} busy={busy} onAction={onAction} />
+            ))}
+        </div>
+      ) : null}
 
       <h3 className="section-title">Needs review ({review.length})</h3>
       {loaded && review.length === 0 ? <div className="card muted small">Nothing to review. Open bets land here when a leg is still pending 72 hours after its game started.</div> : null}

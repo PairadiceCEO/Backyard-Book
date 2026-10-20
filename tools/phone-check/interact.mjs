@@ -1046,6 +1046,58 @@ await check('chat admin: Delete asks to confirm, then sends chatDelete for that 
   await context.close();
 });
 
+// ---------- 0.17.0: Admin → Wallet activity ----------
+await check('wallet activity: pick a player, summary + checks; Load more sends the cursor and completes the chain; Open bet shows it in Bets', async () => {
+  const full = F.walletActivity('ok');
+  const pages = [
+    { ...full, entries: full.entries.slice(0, 8), nextCursor: full.entries[7].id },
+    { ...full, entries: full.entries.slice(8), nextCursor: null, summary: null },
+  ];
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  const calls = [];
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u0' }, admin: true, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, battles: [], challenges: [] } });
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
+  await page.route('**/api/**', async (route) => {
+    const u = new URL(route.request().url());
+    const body = route.request().postDataJSON?.() ?? {};
+    if (u.pathname === '/api/admin' && body.action === 'walletActivity') {
+      calls.push(body);
+      return json(route, 200, body.cursor ? pages[1] : pages[0]);
+    }
+    if (u.pathname === '/api/admin') return json(route, 200, { ok: true, admin: true, username: 'will' });
+    return json(route, 200, { ok: true, ran: false });
+  });
+  await page.goto(BASE + '/admin', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('tab', { name: 'Wallet activity' }).click();
+  await page.getByLabel('Player').selectOption('u1');
+  await page.waitForSelector('.activity-list');
+  assert.deepEqual(calls.map((c) => ({ uid: c.uid, cursor: c.cursor ?? null })), [{ uid: 'u1', cursor: null }]);
+  assert.equal(await page.locator('.activity-row:not(.activity-head)').count(), 8);
+  assert.match(await page.locator('.activity-row:not(.activity-head)').last().innerText(), /load more to check/);
+  assert.match(await page.locator('.activity-summary').innerText(), /Blackjack/);
+  assert.match(await page.locator('.activity-time').first().innerText(), /^\d{1,2}:\d{2}:\d{2} [AP]M/, 'Central time with seconds');
+  await page.getByRole('button', { name: 'Load more' }).click();
+  await page.waitForTimeout(300);
+  assert.deepEqual(calls[1], { action: 'walletActivity', uid: 'u1', cursor: full.entries[7].id });
+  assert.equal(await page.locator('.activity-row:not(.activity-head)').count(), 12);
+  assert.equal(await page.getByRole('button', { name: 'Load more' }).count(), 0);
+  assert.match(await page.locator('.activity-row:not(.activity-head)').last().innerText(), /start of 24 h/);
+  assert.match(await page.locator('.balance-check').innerText(), /Every balance adds up \(12 entries\)/);
+  assert.equal(await page.locator('.activity-row.jump').count(), 0);
+  // Filters: Casino → Blackjack shows the two Blackjack rows; the check still covers everything.
+  await page.getByRole('tab', { name: 'Casino', exact: true }).click();
+  await page.getByLabel('Game').selectOption('blackjack');
+  assert.deepEqual(await page.locator('.activity-row:not(.activity-head) .activity-where').allInnerTexts(), ['Blackjack seat 3', 'Blackjack seat 3']);
+  await page.getByRole('tab', { name: 'All', exact: true }).click();
+  // Open bet › → Admin → Bets with that bet first.
+  await page.getByRole('button', { name: 'Open bet ›' }).first().click();
+  await page.waitForSelector('.focus-bet');
+  assert.equal(await page.getByRole('tab', { name: 'Bets', exact: true }).getAttribute('aria-selected'), 'true');
+  assert.match(await page.locator('.focus-bet').innerText(), /Bet u1_req_b2/);
+  await context.close();
+});
+
 await browser.close();
 console.log(results.join('\n'));
 if (results.some((r) => r.startsWith('FAIL'))) process.exit(1);

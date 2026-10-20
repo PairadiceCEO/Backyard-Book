@@ -1,5 +1,6 @@
 // Admin home: Players, Bets (regrades, needs review), Battles (disputes, result / payout / void),
-// Challenges (approve / reject / edit, settle / void), Custom games, Settlement (preview, settle now), Shop purchases and a server access check.
+// Challenges (approve / reject / edit, settle / void), Custom games, Settlement (preview, settle now), Shop purchases,
+// Wallet activity (a player's last 24 h of wallet changes, read only) and a server access check.
 
 import { useState } from 'react';
 import { adminAction } from '../../lib/api.js';
@@ -10,6 +11,7 @@ import AdminBets from './AdminBets.jsx';
 import AdminCustomGames from './AdminCustomGames.jsx';
 import AdminBattles from './AdminBattles.jsx';
 import AdminChallenges from './AdminChallenges.jsx';
+import AdminWalletActivity from './AdminWalletActivity.jsx';
 
 const SECTIONS = [
   { id: 'players', label: 'Players' },
@@ -19,6 +21,7 @@ const SECTIONS = [
   { id: 'custom', label: 'Custom games' },
   { id: 'settlement', label: 'Settlement' },
   { id: 'shop', label: 'Shop purchases' },
+  { id: 'activity', label: 'Wallet activity' },
   { id: 'system', label: 'System' },
 ];
 
@@ -55,6 +58,7 @@ function SystemPanel() {
 
 export default function AdminPage() {
   const [section, setSection] = useState('players');
+  const [focusBetId, setFocusBetId] = useState(null); // Wallet activity → "Open bet ›"
 
   return (
     <section className="page">
@@ -67,18 +71,29 @@ export default function AdminPage() {
             role="tab"
             aria-selected={s.id === section}
             className={s.id === section ? 'sub-tab active' : 'sub-tab'}
-            onClick={() => setSection(s.id)}
+            onClick={() => {
+              setSection(s.id);
+              setFocusBetId(null);
+            }}
           >
             {s.label}
           </button>
         ))}
       </div>
       {section === 'players' ? <AdminUsers /> : null}
-      {section === 'bets' ? <AdminBets /> : null}
+      {section === 'bets' ? <AdminBets focusBetId={focusBetId} onClearFocus={() => setFocusBetId(null)} /> : null}
       {section === 'battles' ? <AdminBattles /> : null}
       {section === 'challenges' ? <AdminChallenges /> : null}
       {section === 'custom' ? <AdminCustomGames /> : null}
       {section === 'shop' ? <AdminShopHistory /> : null}
+      {section === 'activity' ? (
+        <AdminWalletActivity
+          onOpenBet={(betId) => {
+            setFocusBetId(betId);
+            setSection('bets');
+          }}
+        />
+      ) : null}
       {section === 'settlement' ? <AdminSettlement /> : null}
       {section === 'system' ? <SystemPanel /> : null}
     </section>

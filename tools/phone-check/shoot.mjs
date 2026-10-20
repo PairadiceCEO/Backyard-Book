@@ -58,6 +58,7 @@ async function routeApi(page, mode) {
     if (u.pathname === '/api/admin' && /^challenge(Settle|Void)$/.test(body?.action ?? '')) return json(route, 200, body.confirm ? { ok: true, settlement: { settled: 6, stillOpen: 1 } } : F.challengeSettlePreview);
     if (u.pathname === '/api/admin' && /^challenge/.test(body?.action ?? '')) return json(route, 200, { ok: true, challengeId: body.challengeId });
     if (u.pathname === '/api/admin' && /^battle/.test(body?.action ?? '')) return json(route, 200, F.battlePreview);
+    if (u.pathname === '/api/admin' && body?.action === 'walletActivity') return json(route, 200, F.walletActivity(mode.activity ?? 'ok'));
     if (u.pathname === '/api/admin') {
       if (body?.action === 'gradeBet' || body?.action === 'setLegResult') return json(route, 200, F.regradePreview);
       return json(route, 200, { ok: true, admin: true, username: 'will' });
@@ -269,6 +270,15 @@ const scenarios = [
   S('chat-admin-confirm', '/casino/craps', { admin: true, user: 'u0', fs: withTable(cr.watch), act: async (p) => { await openChat(p); await p.getByRole('button', { name: /^Delete Dan's message/ }).first().click(); await p.waitForTimeout(150); } }),
   S('chat-typing-long', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting), act: async (p) => { await openChat(p); await p.getByLabel('Message').fill('y'.repeat(205)); await p.waitForTimeout(150); } }),
   S('chat-empty-room', '/casino/baccarat', { admin: false, user: 'u1', fs: () => ({ ...withTable(tables.betting)(), 'casinoChat/baccarat/messages': [] }), act: openChat }),
+  // 0.17.0 Admin → Wallet activity: no player picked; entries with every check passing; a balance jump + wallet
+  // mismatch; the main index missing; the per-game index still building; the Casino filter; "Open bet ›" to Bets.
+  S('admin-activity-pick', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Wallet activity' }).click(); await p.waitForTimeout(400); } }),
+  S('admin-activity', '/admin', { act: pickActivity }),
+  S('admin-activity-jump', '/admin', { activity: 'jump', act: pickActivity }),
+  S('admin-activity-missing-index', '/admin', { activity: 'missing', act: pickActivity }),
+  S('admin-activity-building', '/admin', { activity: 'summaryMissing', act: pickActivity }),
+  S('admin-activity-casino', '/admin', { act: async (p) => { await pickActivity(p); await p.getByRole('tab', { name: 'Casino', exact: true }).click(); await p.getByLabel('Game').selectOption('blackjack'); await p.waitForTimeout(200); } }),
+  S('admin-activity-open-bet', '/admin', { act: async (p) => { await pickActivity(p); await p.getByRole('button', { name: 'Open bet ›' }).first().click(); await p.waitForTimeout(500); } }),
 ];
 
 async function clickPrices(p, n) {
@@ -276,6 +286,14 @@ async function clickPrices(p, n) {
   for (const i of [0, 8, 12].slice(0, n)) await buttons.nth(i).click();
   await p.waitForTimeout(200);
 }
+async function pickActivity(p) {
+  await p.getByRole('tab', { name: 'Wallet activity' }).click();
+  await p.waitForTimeout(400);
+  await p.getByLabel('Player').selectOption('u1');
+  await p.waitForSelector('.activity-list, .missing-index', { timeout: 5000 }).catch(() => {});
+  await p.waitForTimeout(250);
+}
+
 async function openChat(p) {
   await p.getByRole('button', { name: /^Chat/ }).first().click();
   await p.waitForSelector('.chat-drawer .chat-msg, .chat-drawer .chat-empty', { timeout: 5000 }).catch(() => {});

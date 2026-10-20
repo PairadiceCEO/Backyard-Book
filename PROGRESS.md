@@ -53,11 +53,38 @@ merge after every CLAUDE.md check; stop servers at the end.
       Timestamp, getCountFromServer, live listeners (emit / liveListeners). Phone-side mutations (closed listens to 30,
       listener never removed, always auto-scroll, seen never saved) each fail. Phone screens: chat-{slots, blackjack,
       baccarat, craps, crapless} closed and -open, craps watching open, admin open + confirm, typing 205, empty room.
-- [ ] 2 Admin → Wallet activity: `walletActivity` { uid, cursor? } (admin only, read only, ledger createdAt ≥ now − 24 h,
-      50 a page); summary by aggregation queries; indexes listed; missing index named, not a crash. Tab next to Shop
-      purchases: player picker, summary (Sportsbook, Casino + per game, Other), filters, rows (time with seconds,
-      where, what, Wagered, Won, balance after, bet link), cards ≤ 520 px, balance chain check (groups by
-      transaction), wallet comparison. Tests + mutation check; phone screens.
+- [x] 2 Admin → Wallet activity. server/admin/walletActivity.js = /api/admin `walletActivity` { uid, cursor? } (admin
+      only via api/admin's requireAdmin; read only, nothing written). Entries: ledger uid == X and createdAt ≥ now −
+      24 h, createdAt desc, 50 a page (+1 to know there's more), cursor = the last entry's id (its snapshot; must be the
+      same player's). Summary (first page only) by aggregation (count + sum(amountCents)): 1 over the window (total,
+      catches unknown types), 9 per non-casino type, 15 per casino type × game. shared/walletActivity.js: categories
+      (Sportsbook = stake/payout/cashout; Casino = casino_* by game; Other = battle_*, shop, admin_*), Wagered = debit
+      types, Won/returned = credit types, admin = signed, shown as its own column (net); `whereOf` ("Blackjack seat 3"
+      from the note); `checkBalances`: oldest → newest, groups of identical createdAt (exact seconds.nanoseconds key)
+      chained in whatever order fits; a link that doesn't add up → jump { expected, ledger says }, the walk then
+      continues from what the ledger says; the window's first group is "start of 24 h" (or "load more to check" while
+      pages remain); newest balance after vs the wallet now.
+      Indexes (all collection `ledger`, scope Collection): ENTRIES uid Asc + createdAt Desc; BY_TYPE uid Asc + type Asc
+      + createdAt Asc; BY_GAME uid Asc + type Asc + game Asc + createdAt Asc. A missing (or building) index is caught
+      (FAILED_PRECONDITION "requires an index") and returned in `missingIndexes` with its fields and Firebase's link;
+      whatever doesn't need it still loads.
+      Screen: src/pages/admin/AdminWalletActivity.jsx, tab "Wallet activity" after "Shop purchases": player picker
+      (users read once, as Shop purchases), Refresh, missing-index card with click-by-click steps, summary table
+      (Sportsbook, Casino + each game, Other + Battles/Shop/Admin, Total; net green/red), balance check card (✓ or N
+      jumps; wallet comparison), filters All/Sportsbook/Casino/Battles/Shop/Admin + Game, rows (time with seconds,
+      Central, plus the day when not today; where; note; Wagered; Won; balance after; ✓ / start / load more / red
+      jump), "Open bet ›" → Admin → Bets with that bet shown first (AdminBets `focusBetId`), Load more. ≤ 520 px: rows
+      are cards. Filters only change what's shown; the check always covers everything loaded.
+      Tests (test/activity, `npm run test:activity`, 9): window edge (24 h in, 24 h + 1 s out), other players excluded,
+      pages 50/50/23 with no gaps, read only, bad cursor, admin only via /api/admin, summary math (incl. a type it
+      doesn't know), good chain + wallet match, broken chain (expected vs ledger, flagged once, resumes), a same-
+      transaction group in either order (and a wrong number in it), wallet mismatch, missing index (per-game and main),
+      other errors still thrown. Mutation-checked: no transaction groups, group walked in ledger order only, never
+      flags, window start as a jump, no wallet comparison, expected without the amount, resume from expected — each
+      fails. interact.mjs "wallet activity" (pick, summary, seconds, Load more sends the cursor and finishes the
+      chain, Casino → Blackjack filter, Open bet → Bets). Phone screens: admin-activity-pick, admin-activity,
+      admin-activity-jump, admin-activity-missing-index, admin-activity-building, admin-activity-casino,
+      admin-activity-open-bet.
 - [ ] 3 Checks: test:all, lint, build, interact.mjs, dealcheck.mjs, phone check. Version 0.17.0. Merge.
 
 ## Vercel Web Analytics on main (Will, 2026-10-20 15:07 CT, item 0 of the 0.17.0 message) — COMPLETE (2026-10-20), merged to main
