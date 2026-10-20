@@ -10,16 +10,49 @@ Spec: Will's attachment of 2026-10-20 15:07 (items 1–2). One phase on a fresh 
 merge after every CLAUDE.md check; stop servers at the end.
 
 ### Checklist
-- [ ] 1 Casino chat, one room per game (slots, blackjack, baccarat, craps, crapless), never mixed.
-      `casinoChat/{game}/messages/{uid}_{requestId}` { uid, name, text, createdAt, deleted }; /api/casino action
-      `chat` (no new function): room check, disabled refused, text cleaned (control characters out), 1–200
-      characters; rate 1 per 2 s and 20 a minute per player across rooms (`chatRate/{uid}`, same transaction);
-      create() so a retry posts once. firestore.rules: signed-in read, no client writes. Phone: Chat button + unread
-      badge on every game page (craps: top bar / dock), drawer (room name, last 30 of 24 h, oldest on top, name +
-      Central time, mine styled, auto-scroll only at the bottom, 200 counter, Send + Enter, plain text, "Message
-      removed"); closed = listen to the newest 1, open = newest 30; listeners removed; unread per room in localStorage.
-      Admin `chatDelete` + Delete with confirm. Prune > 24 h in the cron and at most hourly in other settlement runs,
-      batches ≤ 500. Tests + mutation checks; phone screens; craps no-scroll still passes; chat never leaves the seat.
+- [x] 1 Casino chat. shared/casino/chat.js (rooms, 200 chars, `cleanChatText`: tabs/new lines → space, other C0/DEL/C1
+      control characters dropped, trimmed; length in characters, an emoji is one; rate rules). server/casinoChat.js
+      `sendChat` = /api/casino action `chat` (router; no new function): room check (400 BAD_ROOM), requestId, text
+      (EMPTY_MESSAGE / MESSAGE_TOO_LONG "Messages can be up to 200 characters"), then one transaction: users/{uid}
+      (missing/disabled refused), chatRate/{uid}, the message doc; an existing {uid}_{requestId} → duplicate: true (no
+      rate used); rate: < 2 s since the last or 20 in the last minute → 429 SLOW_DOWN "Slow down a little"; message
+      { uid, name (displayName, else username), text, createdAt (server), deleted: false } with create(), and chatRate
+      { recent: last-minute times } set in the same transaction. Seated or not doesn't matter. `deleteChatMessage` =
+      /api/admin `chatDelete` (admin only): deleted: true, text '', deletedAt, deletedBy; idempotent; 404 if gone.
+      server/casinoChatPrune.js `pruneCasinoChat` from settleOpenBets (not dry runs): the cron always, other runs once
+      an hour (meta/chatPrune); per room `createdAt < now − 24 h`, 500 a batch, ≤ 10 batches per room per run (single-
+      field index, automatic). Kept apart from casinoChat.js so settlement doesn't load sign-in code (sportsbook tests
+      mock auth.js narrowly); the chat checks the profile itself (same answers as auth.js checkProfile).
+      firestore.rules: `casinoChat/{game}/messages/{id}` read if signed in, write never; chatRate falls under the
+      server-only catch-all. Will must publish the rules.
+      Phone: src/hooks/useCasinoChat.js (one onSnapshot: newest 1 while closed, newest 30 while open, `createdAt ≥ now −
+      24 h`, desc then reversed; removed on close/unmount; unread: localStorage `bb.chatSeen.{room}` (try/catch) and,
+      when the newest is newer, one getCountFromServer of `createdAt > seen` (1 read); single-field queries, no new
+      index). src/components/casino/CasinoChat.jsx: ChatButton (badge, "Chat, N unread"), ChatDrawer (portal over the
+      page and nav; room title; oldest on top; name + "8:42 PM" Central; mine = "You", right, green; removed = "Message
+      removed"; auto-scroll only when at the bottom; input + Send + Enter; n/200 counter, red and Send off over 200;
+      failed send retried with the same requestId; Escape / backdrop / × close; body scroll locked while open; admin
+      Delete → inline confirm → chatDelete). Text is React text: no HTML, no links. Slots/Blackjack/Baccarat: button
+      in the header (icon-only under 420 px; header items don't wrap inside). Craps/Crapless: compact button in the top
+      bar; on phones (< 720 px) the bar is two rows (controls on top; last roll + shooter on one line under them).
+      Decision: the badge's count comes from one count query (the spec's "listen to the newest 1" gives presence, not a
+      number). Decision: the Chat button stays in the top bar at 320×568 too (Roll moves to the dock there, so it fits).
+      Tests (test/chat, `npm run test:chat`, 9): rooms, validation, disabled/no profile, rate (2 s, 20/min, across rooms,
+      counter written only with a message), requestId once, admin delete (403 for a player via /api/admin), prune
+      (24 h edge, 1,203 in batches, hourly gate, cron), settlement prunes, rules (test/chat/rulesEval.mjs: the emulator
+      can't be downloaded here, so a small evaluator of our firestore.rules, checked against known answers for other
+      collections: chat read signed-in only; create/update/delete refused for players, admin and signed-out; chatRate
+      closed). Mutation-checked: no 2 s gap, 1,999 ms, 21 a minute, no per-minute cap, counter per room, server rate
+      check off, room check off, extra room, sendChat skipping the room check — each fails. phase7's fake gained
+      subcollections/range filters/batch delete (settlement now walks the chat); casino fakeFirestore gained range
+      operators, chained where, orderBy, startAfter, aggregation, batch.
+      interact.mjs: no-scroll check now also requires the Chat button on screen (all sizes; lowest control 521/607 at
+      375×667); new: rooms + listener limits (1 / 30 / 1 / 0 after leaving, all five games), drawer content + badge +
+      unread memory + auto-scroll both ways, send/Enter/counter/refusal/retry id/storage blocked, craps: open/close never
+      leaves and the felt doesn't move, admin delete with confirm. Phone mock: nested paths, >=/>/< on timestamps,
+      Timestamp, getCountFromServer, live listeners (emit / liveListeners). Phone-side mutations (closed listens to 30,
+      listener never removed, always auto-scroll, seen never saved) each fail. Phone screens: chat-{slots, blackjack,
+      baccarat, craps, crapless} closed and -open, craps watching open, admin open + confirm, typing 205, empty room.
 - [ ] 2 Admin → Wallet activity: `walletActivity` { uid, cursor? } (admin only, read only, ledger createdAt ≥ now − 24 h,
       50 a page); summary by aggregation queries; indexes listed; missing index named, not a crash. Tab next to Shop
       purchases: player picker, summary (Sportsbook, Casino + per game, Other), filters, rows (time with seconds,

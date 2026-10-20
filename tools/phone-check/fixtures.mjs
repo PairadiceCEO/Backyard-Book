@@ -360,3 +360,33 @@ export function offlineRoute(route) {
   }
   return route.abort();
 }
+
+// ---------- Casino chat (0.17.0) ----------
+// casinoChat/{room}/messages for the phone check: a mix of players, my own (u1 = Mike), a removed one, a long one, a
+// link and some HTML (shown as plain text), all within the last 24 hours; plus one older than 24 h that must not show.
+export function chatMessages(room, { count = 7 } = {}) {
+  const t = Date.now();
+  const lines = [
+    ['u2', 'Dan', 'Anyone else running cold tonight?'],
+    ['u1', 'Mike the Bookie Slayer', `Pressing the ${room === 'craps' || room === 'crapless' ? '6 and 8' : 'Player side'}. Feeling it.`],
+    ['u4', 'Ann', 'https://example.com/not-a-link <b>not bold</b>'],
+    ['u0', 'Will', 'Remember: the wallet is the only limit now 😄'],
+    ['u2', 'Dan', 'x'.repeat(40) + ' a long message that has to wrap nicely on a 320 px phone without pushing anything sideways at all, ok'],
+    ['u5', 'Bo', ''],
+    ['u1', 'Mike the Bookie Slayer', 'gl all'],
+  ];
+  const list = lines.slice(0, count).map(([uid, name, text], i) => ({
+    id: `${uid}_m${i}`,
+    uid,
+    name,
+    text,
+    deleted: i === 5,
+    createdAt: new Date(t - (count - i) * 7 * 60 * 1000).toISOString(),
+  }));
+  list.push({ id: 'u2_old', uid: 'u2', name: 'Dan', text: 'from yesterday (must not show)', deleted: false, createdAt: new Date(t - 25 * 3600 * 1000).toISOString() });
+  return list;
+}
+export const CHAT_ROOMS = ['slots', 'blackjack', 'baccarat', 'craps', 'crapless'];
+export function chatFs() {
+  return Object.fromEntries(CHAT_ROOMS.map((r) => [`casinoChat/${r}/messages`, chatMessages(r)]));
+}

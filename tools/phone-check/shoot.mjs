@@ -9,7 +9,7 @@ const out = process.argv[2];
 const only = process.argv[3] ? new RegExp(process.argv[3]) : null;
 mkdirSync(out, { recursive: true });
 
-const fsDefault = { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, battles: F.battles, challenges: F.challenges };
+const fsDefault = { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, battles: F.battles, challenges: F.challenges, ...F.chatFs() };
 const json = (route, status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
 async function routeApi(page, mode) {
@@ -253,12 +253,33 @@ const scenarios = [
   S('admin-settlement', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Settlement' }).click(); await p.getByRole('button', { name: 'Preview settlement' }).click(); await p.waitForTimeout(300); } }),
   S('admin-shop', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Shop purchases' }).click(); await p.waitForTimeout(300); } }),
   S('admin-system', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'System' }).click(); await p.waitForTimeout(200); } }),
+  // 0.17.0 casino chat: every game page with the drawer closed (unread badge) and open; the admin's Delete + confirm.
+  S('chat-slots', '/casino/slots', { admin: false, user: 'u1' }),
+  S('chat-slots-open', '/casino/slots', { admin: false, user: 'u1', act: openChat }),
+  S('chat-blackjack', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting) }),
+  S('chat-blackjack-open', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting), act: openChat }),
+  S('chat-baccarat', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.betting) }),
+  S('chat-baccarat-open', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.betting), act: openChat }),
+  S('chat-craps', '/casino/craps', { admin: false, user: 'u1', fs: withTable(() => cr.myRoll('craps')) }),
+  S('chat-craps-open', '/casino/craps', { admin: false, user: 'u1', fs: withTable(() => cr.myRoll('craps')), act: openChat }),
+  S('chat-crapless', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(() => cr.myRoll('crapless')) }),
+  S('chat-crapless-open', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(() => cr.myRoll('crapless')), act: openChat }),
+  S('chat-craps-watching-open', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.watch), act: openChat }),
+  S('chat-admin-open', '/casino/craps', { admin: true, user: 'u0', fs: withTable(cr.watch), act: openChat }),
+  S('chat-admin-confirm', '/casino/craps', { admin: true, user: 'u0', fs: withTable(cr.watch), act: async (p) => { await openChat(p); await p.getByRole('button', { name: /^Delete Dan's message/ }).first().click(); await p.waitForTimeout(150); } }),
+  S('chat-typing-long', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting), act: async (p) => { await openChat(p); await p.getByLabel('Message').fill('y'.repeat(205)); await p.waitForTimeout(150); } }),
+  S('chat-empty-room', '/casino/baccarat', { admin: false, user: 'u1', fs: () => ({ ...withTable(tables.betting)(), 'casinoChat/baccarat/messages': [] }), act: openChat }),
 ];
 
 async function clickPrices(p, n) {
   const buttons = p.locator('.game-card .odds-button');
   for (const i of [0, 8, 12].slice(0, n)) await buttons.nth(i).click();
   await p.waitForTimeout(200);
+}
+async function openChat(p) {
+  await p.getByRole('button', { name: /^Chat/ }).first().click();
+  await p.waitForSelector('.chat-drawer .chat-msg, .chat-drawer .chat-empty', { timeout: 5000 }).catch(() => {});
+  await p.waitForTimeout(250);
 }
 async function openPropsTab(p) {
   await p.getByRole('tab', { name: 'Player props' }).click();
@@ -329,7 +350,7 @@ for (const sc of scenarios) {
     const analyticsLoads = await page.evaluate(() => window.__analyticsLoads ?? 0);
     if (analyticsLoads !== 1) errors.push(`analytics script loaded ${analyticsLoads} times (expected 1)`);
     report[sc.name][width] = { ...m, errors };
-    if (width === 375) await page.screenshot({ path: `${out}/${sc.name}.png`, fullPage: !/slip|confirm|preview/.test(sc.name) });
+    if (width === 375) await page.screenshot({ path: `${out}/${sc.name}.png`, fullPage: !/slip|confirm|preview|^chat-.*(open|typing|empty-room)/.test(sc.name) });
     await context.close();
   }
 }

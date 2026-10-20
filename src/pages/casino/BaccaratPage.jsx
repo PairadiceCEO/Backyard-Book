@@ -30,6 +30,8 @@ import { useChipBetting } from '../../hooks/useChipBetting.js';
 import { newRequestId, tableAction } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
 import { BET_HELP_TEXT, betCeilingProblem } from '../../../shared/casino/constants.js';
+import { ChatButton, ChatDrawer } from '../../components/casino/CasinoChat.jsx';
+import { useCasinoChat } from '../../hooks/useCasinoChat.js';
 import {
   BACCARAT_ODDS,
   SPOT_LABELS,
@@ -192,6 +194,7 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, call, roundI
 
 export default function BaccaratPage() {
   const { authUser, profile } = useAuth();
+  const chat = useCasinoChat(GAME); // this game's chat room (0.17.0)
   const myUid = authUser?.uid ?? null;
   const balanceCents = Number(profile?.balanceCents) || 0;
   const { setHeldCents, setPendingCents, reportBalance } = useWalletDisplay();
@@ -324,6 +327,7 @@ export default function BaccaratPage() {
             Shoe {table.shoe.remaining}/{table.shoe.total}
           </span>
         ) : null}
+        <ChatButton chat={chat} />
       </div>
 
       <div className={`card table-status phase-${phase}`} role="status">
@@ -424,6 +428,7 @@ export default function BaccaratPage() {
         Player pays 1:1, Banker 0.95:1 (5% commission), Tie 8:1; a Tie pushes Player and Banker bets. 8 decks, standard
         drawing rules, every card dealt on the server.
       </p>
+      <ChatDrawer chat={chat} />
     </section>
   );
 }

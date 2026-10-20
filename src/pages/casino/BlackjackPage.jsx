@@ -33,6 +33,8 @@ import { newRequestId, tableAction } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
 import { BET_HELP_TEXT, betCeilingProblem } from '../../../shared/casino/constants.js';
 import { cardRank } from '../../../shared/casino/cards.js';
+import { ChatButton, ChatDrawer } from '../../components/casino/CasinoChat.jsx';
+import { useCasinoChat } from '../../hooks/useCasinoChat.js';
 import {
   BLACKJACK_INITIAL_GAP_MS,
   canDouble,
@@ -298,6 +300,7 @@ function SeatPanel({
 
 export default function BlackjackPage() {
   const { authUser, profile } = useAuth();
+  const chat = useCasinoChat(GAME); // this game's chat room (0.17.0)
   const myUid = authUser?.uid ?? null;
   const balanceCents = Number(profile?.balanceCents) || 0;
   const { setHeldCents, setPendingCents, reportBalance } = useWalletDisplay();
@@ -463,6 +466,7 @@ export default function BlackjackPage() {
             Shoe {table.shoe.remaining}/{table.shoe.total}
           </span>
         ) : null}
+        <ChatButton chat={chat} />
       </div>
 
       <div className={`card table-status phase-${phase}`} role="status">
@@ -568,6 +572,7 @@ export default function BlackjackPage() {
         split per hand (split Aces get one card), double on any first two cards, also after a split. 15 s per hand; time out = stand.
         {BET_HELP_TEXT} Each seat bets on its own; sit in as many seats as you like.
       </p>
+      <ChatDrawer chat={chat} />
     </section>
   );
 }

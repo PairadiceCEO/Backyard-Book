@@ -260,7 +260,7 @@ async function openCraps(path, tables, { width = 375, height = 800, uid = 'u1', 
       };
     });
   }
-  await page.addInitScript((h) => { window.__H = h; }, { user: { uid }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: tables } });
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: tables, ...F.chatFs() } });
   await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
   await page.route('**/api/**', async (route) => {
     const u = new URL(route.request().url());
@@ -288,6 +288,8 @@ function measureCraps(page, dockedOnly) {
       ...pick('.craps-roll-btn', 'Roll'),
       ...pick('[role=radio][aria-label$="chip"]', 'chip'),
       ...pick('.take-down', 'Take down'),
+      // 0.17.0: the Chat button lives in the top bar (it must be on screen too, at every size, docked or not).
+      ...[...document.querySelectorAll('.craps-bar .chat-btn, .craps-dock .chat-btn')].map((el) => ({ el, label: 'Chat' })),
       ...(dockedOnly ? [] : [...document.querySelectorAll('.craps-tools .btn')].map((el) => ({ el, label: el.textContent.trim() }))),
       ...(dockedOnly ? [] : [...document.querySelectorAll('.craps-felt .craps-spot')].map((el) => ({ el, label: el.getAttribute('aria-label') }))),
     ];
@@ -300,7 +302,7 @@ function measureCraps(page, dockedOnly) {
 }
 
 for (const game of ['craps', 'crapless']) {
-  await check(`${game}: Roll, chips, Take down, Undo/Clear and every spot on screen at scrollY 0 (375×667, 390×844, 414×896, 1280×720, 1440×900); docked bar at 320×568`, async () => {
+  await check(`${game}: Roll, chips, Take down, Undo/Clear, Chat and every spot on screen at scrollY 0 (375×667, 390×844, 414×896, 1280×720, 1440×900); docked bar at 320×568`, async () => {
     const report = [];
     for (const [width, height] of SIZES) {
       const { page, context } = await openCraps(`/casino/${game}`, [crapsWorst(game)], { width, height });
@@ -308,10 +310,10 @@ for (const game of ['craps', 'crapless']) {
       const m = await measureCraps(page, dockedOnly);
       assert.equal(m.scrollY, 0);
       assert.equal(m.docked, dockedOnly, `${width}×${height}: the docked bar shows only on the short screen`);
-      const need = dockedOnly ? ['Roll', 'chip', 'Take down'] : ['Roll', 'chip', 'Take down', 'Undo', 'Clear'];
+      const need = dockedOnly ? ['Roll', 'chip', 'Take down', 'Chat'] : ['Roll', 'chip', 'Take down', 'Undo', 'Clear', 'Chat'];
       for (const label of need) assert.ok(m.out.some((o) => o.label.startsWith(label)), `${width}×${height}: ${label} present`);
       assert.equal(m.out.filter((o) => o.label.startsWith('chip')).length, 6, `${width}×${height}: all six chips ($1–$100) measured`);
-      const spots = m.out.filter((o) => !['Roll', 'chip', 'Take down', 'Undo', 'Clear'].some((l) => o.label.startsWith(l)));
+      const spots = m.out.filter((o) => !['Roll', 'chip', 'Take down', 'Undo', 'Clear', 'Chat'].some((l) => o.label.startsWith(l)));
       if (!dockedOnly) // craps: Pass, Odds, Don't, Don't Odds, Come, Field, 6 Place, 3 Come bets, 4 Hard = 19; crapless: 2 + 2 + 10 + 3 + 4 = 21.
       assert.equal(spots.length, game === 'crapless' ? 21 : 19, `${width}×${height}: every spot measured`);
       const outside = m.out.filter((o) => !o.inside);
@@ -823,6 +825,224 @@ await check('props tab works with sessionStorage blocked', async () => {
   await page.getByRole('tab', { name: 'Game lines' }).click();
   await page.waitForSelector('.line-wheel .wheel-chip');
   assert.deepEqual(errors, []);
+  await context.close();
+});
+
+// ---------- 0.17.0: casino chat ----------
+// One page with chat: returns the page plus every /api/casino body it sent.
+async function openChatPage(path, { uid = 'u1', admin = false, fs = {}, width = 375, height = 800, onChat = null, tables = [] } = {}) {
+  const phone = width <= 640;
+  const context = await browser.newContext({ viewport: { width, height }, isMobile: phone, hasTouch: phone });
+  const page = await context.newPage();
+  const calls = [];
+  const adminCalls = [];
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid }, admin, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: tables, ...F.chatFs(), ...fs } });
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
+  await page.route('**/api/**', async (route) => {
+    const u = new URL(route.request().url());
+    const body = route.request().postDataJSON?.() ?? {};
+    if (u.pathname === '/api/casino') {
+      calls.push(body);
+      if (body.action === 'chat' && onChat) return onChat(route, body);
+      return json(route, 200, { ok: true, serverNow: now() });
+    }
+    if (u.pathname === '/api/admin') {
+      adminCalls.push(body);
+      return json(route, 200, body.action === 'ping' ? { ok: true, admin: true, username: 'will' } : { ok: true });
+    }
+    if (u.pathname === '/api/settle') return json(route, 200, { ran: false });
+    return json(route, 200, { ok: true });
+  });
+  await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(700);
+  return { page, context, calls, adminCalls };
+}
+const chatListeners = (page) => page.evaluate(() => window.__H.liveListeners().filter((l) => l.path.startsWith('casinoChat/')));
+const chatButton = (page) => page.getByRole('button', { name: /^Chat/ }).first();
+const freshMessage = (id, uid, name, text, agoMs = 1000) => ({ id, uid, name, text, deleted: false, createdAt: new Date(Date.now() - agoMs).toISOString() });
+
+await check('chat: each game page listens to its own room only; closed = newest 1, open = newest 30, back to 1 on close, none after leaving', async () => {
+  for (const [path, room] of [['/casino/slots', 'slots'], ['/casino/blackjack', 'blackjack'], ['/casino/baccarat', 'baccarat'], ['/casino/craps', 'craps'], ['/casino/crapless', 'crapless']]) {
+    const { page, context } = await openChatPage(path);
+    let l = await chatListeners(page);
+    assert.deepEqual(l, [{ path: `casinoChat/${room}/messages`, limit: 1 }], `${room}: closed`);
+    await chatButton(page).click();
+    await page.waitForSelector('.chat-drawer .chat-msg');
+    l = await chatListeners(page);
+    assert.deepEqual(l, [{ path: `casinoChat/${room}/messages`, limit: 30 }], `${room}: open`);
+    assert.equal(await page.locator('.chat-drawer h3').innerText(), `${{ slots: '7s Slots', blackjack: 'Blackjack', baccarat: 'Baccarat', craps: 'Craps', crapless: 'Crapless Craps' }[room]} chat`);
+    await page.getByRole('button', { name: 'Close chat' }).click();
+    await page.waitForTimeout(100);
+    assert.deepEqual(await chatListeners(page), [{ path: `casinoChat/${room}/messages`, limit: 1 }], `${room}: closed again`);
+    await page.evaluate(() => { window.history.pushState({}, '', '/my-bets'); window.dispatchEvent(new PopStateEvent('popstate')); });
+    await page.waitForTimeout(250);
+    assert.deepEqual(await chatListeners(page), [], `${room}: listener removed when the page goes away`);
+    await context.close();
+  }
+});
+
+await check('chat drawer: last 24 h only, oldest on top, names and Central times, mine marked, plain text, removed message, badge and unread memory', async () => {
+  const { page, context } = await openChatPage('/casino/craps');
+  await page.waitForSelector('.chat-badge');
+  assert.equal(await page.locator('.chat-badge').innerText(), '7', 'all 7 of the last 24 h are unread on a first visit (the 25 h old one is not)');
+  await chatButton(page).click();
+  await page.waitForSelector('.chat-drawer .chat-msg');
+  const texts = await page.locator('.chat-msg .chat-msg-text').allInnerTexts();
+  assert.equal(texts.length, 7);
+  assert.ok(!texts.some((t) => t.includes('must not show')), 'nothing older than 24 h');
+  assert.equal(texts[0], 'Anyone else running cold tonight?', 'oldest at the top');
+  assert.equal(texts[6], 'gl all', 'newest at the bottom');
+  assert.equal(texts[5], 'Message removed');
+  assert.equal(await page.locator('.chat-msg.mine').count(), 2);
+  assert.equal(await page.locator('.chat-msg.mine .chat-msg-name').first().innerText(), 'You');
+  assert.match(await page.locator('.chat-msg-time').first().innerText(), /^\d{1,2}:\d{2} [AP]M$/, '"8:42 PM" style, Central');
+  assert.equal(await page.locator('.chat-drawer a').count(), 0, 'links are not clickable');
+  assert.equal(await page.locator('.chat-drawer b').count(), 0, 'HTML is shown as text');
+  assert.ok(texts[2].includes('<b>not bold</b>'));
+  assert.equal(await page.locator('.chat-badge').count(), 0, 'open: no badge');
+  // Opened at the bottom.
+  const atBottom = () => page.evaluate(() => { const l = document.querySelector('.chat-list'); return l.scrollHeight - l.scrollTop - l.clientHeight < 2; });
+  assert.ok(await atBottom(), 'opens at the newest');
+  // A new message while I'm at the bottom: it scrolls to it.
+  await page.evaluate((m) => { window.__H.fs['casinoChat/craps/messages'].push(m); window.__H.emit(); }, freshMessage('u2_new1', 'u2', 'Dan', 'new one '.repeat(20), 500));
+  await page.waitForTimeout(200);
+  assert.ok(await atBottom(), 'followed the new message');
+  // Scrolled up: a new message does not yank me down.
+  await page.evaluate(() => { const l = document.querySelector('.chat-list'); l.scrollTop = 0; l.dispatchEvent(new Event('scroll')); });
+  await page.evaluate((m) => { window.__H.fs['casinoChat/craps/messages'].push(m); window.__H.emit(); }, freshMessage('u2_new2', 'u2', 'Dan', 'another', 200));
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => document.querySelector('.chat-list').scrollTop), 0, 'stayed where I was reading');
+  // Close: everything shown is seen; a new message from someone else → badge 1 (one count query).
+  await page.getByRole('button', { name: 'Close chat' }).click();
+  await page.waitForTimeout(150);
+  assert.equal(await page.locator('.chat-badge').count(), 0, 'nothing unread after reading');
+  const seen = await page.evaluate(() => { try { return Number(localStorage.getItem('bb.chatSeen.craps')); } catch { return -1; } });
+  assert.ok(seen > Date.now() - 5000, 'last seen kept per room in localStorage');
+  await page.evaluate((m) => { window.__H.fs['casinoChat/craps/messages'].push(m); window.__H.emit(); }, freshMessage('u4_new3', 'u4', 'Ann', 'you there?', 0));
+  await page.waitForSelector('.chat-badge');
+  assert.equal(await page.locator('.chat-badge').innerText(), '1');
+  assert.equal(await chatButton(page).getAttribute('aria-label'), 'Chat, 1 unread');
+  // Remembered across a reload (the page's fake data resets to the 7 fixtures, all older than what I saw): no badge until
+  // someone writes again, then 1, not 8.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('.chat-badge').count(), 0, 'seen survives a reload');
+  await page.evaluate((m) => { window.__H.fs['casinoChat/craps/messages'].push(m); window.__H.emit(); }, freshMessage('u4_new4', 'u4', 'Ann', 'hello again', 0));
+  await page.waitForSelector('.chat-badge');
+  assert.equal(await page.locator('.chat-badge').innerText(), '1');
+  await context.close();
+});
+
+await check('chat: Send and Enter post one request with the room; 200 counter; refusals shown; a retry reuses the requestId; storage blocked still works', async () => {
+  let refuse = 'none';
+  const { page, context, calls } = await openChatPage('/casino/blackjack', {
+    onChat: async (route, body) => {
+      if (refuse === 'slow') return json(route, 429, { error: { code: 'SLOW_DOWN', message: 'Slow down a little' } });
+      if (refuse === 'network') return route.abort();
+      return json(route, 200, { ok: true, duplicate: false, messageId: `u1_${body.requestId}`, serverNow: now() });
+    },
+  });
+  await chatButton(page).click();
+  const box = page.getByLabel('Message');
+  await box.fill('hello table');
+  assert.equal(await page.locator('.chat-count').innerText(), '11/200');
+  await box.press('Enter');
+  await page.waitForTimeout(250);
+  let chat = calls.filter((c) => c.action === 'chat');
+  assert.equal(chat.length, 1);
+  assert.equal(chat[0].game, 'blackjack');
+  assert.equal(chat[0].text, 'hello table');
+  assert.match(chat[0].requestId, /^[A-Za-z0-9_-]{8,64}$/);
+  assert.equal(await box.inputValue(), '', 'cleared after sending');
+  // The Send button too.
+  await box.fill('second');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await page.waitForTimeout(250);
+  assert.equal(calls.filter((c) => c.action === 'chat').length, 2);
+  // Over 200: the counter turns red and Send is off; nothing is sent.
+  await box.fill('z'.repeat(201));
+  assert.equal(await page.locator('.chat-count').innerText(), '201/200');
+  assert.ok(await page.locator('.chat-count.over').count());
+  assert.equal(await page.getByRole('button', { name: 'Send' }).isDisabled(), true);
+  await box.press('Enter');
+  await page.waitForTimeout(150);
+  assert.equal(calls.filter((c) => c.action === 'chat').length, 2);
+  // Rate limited: the reason shows.
+  refuse = 'slow';
+  await box.fill('again');
+  await box.press('Enter');
+  await page.waitForSelector('.chat-error');
+  assert.equal(await page.locator('.chat-error').innerText(), 'Slow down a little');
+  // A failed send retried with the same text keeps its requestId (so it can only post once).
+  refuse = 'network';
+  await box.fill('flaky');
+  await box.press('Enter');
+  await page.waitForTimeout(250);
+  refuse = 'none';
+  await box.press('Enter');
+  await page.waitForTimeout(250);
+  chat = calls.filter((c) => c.action === 'chat' && c.text === 'flaky');
+  assert.equal(chat.length, 2);
+  assert.equal(chat[0].requestId, chat[1].requestId, 'same requestId on the retry');
+  await context.close();
+
+  // localStorage blocked: the drawer and badge still work.
+  const blocked = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
+  const p2 = await blocked.newPage();
+  const errors = [];
+  p2.on('pageerror', (e) => errors.push(e.message));
+  await p2.addInitScript(() => { Object.defineProperty(window, 'localStorage', { get() { throw new Error('blocked'); } }); });
+  await p2.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: [], customGames: [], casinoTables: [], ...F.chatFs() } });
+  await p2.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
+  await p2.route('**/api/**', (route) => json(route, 200, { ok: true, ran: false, serverNow: now() }));
+  await p2.goto(BASE + '/casino/slots', { waitUntil: 'domcontentloaded' });
+  await p2.waitForSelector('.chat-badge');
+  await p2.getByRole('button', { name: /^Chat/ }).click();
+  await p2.waitForSelector('.chat-drawer .chat-msg');
+  await p2.getByRole('button', { name: 'Close chat' }).click();
+  assert.deepEqual(errors, []);
+  await blocked.close();
+});
+
+await check('chat on craps: opening and closing it never sends a leave; the drawer overlays the felt (no layout shift)', async () => {
+  const t = crapsWorst('craps');
+  const { page, context, calls } = await openChatPage('/casino/craps', { tables: [t] });
+  await page.waitForSelector('.craps-felt');
+  const feltTop = () => page.evaluate(() => document.querySelector('.craps-felt').getBoundingClientRect().top);
+  const before = await feltTop();
+  for (let i = 0; i < 3; i += 1) {
+    await chatButton(page).click();
+    await page.waitForSelector('.chat-drawer');
+    assert.equal(await feltTop(), before, 'the felt did not move');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('.chat-drawer').count(), 0, 'Escape closes');
+  }
+  await chatButton(page).click();
+  await page.locator('.chat-backdrop').click({ position: { x: 10, y: 10 } });
+  await page.waitForTimeout(600); // longer than the 400 ms leave delay
+  assert.equal(calls.filter((c) => c.action === 'leave').length, 0, 'no leave-all from chat');
+  assert.equal(await page.evaluate(() => document.body.classList.contains('no-scroll')), false, 'scroll lock removed on close');
+  await context.close();
+});
+
+await check('chat admin: Delete asks to confirm, then sends chatDelete for that room and message; players see no Delete', async () => {
+  const player = await openChatPage('/casino/baccarat');
+  await chatButton(player.page).click();
+  await player.page.waitForSelector('.chat-drawer .chat-msg');
+  assert.equal(await player.page.locator('.chat-delete').count(), 0);
+  await player.context.close();
+  const { page, context, adminCalls } = await openChatPage('/casino/baccarat', { uid: 'u0', admin: true });
+  await chatButton(page).click();
+  await page.waitForSelector('.chat-drawer .chat-msg');
+  assert.equal(await page.locator('.chat-delete').count(), 6, 'every message but the removed one');
+  await page.getByRole('button', { name: "Delete Ann's message" }).click();
+  assert.equal(adminCalls.filter((c) => c.action === 'chatDelete').length, 0, 'not before the confirm');
+  await page.getByRole('button', { name: 'No' }).click();
+  await page.getByRole('button', { name: "Delete Ann's message" }).click();
+  await page.getByRole('button', { name: 'Yes, delete' }).click();
+  await page.waitForTimeout(200);
+  assert.deepEqual(adminCalls.filter((c) => c.action === 'chatDelete').map(({ game, messageId }) => ({ game, messageId })), [{ game: 'baccarat', messageId: 'u4_m2' }]);
   await context.close();
 });
 
