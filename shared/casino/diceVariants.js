@@ -2,12 +2,9 @@
 // to either game: every rule it applies comes from here, so a rule can only differ between the two
 // games by changing this file. Odds and payouts are [winnings, stake] (e.g. [7, 6] = 7:6).
 
-// Table limits (cents), the same for both games.
-//   line   Pass, Don't Pass and each Come bet (also a Come bet once it has moved to its number)
-//   spot   every other spot: each Place number, the Field, each Hard way
-//   total  everything one player has on the felt at once, Odds included
-// Odds (behind Pass, Don't Pass or a Come bet) are limited only by oddsMultiple × that line bet.
-export const CRAPS_LIMITS = { line: 2000, spot: 3000, total: 6000 };
+// No table limits (0.16.0): any spot holds any whole-dollar amount the wallet covers (one bet at most the $1,000,000
+// sanity ceiling, shared/casino/constants.js). The one cap that stays is a game rule: Odds (behind Pass, Don't Pass or
+// a Come bet) up to oddsMultiple × that line bet.
 
 // Hard ways: [winnings, stake]. Off on come-out rolls; a winner is paid and stays up.
 const HARD_WAYS = { 4: [6, 1], 6: [8, 1], 8: [8, 1], 10: [6, 1] };
@@ -38,7 +35,6 @@ export const DICE_VARIANTS = {
     place: { 4: [9, 5], 10: [9, 5], 5: [7, 5], 9: [7, 5], 6: [7, 6], 8: [7, 6] },
     field: FIELD,
     hardWays: HARD_WAYS,
-    limits: CRAPS_LIMITS,
   },
   crapless: {
     id: 'crapless',
@@ -54,7 +50,6 @@ export const DICE_VARIANTS = {
     place: { 2: [9, 2], 12: [9, 2], 3: [11, 4], 11: [11, 4], 4: [9, 5], 10: [9, 5], 5: [7, 5], 9: [7, 5], 6: [7, 6], 8: [7, 6] },
     field: FIELD,
     hardWays: HARD_WAYS,
-    limits: CRAPS_LIMITS,
   },
 };
 

@@ -5,6 +5,79 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.16.0 (Will, 2026-10-20 11:47 CT; full spec re-sent 11:48 and 14:30) — COMPLETE (2026-10-20), merged to main, ready for Will to test
+Spec: Will's attachment of 2026-10-20 11:48 (the 11:47 message was cut off mid-sentence; the attachment is the whole
+spec). One phase on a fresh wip off main (c3769b4); merge after every CLAUDE.md check; stop servers at the end.
+
+### Checklist
+- [x] 1 Shared rules. shared/casino/constants.js: `CHIP_VALUES = [1, 2, 5, 10, 25, 100]` (src/components/casino/
+      Chips.jsx re-exports it); `isValidCasinoBet` replaced by `isChip` (chip check) and `isValidBetAmount` (whole
+      dollars, ≥ $1, safe integer), `betCeilingProblem(cents)` / `betAmountProblem(dollars)`; `BET_CEILING_CENTS` =
+      MAX_WALLET_CHANGE_CENTS ($1,000,000), `BET_CEILING_MESSAGE` "That bet is larger than the table allows.",
+      `BET_HELP_TEXT` "Minimum $1. Bet as much as your wallet holds." Craps (shared/casino/dice.js): `spotLimitCents`
+      is now Odds only (oddsMultiple × the line bet; null elsewhere); `limitProblem` = Odds rule + the ceiling on every
+      spot; a fresh Come bet moving onto a number with a Come bet already there adds all of it (nothing given back).
+      Battles: `battleProblems` = whole dollars ≥ $1, then the ceiling. Sportsbook (shared/betRules.js):
+      `stakeCeilingProblem` for singles and the parlay stake; `payoutTooLarge` (payout must be a safe integer).
+- [x] 2 Server. Every bet still goes through the same transaction as its debit, which refuses INSUFFICIENT_BALANCE
+      (tableRunner `ctx.balance` / applyCasinoEntries, slots' own transaction, Battles, placeBets) — unchanged.
+      server/casino/money.js: `requireBetAmount` (400 BAD_BET, or 400 BET_TOO_LARGE with the ceiling message),
+      `requireUnderCeiling`, `requireChip` (400 BAD_CHIP). Blackjack `bet` and Baccarat `bet` (each spot) and Slots
+      `spin`: amount check (a total built from chips). Craps `bets` (the phone's batches): each change whole dollars
+      under the ceiling, the batch's charge under the ceiling, then limitProblem (Odds 2× → 409 SPOT_LIMIT, ceiling →
+      400 BET_TOO_LARGE). Craps `bet` (documented as one chip, not used by the phone): chip check. Double / split /
+      insurance unchanged: requireFunds before the charge (insurance ≤ half the bet is a game rule). placeBets refuses a
+      payout that isn't a safe integer (a $1,000,000 ten-leg longshot parlay would be ~10^23 cents) before reading
+      anything, with the ceiling message.
+      Maximums removed (searched MAX, LIMIT, "up to $", "$1–$", digit caps):
+        CASINO_MAX_BET_DOLLARS ($10: Blackjack seat, Baccarat spot, Slots; server + Blackjack/Baccarat/Slots pages);
+        MAX_SPOT_CENTS (BaccaratPage); CRAPS_LIMITS line $20 / spot $30 / total $60 (diceVariants `limits`, dice.js
+        limitProblem + the Come "at the $20 limit" give-back, craps meter "of $60 / Room"); BATTLE_STAKE_MAX_DOLLARS
+        ($10,000, shared + NewBattlePage); the Battle stake input's `.slice(0, 5)` (a hidden $99,999 cap, now 10
+        digits). Kept (not bet limits): MAX_LEGS, insurance ≤ half the bet, craps CHANGE_LIMIT (20 chip changes per
+        request, a request-size guard; any amount per change), text lengths, page sizes, MAX_WALLET_CHANGE_CENTS (admin
+        wallet change, now also the bet ceiling). The sportsbook had no maximum stake before; it gets only the ceiling.
+- [x] 3 Phone. Six chips on every game and Slots (rack 6 across; $25 green, $100 black/gold; tokens shrink to fit
+      at 320 px, buttons ≥ 44 px). Craps: chips in one row, Take down moved into the tools row ("On the felt $X" +
+      Take down + Undo + Clear; in the 320×568 dock: chips row, then Take down + Roll). Validators keep the wallet
+      check and add only the ceiling. Text: lobby, Blackjack, Baccarat, Craps help and rules, Slots, Battle stake →
+      "Minimum $1. Bet as much as your wallet holds."; README; Odds "up to 2×" kept (rule). Slots shows big bets with
+      separators ($1,250). interact.mjs: the no-scroll check now also asserts the six chips at every size; new check
+      "no maximum bets" ($100 + $100 + $25 → one $225 bet on Blackjack, Baccarat Banker, Craps/Crapless Pass, Slots;
+      six chips; no old limit text; help text present).
+- [x] 4 Tests. Rewritten (they asserted the old maximums): casino1 slots amounts ($11 → $1,000,001 BET_TOO_LARGE,
+      plus 2^53 and 1e300); casino2 Baccarat ($11 → ceiling); casino3 Blackjack ($11 → ceiling); casino4 craps
+      ("limits" → chips and amounts: $21 Pass accepted, $11 / $0 / $2.50 refused as one chip, wallet; batch refusals
+      now Odds-before-point and the ceiling; the Odds test's "$11 Place" → BAD_CHIP); casino5 (multi-seat Blackjack and
+      Baccarat lose their $10 checks; "limit messages" → "the only craps caps left"; "every limit at the table" → "big
+      craps bets": $500 Pass, $31 Field / Hard 4, $562 on the felt, $1,000 Odds behind $500, $50 Come moves whole).
+      casino4/casino6 `bet` helpers send a chip amount through `bet` and any other amount through `bets` (as the phone).
+      New test/casino/casino7.test.mjs (9): rules (chips, amount, ceiling, old names gone); Blackjack $500 accepted /
+      refused with no wallet, ledger or table change; double and split refused at $499.99, double works with funds;
+      Baccarat $500 Banker accepted / refused; craps and crapless $500 Pass + $1,000 Odds accepted / refused, Odds
+      $1,001 refused; $25 / $100 chips, "$3 chip" BAD_CHIP vs $1 + $2 = $3 Pass and a $3 batch; craps ceiling per
+      change and per spot (exactly $1,000,000 ok); Blackjack / Baccarat totals from big chips; Slots $250 spin accepted /
+      refused, ceiling, $3 total ok. Battles: $50,000 Battle among three ($150,000 pot paid in full), short wallets
+      refused with nothing taken, $1,000,000 ok / $1,000,001 refused. Sportsbook (test/props): $50,000 single accepted,
+      a second refused for funds, $1,000,001 single and parlay refused before pricing, exactly $1,000,000 ok, slip
+      mirror, payout guard.
+      Mutation-checked (each fails a test): $10 cap back (6), no ceiling (7), ceiling $1 higher (7), Odds 2× dropped (6),
+      $20 line limit back (5), chip check off (3), no $25/$100 chips (2), craps spot ceiling off (2), Come $20 give-back
+      back (1), Battle ceiling off (1), Battle $10,000 back (1), sportsbook ceiling off (1), payout guard off (1), the
+      phone's $10 Baccarat cap back (interact "no maximum bets"). Survived alone, by design: double without requireFunds,
+      split without requireFunds (the transaction's final overdraft check in applyCasinoEntries still refuses with
+      INSUFFICIENT_BALANCE and writes nothing) and the craps per-change ceiling (limitProblem's per-spot ceiling still
+      refuses); with both layers removed each fails (3, 2 and 2 tests).
+      CLAUDE.md: "$60 craps total" line removed; "No maximum bets anywhere…" and "Chips: $1, $2, $5, $10, $25 and $100
+      on every game." added (there was no chips line before, so "update" = add).
+- [x] 5 Checks (re-run in full at 14:30 after a session restart, on wip 50eb712): test:all (31 + 106 + 21 + 104 + 16 +
+      11 + 11 + 12 = 312), lint (scratch flat config, as 0.15.0), build, interact.mjs 16/16 ("a refused chip…" now
+      expects the wallet refusal: a $100 chip with $96.40 is refused at once with "Not enough in your wallet ($96.40)"
+      and no request; the craps/crapless no-scroll check passes at 375×667, 390×844, 414×896, 1280×720, 1440×900 and
+      the 320×568 dock with six chips), dealcheck.mjs 6/6, phone check 125 screens × 320/375/414 clean. Version 0.16.0;
+      docs/CASINO_PROGRESS.md note. No firestore.rules change, no new index, no new /api function. Merged wip → main.
+      Harness server stopped.
+
 ## Phase 0.15.0 (Will, 2026-10-20 10:22 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 10:22. One phase on a fresh wip off main (d09682b); merge after every
 CLAUDE.md check; stop dev/harness servers at the end.
@@ -344,7 +417,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.15.0 is merged. Wait for Will's test results.
+Nothing queued: 0.16.0 is merged. Wait for Will's test results.
 
 ## Open questions
 None open.

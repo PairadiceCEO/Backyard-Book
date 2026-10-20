@@ -77,8 +77,12 @@ await check('three quick taps on Player: chips show at once, one request carries
 
 await check('a refused chip comes back off and the reason is shown', async () => {
   const table = { id: 'baccarat', game: 'baccarat', epoch: 'x', roundNo: 3, roundId: 'x-3', phase: 'betting', deadline: null, coup: null, shoeResults: '', shoe: { remaining: 400, total: 416 }, version: 5, updatedAt: now() - 5000, seats: [null, seat('u1', 'Mike', { bets: { player: 0, banker: 0, tie: 0 } }), null, null, null] };
+  let betRequests = 0;
   const { page, context } = await openPage('/casino/baccarat', [table], async (route, body) => {
-    if (body.action === 'bet') return json(route, 409, { error: { code: 'PHASE', message: 'Betting is closed for this hand.' } });
+    if (body.action === 'bet') {
+      betRequests += 1;
+      return json(route, 409, { error: { code: 'PHASE', message: 'Betting is closed for this hand.' } });
+    }
     return json(route, 200, { ok: true, serverNow: now() });
   });
   const banker = page.getByRole('button', { name: /Banker, pays/ });
@@ -89,12 +93,15 @@ await check('a refused chip comes back off and the reason is shown', async () =>
   assert.doesNotMatch(await banker.innerText(), /\$5\.00/, 'chip removed');
   assert.match(await page.locator('.bac-help').innerText(), /Betting is closed/);
   assert.match(await wallet(page), /\$96\.40/, 'wallet back');
-  // The limit is checked at the tap: $10 + $1 is refused without a request.
-  await page.getByRole('radio', { name: '$10 chip' }).click();
+  // No maximum (0.16.0): the wallet is checked at the tap. A $100 chip with $96.40 in the wallet is refused at once,
+  // with the reason and without a request.
+  const sent = betRequests;
+  await page.getByRole('radio', { name: '$100 chip' }).click();
   await banker.click();
-  await page.getByRole('radio', { name: '$1 chip' }).click();
-  await banker.click();
-  assert.match(await page.locator('.bac-help').innerText(), /up to \$10/);
+  assert.match(await page.locator('.bac-help').innerText(), /Not enough in your wallet \(\$96\.40\)/);
+  assert.doesNotMatch(await banker.innerText(), /\$100/, 'the chip never went down');
+  await page.waitForTimeout(500);
+  assert.equal(betRequests, sent, 'no request for a chip the wallet cannot cover');
   await context.close();
 });
 
@@ -303,6 +310,7 @@ for (const game of ['craps', 'crapless']) {
       assert.equal(m.docked, dockedOnly, `${width}×${height}: the docked bar shows only on the short screen`);
       const need = dockedOnly ? ['Roll', 'chip', 'Take down'] : ['Roll', 'chip', 'Take down', 'Undo', 'Clear'];
       for (const label of need) assert.ok(m.out.some((o) => o.label.startsWith(label)), `${width}×${height}: ${label} present`);
+      assert.equal(m.out.filter((o) => o.label.startsWith('chip')).length, 6, `${width}×${height}: all six chips ($1–$100) measured`);
       const spots = m.out.filter((o) => !['Roll', 'chip', 'Take down', 'Undo', 'Clear'].some((l) => o.label.startsWith(l)));
       if (!dockedOnly) // craps: Pass, Odds, Don't, Don't Odds, Come, Field, 6 Place, 3 Come bets, 4 Hard = 19; crapless: 2 + 2 + 10 + 3 + 4 = 21.
       assert.equal(spots.length, game === 'crapless' ? 21 : 19, `${width}×${height}: every spot measured`);
@@ -356,6 +364,90 @@ await check('craps: "Sit down" takes the first open seat; "Table full" when all 
   const mq = await third.page.evaluate(() => window.__mq);
   assert.equal(mq.added, mq.removed, `media-query listeners cleaned up (${mq.added} added, ${mq.removed} removed)`);
   await third.context.close();
+});
+
+// ---------- 0.16.0: no maximum bets; $25 and $100 chips on every game ----------
+// A rich player ($10,000) on every casino game: six chips; $100 + $100 + $25 on one spot goes to the server as one
+// $225 total (an amount built from chips); no "up to $10" / "$1–$10" / "$60" text anywhere; the new help line shows.
+async function openRich(path, tables, onCasino) {
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  const users = F.users.map((u) => (u.id === 'u1' ? { ...u, balanceCents: 1_000_000 } : u));
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: tables } });
+  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route('**/api/**', async (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/casino') return onCasino(route, route.request().postDataJSON());
+    if (u.pathname === '/api/settle') return json(route, 200, { ran: false });
+    return json(route, 200, { ok: true, serverNow: now() });
+  });
+  await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(700);
+  return { page, context };
+}
+const OLD_LIMIT_TEXT = /up to \$10\b|\$1[–-]\$10\b|\$1[–-]\$20|\$1[–-]\$30|\$60\b|of \$60|Room \$/;
+async function chipsAndText(page, where) {
+  const labels = await page.getByRole('radio', { name: /chip$/ }).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
+  assert.deepEqual([...new Set(labels)], ['$1 chip', '$2 chip', '$5 chip', '$10 chip', '$25 chip', '$100 chip'], `${where}: six chips`);
+  const text = await page.evaluate(() => document.body.innerText);
+  assert.ok(!OLD_LIMIT_TEXT.test(text), `${where}: old limit wording left: ${(text.match(OLD_LIMIT_TEXT) ?? [])[0]}`);
+  assert.match(text, /Minimum \$1\. Bet as much as your wallet holds\./, `${where}: new help text`);
+}
+const tapChips = async (page, spot) => {
+  await page.getByRole('radio', { name: '$100 chip' }).first().click();
+  await spot.click();
+  await spot.click();
+  await page.getByRole('radio', { name: '$25 chip' }).first().click();
+  await spot.click();
+};
+
+await check('no maximum bets: $100 + $100 + $25 chips on Blackjack, Baccarat, Craps, Crapless and Slots arrive as a $225 bet; no old limit text', async () => {
+  const sent = {};
+  const record = (game) => async (route, body) => {
+    if (['bet', 'bets', 'spin'].includes(body.action)) (sent[game] ??= []).push(body);
+    if (body.action === 'spin') {
+      return json(route, 200, { ok: true, duplicate: false, stops: [1, 2, 3], symbols: ['BL', 'B1', 'CH'], line: null, betCents: body.amount * 100, winCents: 0, balanceCents: 1_000_000 - body.amount * 100, serverNow: now() });
+    }
+    return json(route, 200, { ok: true, serverNow: now() });
+  };
+  const bjSeat = (uid, name) => ({ uid, name, sitAt: now() - 60000, leaving: false, reqs: [], betCents: 0, stakeCents: 0, returnCents: 0, insurance: null, hands: [], result: null, ready: false });
+  const bj = { id: 'blackjack', game: 'blackjack', epoch: 'y', roundNo: 7, roundId: 'y-7', phase: 'betting', deadline: null, turn: null, dealer: { cards: [], holeDown: false }, lastDeal: null, shoe: { remaining: 248, total: 312, shuffles: 0 }, version: 30, updatedAt: now() - 5000, seats: [null, bjSeat('u1', 'Mike'), null, null, null] };
+  let { page, context } = await openRich('/casino/blackjack', [bj], record('blackjack'));
+  await chipsAndText(page, 'Blackjack');
+  await tapChips(page, page.getByRole('button', { name: /Seat 2 bet .*Tap to add/ }));
+  await page.waitForTimeout(700);
+  assert.equal(sent.blackjack.at(-1).amount, 225, 'Blackjack: $225 on the seat');
+  await context.close();
+
+  const bac = { id: 'baccarat', game: 'baccarat', epoch: 'x', roundNo: 3, roundId: 'x-3', phase: 'betting', deadline: null, coup: null, shoeResults: '', shoe: { remaining: 400, total: 416 }, version: 5, updatedAt: now() - 5000, seats: [null, seat('u1', 'Mike', { bets: { player: 0, banker: 0, tie: 0 } }), null, null, null] };
+  ({ page, context } = await openRich('/casino/baccarat', [bac], record('baccarat')));
+  await chipsAndText(page, 'Baccarat');
+  await tapChips(page, page.getByRole('button', { name: /Banker, pays/ }));
+  await page.waitForTimeout(700);
+  assert.equal(sent.baccarat.at(-1).banker, 225, 'Baccarat: $225 on Banker (was capped at $10)');
+  await context.close();
+
+  for (const game of ['craps', 'crapless']) {
+    const t = { ...crapsWorst(game), seats: [null, seat('u1', 'Mike', { bets: { pass: 0, dontPass: 0, odds: 0, dontOdds: 0, come: 0, field: 0, place: {}, hard: {}, comeOn: {} }, lastRoll: null }), null, null, null], point: null, deadline: null };
+    ({ page, context } = await openRich(`/casino/${game}`, [t], record(game)));
+    await chipsAndText(page, game);
+    await tapChips(page, page.getByRole('button', { name: /^Pass/ }));
+    // The chips show at once (the mock table doc never changes, so read the meter before the reply clears them).
+    assert.match(await page.locator('.craps-meter').innerText(), /^On the felt \$225\.00$/);
+    await page.waitForTimeout(700);
+    const total = sent[game].flatMap((b) => b.changes ?? []).filter((c) => c.kind === 'pass').reduce((a, c) => a + c.cents, 0);
+    assert.equal(total, 22_500, `${game}: $225 on Pass (was capped at $20)`);
+    await context.close();
+  }
+
+  ({ page, context } = await openRich('/casino/slots', [], record('slots')));
+  await chipsAndText(page, 'Slots');
+  await page.getByRole('button', { name: 'Clear' }).click();
+  await tapChips(page, page.getByRole('button', { name: /^Bet \$/ }));
+  await page.getByRole('button', { name: /^Spin/ }).click();
+  await page.waitForTimeout(400);
+  assert.equal(sent.slots.at(-1).amount, 225, 'Slots: a $225 spin (was capped at $10)');
+  await context.close();
 });
 
 // ---------- My Bets → Finished: every finished bet, sort, filters, remembered view ----------

@@ -13,6 +13,7 @@ import { HttpError } from './http.js';
 import { getLeague } from './leagues.js';
 import { createPricingContext, priceLeg } from './pricing.js';
 import {
+  BET_CEILING_MESSAGE,
   MAX_LEGS,
   combinedAmerican,
   combinedDecimal,
@@ -21,6 +22,7 @@ import {
   makeLegId,
   marketHasLine,
   payoutCents,
+  payoutTooLarge,
   pickLabel,
   slipProblems,
   totalStakeCents,
@@ -325,6 +327,10 @@ export async function placeBets(caller, body, { now = new Date(), fetchImpl = fe
           potentialPayoutCents: payoutCents(request.legs[i].stakeCents, leg.decimalOdds),
         }))
   ).map((bet) => (bet.legs.some(isPosterLeg) ? { ...bet, posterBet: true } : bet));
+
+  // Technical guard (0.16.0, no maximum stakes): a payout must be an exact integer number of cents, so a huge stake on
+  // a long-odds parlay is refused rather than stored rounded. Nothing has been read or written yet.
+  if (bets.some((bet) => payoutTooLarge(bet.potentialPayoutCents))) throw bad(BET_CEILING_MESSAGE);
 
   const total = totalStakeCents({ mode: request.mode, legs: request.legs, stakeCents: request.stakeCents });
   const userRef = db.collection('users').doc(caller.uid);

@@ -60,8 +60,10 @@ Vercel deploys the live site from `main`.
 - Hard ways pay 6:1 (Hard 4 and 10) and 8:1 (Hard 6 and 8).
 - Craps/Crapless: no shooter clock with 1 player at the table; 30 s clocks with 2 or more.
 - Crapless 2/12 Odds pay 5:1.
-- The $60 craps table total includes Odds.
 - Payouts round down to the cent.
+- No maximum bets anywhere (sportsbook, casino, slots, Battles): minimum $1, the wallet balance is the only cap, plus a
+  $1,000,000 per-bet sanity ceiling. Craps Odds stay capped at 2× the line bet (a game rule).
+- Chips: $1, $2, $5, $10, $25 and $100 on every game.
 - Cash out: pre-game = stake × 0.90; live = potential payout × Kalshi bid(s) × 0.90; crypto = potential payout × Kalshi
   bid × 0.90 (no cash out in the last 60 s). Never on a bet containing a custom-game or Challenge leg; Battles have no
   cash out.

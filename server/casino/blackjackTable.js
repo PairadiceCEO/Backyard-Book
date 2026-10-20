@@ -1,6 +1,6 @@
 // Blackjack at the shared table.
 //
-//   Betting    no timer until the first bet, then 15 s; chips build each seat's bet ($1–$10) and
+//   Betting    no timer until the first bet, then 15 s; chips build each seat's bet (whole dollars ≥ $1, no maximum) and
 //              Confirm locks it; deals at once when every seated player has confirmed.
 //   Deal       two cards each, seat 1 → 5, the dealer's second card face down. The hole card goes to
 //              private/shoe.holeCard; the public doc only says holeDown: true.
@@ -22,10 +22,10 @@ import { HttpError } from '../http.js';
 import { requirePhase, requireSeat } from './tableRunner.js';
 import { drawCard, reshuffleIfDue } from './shoe.js';
 import { freeGoneSeats } from './seats.js';
-import { formatDollars } from './money.js';
+import { formatDollars, requireBetAmount } from './money.js';
 import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
 import { buildShoe, cardRank } from '../../shared/casino/cards.js';
-import { CASINO_SEATS, RESULTS_SECONDS, TURN_SECONDS, isValidCasinoBet } from '../../shared/casino/constants.js';
+import { CASINO_SEATS, RESULTS_SECONDS, TURN_SECONDS } from '../../shared/casino/constants.js';
 import {
   BLACKJACK_INITIAL_GAP_MS,
   BLACKJACK_LATER_GAP_MS,
@@ -384,14 +384,14 @@ async function openNextRound(ctx) {
 
 // ---------- actions ----------
 
-// Chips build the bet: `bet` sets this hand's total ($0 clears it, up to $10); a change charges or
+// Chips build the bet: `bet` sets this hand's total ($0 clears it; no maximum, the wallet must cover it); a change charges or
 // refunds the difference. `confirm` locks it in. The cards come out when every seated player has
 // confirmed, or 15 s after the first bet for whoever has a bet down.
 async function bet(ctx, body) {
   const index = requireSeat(ctx, body);
   const seat = ctx.state.seats[index];
   const amount = body.amount;
-  if (!(amount === 0 || isValidCasinoBet(amount))) throw new HttpError(400, 'BAD_BET', 'Bets are whole dollars from $1 to $10.');
+  if (amount !== 0) requireBetAmount(amount);
   if (typeof body.requestId !== 'string' || !REQUEST_ID_PATTERN.test(body.requestId)) {
     throw new HttpError(400, 'BAD_REQUEST_ID', 'Missing or invalid requestId.');
   }

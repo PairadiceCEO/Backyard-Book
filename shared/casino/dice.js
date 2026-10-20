@@ -8,7 +8,7 @@
 //   comeOn { [n]: { bet, odds } }   Come bets that moved to their number, with their Odds
 //   place { [n] }, hard { [n] }, field
 
-import { dollarsText, winningsCents } from './constants.js';
+import { BET_CEILING_CENTS, BET_CEILING_MESSAGE, dollarsText, winningsCents } from './constants.js';
 
 export const BET_KINDS = ['pass', 'dontPass', 'odds', 'dontOdds', 'come', 'comeOdds', 'place', 'hard', 'field'];
 export const NUMBERED_KINDS = ['place', 'hard', 'comeOdds'];
@@ -99,30 +99,27 @@ function oddsBase(bets, kind, number) {
   return null;
 }
 
-// The most a spot can hold (cents).
+// The most an Odds spot can hold (cents): oddsMultiple × its line bet (a game rule). Every other spot has no maximum
+// (null); the wallet and the per-bet sanity ceiling are its only caps.
 export function spotLimitCents(variant, bets, kind, number) {
   const base = oddsBase(bets, kind, number);
   if (base !== null) return base * variant.oddsMultiple;
-  if (kind === 'pass' || kind === 'dontPass' || kind === 'come') return variant.limits.line;
-  return variant.limits.spot;
+  return null;
 }
 
 const dollars = dollarsText;
 
-// Why `bets` (after a change) break a limit, or '' if they don't: each spot, each Odds (2× its line
-// bet), and the $60 total. Used by the server (refusals) and the phone (refusing a chip at once).
+// Why `bets` (after a change) break a rule, or '' if they don't: each Odds at most oddsMultiple × its line bet, and
+// no single spot above the $1,000,000 sanity ceiling. Used by the server (refusals) and the phone (refusing a chip
+// at once).
 export function limitProblem(variant, bets, { kind, number } = {}) {
   const b = cloneBets(bets);
   const check = (k, n, amount) => {
+    if (amount > BET_CEILING_CENTS || !Number.isSafeInteger(amount)) return BET_CEILING_MESSAGE;
     const limit = spotLimitCents(variant, b, k, n);
-    if (amount <= limit) return '';
-    const base = oddsBase(b, k, n);
-    if (base !== null) {
-      const behind = k === 'odds' ? 'Pass' : k === 'dontOdds' ? "Don't Pass" : `Come ${n}`;
-      return `${spotLabel(k, n)} can be up to ${variant.oddsMultiple}× your ${behind} bet (${dollars(limit)}).`;
-    }
-    const which = k === 'pass' || k === 'dontPass' || k === 'come' ? 'Line limit' : 'Spot limit';
-    return `${which}: ${spotLabel(k, n)} holds up to ${dollars(limit)}.`;
+    if (limit === null || amount <= limit) return '';
+    const behind = k === 'odds' ? 'Pass' : k === 'dontOdds' ? "Don't Pass" : `Come ${n}`;
+    return `${spotLabel(k, n)} can be up to ${variant.oddsMultiple}× your ${behind} bet (${dollars(limit)}).`;
   };
   // The spot just changed first, so its message wins.
   if (kind) {
@@ -133,14 +130,17 @@ export function limitProblem(variant, bets, { kind, number } = {}) {
     const problem = check(k, undefined, b[k]);
     if (problem) return problem;
   }
-  for (const [n, v] of Object.entries(b.place)) if (v > variant.limits.spot) return check('place', Number(n), v);
-  for (const [n, v] of Object.entries(b.hard)) if (v > variant.limits.spot) return check('hard', Number(n), v);
-  for (const [n, c] of Object.entries(b.comeOn)) {
-    if (c.odds > c.bet * variant.oddsMultiple) return check('comeOdds', Number(n), c.odds);
+  for (const [n, v] of Object.entries(b.place)) {
+    const problem = check('place', Number(n), v);
+    if (problem) return problem;
   }
-  const total = totalOnFelt(b);
-  if (total > variant.limits.total) {
-    return `Table limit: up to ${dollars(variant.limits.total)} on the felt at once, Odds included (that would be ${dollars(total)}).`;
+  for (const [n, v] of Object.entries(b.hard)) {
+    const problem = check('hard', Number(n), v);
+    if (problem) return problem;
+  }
+  for (const [n, c] of Object.entries(b.comeOn)) {
+    const problem = check('comeOdds', Number(n), c.odds) || (c.bet > BET_CEILING_CENTS ? BET_CEILING_MESSAGE : '');
+    if (problem) return problem;
   }
   return '';
 }
@@ -284,18 +284,15 @@ export function settleRoll(variant, point, bets, total, dice = null) {
   }
 
   // A fresh Come bet: decided like a Pass bet on a come-out, or it moves to its number. Landing on a
-  // number that already holds a Come bet adds to it, up to the line limit (any extra comes back).
+  // number that already holds a Come bet adds to it (no line limit since 0.16.0, so nothing comes back).
   if (before.come) {
     after.come = 0;
     if (variant.comeOutPassWins.includes(total)) payOff('come', before.come, variant.lineOdds);
     else if (variant.comeOutPassLoses.includes(total)) lose('come', before.come);
     else {
       const there = after.comeOn[total] ?? { bet: 0, odds: 0 };
-      const room = Math.max(0, variant.limits.line - there.bet);
-      const moved = Math.min(before.come, room);
-      if (moved > 0) after.comeOn[total] = { bet: there.bet + moved, odds: there.odds };
-      lines.push({ bet: 'come', number: total, result: 'moved', stake: moved });
-      if (before.come > moved) giveBack('come', before.come - moved, total, `Come ${total} is at the ${dollars(variant.limits.line)} limit`);
+      after.comeOn[total] = { bet: there.bet + before.come, odds: there.odds };
+      lines.push({ bet: 'come', number: total, result: 'moved', stake: before.come });
     }
   }
 

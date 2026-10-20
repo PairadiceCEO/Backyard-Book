@@ -29,7 +29,7 @@ import {
 import { useChipBetting } from '../../hooks/useChipBetting.js';
 import { newRequestId, tableAction } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
-import { CASINO_MAX_BET_DOLLARS } from '../../../shared/casino/constants.js';
+import { BET_HELP_TEXT, betCeilingProblem } from '../../../shared/casino/constants.js';
 import {
   BACCARAT_ODDS,
   SPOT_LABELS,
@@ -43,7 +43,6 @@ const GAME = 'baccarat';
 const SPOT_ORDER = ['player', 'tie', 'banker'];
 const NO_SEATS = [null, null, null, null, null];
 const NO_BETS = { player: 0, banker: 0, tie: 0 };
-const MAX_SPOT_CENTS = CASINO_MAX_BET_DOLLARS * 100;
 const WINNER_TEXT = { player: 'Player wins', banker: 'Banker wins', tie: 'Tie' };
 
 function signedMoney(cents) {
@@ -79,7 +78,8 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, call, roundI
   const canBet = phase === 'betting' && !seat.ready && !seat.leaving;
   const validate = useCallback(
     (spot, cents, after) => {
-      if (cents > MAX_SPOT_CENTS) return `${SPOT_LABELS[spot]} holds up to $${CASINO_MAX_BET_DOLLARS} on this seat.`;
+      const tooBig = betCeilingProblem(cents); // only the $1,000,000 sanity ceiling: no maximum bet
+      if (tooBig) return tooBig;
       const extra = totalBetCents(after) - totalBetCents(serverBets);
       if (extra > balanceCents) return `Not enough in your wallet (${formatMoney(balanceCents)}).`;
       return '';
@@ -177,7 +177,7 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, call, roundI
         ) : seat.ready && phase === 'betting' ? (
           'Confirmed. The cards come out when every seat confirms or the clock runs out.'
         ) : phase === 'betting' ? (
-          `Pick a chip and tap Player, Banker or Tie; each tap adds a chip. Up to $${CASINO_MAX_BET_DOLLARS} a spot on this seat.`
+          `Pick a chip and tap Player, Banker or Tie; each tap adds a chip. ${BET_HELP_TEXT}`
         ) : (
           'Bet again when the next hand opens.'
         )}

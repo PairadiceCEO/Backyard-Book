@@ -31,7 +31,7 @@ import {
 import { useChipBetting } from '../../hooks/useChipBetting.js';
 import { newRequestId, tableAction } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
-import { CASINO_MAX_BET_DOLLARS } from '../../../shared/casino/constants.js';
+import { BET_HELP_TEXT, betCeilingProblem } from '../../../shared/casino/constants.js';
 import { cardRank } from '../../../shared/casino/cards.js';
 import {
   BLACKJACK_INITIAL_GAP_MS,
@@ -135,7 +135,8 @@ function SeatPanel({
   const serverSpots = useMemo(() => ({ bet: seat.betCents || 0 }), [seat.betCents]);
   const validate = useCallback(
     (_spot, cents) => {
-      if (cents > CASINO_MAX_BET_DOLLARS * 100) return `Each seat's bet is up to $${CASINO_MAX_BET_DOLLARS}.`;
+      const tooBig = betCeilingProblem(cents); // only the $1,000,000 sanity ceiling: no maximum bet
+      if (tooBig) return tooBig;
       if (cents - (seat.betCents || 0) > balanceCents) return `Not enough in your wallet (${formatMoney(balanceCents)}).`;
       return '';
     },
@@ -233,7 +234,7 @@ function SeatPanel({
             ) : seat.ready ? (
               'Locked in. Cards come out when every seat confirms or the clock runs out.'
             ) : (
-              `Pick a chip and tap the spot; each tap adds a chip. Up to $${CASINO_MAX_BET_DOLLARS} on this seat.`
+              `Pick a chip and tap the spot; each tap adds a chip. ${BET_HELP_TEXT}`
             )}
           </p>
         </>
@@ -565,7 +566,7 @@ export default function BlackjackPage() {
       <p className="muted small table-rules">
         6 decks. Blackjack pays 3:2; insurance up to half your bet pays 2:1. Dealer hits soft 17 and peeks with an Ace or 10. One
         split per hand (split Aces get one card), double on any first two cards, also after a split. 15 s per hand; time out = stand.
-        Bets $1–${CASINO_MAX_BET_DOLLARS} per seat; sit in as many seats as you like.
+        {BET_HELP_TEXT} Each seat bets on its own; sit in as many seats as you like.
       </p>
     </section>
   );

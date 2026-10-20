@@ -1,8 +1,8 @@
 // Baccarat at the shared table.
 //
-//   Seats     a player may hold several; each seat has its own bets, limits, confirm and result.
+//   Seats     a player may hold several; each seat has its own bets, confirm and result.
 //   Betting   no timer until the first bet, then 15 s; closes early once every seat has confirmed.
-//             `bet` sets a seat's three spots (each $0 or $1–$10); a change charges or refunds the
+//             `bet` sets a seat's three spots (each $0 or whole dollars ≥ $1, no maximum); a change charges or refunds the
 //             difference. `confirm` locks the seat's bets.
 //   Deal      when betting closes, in the same transaction: draw from the private shoe, play the coup,
 //             pay every seat (one ledger entry per player), add the winner to the shoe's results.
@@ -16,11 +16,9 @@ import { HttpError } from '../http.js';
 import { requirePhase, requireSeat } from './tableRunner.js';
 import { drawCard, reshuffleIfDue } from './shoe.js';
 import { freeGoneSeats } from './seats.js';
-import { formatDollars } from './money.js';
+import { formatDollars, requireBetAmount } from './money.js';
 import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
 import {
-  CASINO_MAX_BET_DOLLARS,
-  CASINO_MIN_BET_DOLLARS,
   CASINO_SEATS,
   RESULTS_SECONDS,
   TURN_SECONDS,
@@ -97,8 +95,8 @@ function parseBets(body) {
   const bets = {};
   for (const spot of BACCARAT_SPOTS) {
     const dollars = body[spot] ?? 0;
-    const ok = Number.isInteger(dollars) && (dollars === 0 || (dollars >= CASINO_MIN_BET_DOLLARS && dollars <= CASINO_MAX_BET_DOLLARS));
-    if (!ok) throw new HttpError(400, 'BAD_BET', `${SPOT_LABELS[spot]}: bets are $0 or whole dollars from $1 to $10.`);
+    // $0 clears the spot; otherwise whole dollars ≥ $1 under the sanity ceiling (no maximum; the wallet is the cap).
+    if (dollars !== 0) requireBetAmount(dollars);
     bets[spot] = dollars * 100;
   }
   if (typeof body.requestId !== 'string' || !REQUEST_ID_PATTERN.test(body.requestId)) {

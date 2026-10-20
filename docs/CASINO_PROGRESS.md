@@ -77,3 +77,10 @@ Compact top bar (puck, dice, total, countdown, Roll / Sit down / Table full), th
 down, meter + Undo/Clear, every spot in dense grids, two columns ≥ 720 px), then seats, last rolls, Leave seat, help and
 rules. Short screens (max-height 620px) dock the chips, Take down and Roll above the bottom nav. No rule, limit, payout,
 timer or turn-order change. Details in PROGRESS.md 0.15.0 item 3.
+
+## 0.16.0 (2026-10-20): no maximum bets, $25 and $100 chips
+No maximum on any casino bet, slot spin or Battle stake: minimum $1, whole dollars; the wallet balance is the only cap
+(INSUFFICIENT_BALANCE inside the debit's transaction, as before), plus a $1,000,000 per-bet sanity ceiling ("That bet is
+larger than the table allows."). Craps Odds stay at 2× the line bet. Chips $1, $2, $5, $10, $25, $100 on every game and
+Slots. The old limits in the entries above ($1–$10 a bet, $10 a spot, craps $20 / $30 / $60) no longer apply. Details in
+PROGRESS.md 0.16.0.

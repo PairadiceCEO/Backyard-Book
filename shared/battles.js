@@ -12,6 +12,9 @@
 // Money: every share rounds down to the cent; the cents left over go to the highest-placed winner, so the
 // whole pot is always paid out.
 
+import { MAX_WALLET_CHANGE_CENTS } from './constants.js';
+import { BET_CEILING_MESSAGE } from './casino/constants.js';
+
 export const BATTLE_FORMATS = ['ffa', 'teams'];
 export const FFA_MIN_PLAYERS = 2;
 export const BATTLE_MAX_PLAYERS = 8;
@@ -19,8 +22,9 @@ export const TEAMS_MIN = 2;
 export const TEAMS_MAX = 4;
 export const TEAM_SIZE_MIN = 2;
 export const TEAM_SIZE_MAX = 4;
+// Stake: whole dollars, at least $1; no maximum (0.16.0) beyond the wallet and the $1,000,000 per-stake sanity ceiling.
 export const BATTLE_STAKE_MIN_DOLLARS = 1;
-export const BATTLE_STAKE_MAX_DOLLARS = 10000;
+export const BATTLE_STAKE_RULE = 'The stake is whole dollars, at least $1.';
 export const BATTLE_TITLE_MAX = 80;
 export const BATTLE_DESCRIPTION_MAX = 500;
 export const TEAM_NAME_MAX = 24;
@@ -88,8 +92,10 @@ export function battleProblems(input, creatorUid) {
   }
 
   const stake = input?.stakeDollars;
-  if (!Number.isInteger(stake) || stake < BATTLE_STAKE_MIN_DOLLARS || stake > BATTLE_STAKE_MAX_DOLLARS) {
-    problems.push(`The stake is whole dollars from $${BATTLE_STAKE_MIN_DOLLARS} to $${BATTLE_STAKE_MAX_DOLLARS.toLocaleString('en-US')}.`);
+  if (typeof stake !== 'number' || !Number.isInteger(stake) || stake < BATTLE_STAKE_MIN_DOLLARS) {
+    problems.push(BATTLE_STAKE_RULE);
+  } else if (!Number.isSafeInteger(stake) || stake * 100 > MAX_WALLET_CHANGE_CENTS) {
+    problems.push(BET_CEILING_MESSAGE);
   }
 
   const players = Array.isArray(input?.players) ? input.players : [];

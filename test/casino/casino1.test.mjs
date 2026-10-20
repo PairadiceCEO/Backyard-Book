@@ -154,11 +154,19 @@ test('the same request twice (double tap / retry) replays the first result and c
   assert.equal(ledger().filter((e) => e.id === 'cbet_u1_spin-dup-0002').length, 1, 'one bet entry');
 });
 
-test('limits and wallet checks: $1–$10 whole dollars; never below $0; concurrent spins can\'t overdraw', async () => {
+test('amount and wallet checks: whole dollars ≥ $1, no maximum (only the $1,000,000 sanity ceiling); never below $0; concurrent spins can\'t overdraw', async () => {
   seed(10000);
-  for (const amount of [0, 11, 2.5, '5', -1, null]) {
+  for (const amount of [0, 2.5, '5', -1, null]) {
     await assert.rejects(spinSlots(caller, { amount, requestId: 'spin-bad-001' }), (e) => e.code === 'BAD_BET', `amount ${amount}`);
   }
+  for (const amount of [1_000_001, Number.MAX_SAFE_INTEGER + 1, 1e300]) {
+    await assert.rejects(
+      spinSlots(caller, { amount, requestId: 'spin-huge-01' }),
+      (e) => e.code === 'BET_TOO_LARGE' && e.message === 'That bet is larger than the table allows.',
+      `amount ${amount}`,
+    );
+  }
+  assert.equal(ledger().length, 0, 'nothing written for refused amounts');
   await assert.rejects(spinSlots(caller, { amount: 1 }), (e) => e.code === 'BAD_REQUEST_ID');
   seed(150);
   await assert.rejects(spinSlots(caller, { amount: 2, requestId: 'spin-poor-01' }), (e) => e.code === 'INSUFFICIENT_BALANCE');

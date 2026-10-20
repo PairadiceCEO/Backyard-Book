@@ -3228,32 +3228,21 @@ body.no-scroll {
   pointer-events: none;
 }
 
-.craps-rack {
-  display: grid;
-  grid-template-columns: minmax(0, 4fr) minmax(0, 1.35fr);
-  gap: 0.35rem;
-}
-
 .craps-rack-chips {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.3rem;
 }
 
-.craps-rack .chip-pick {
+.craps-rack-chips .chip-pick {
   min-height: 44px;
   border-radius: 10px;
 }
 
-.craps-rack .chip-md {
-  width: 36px;
-  height: 36px;
-  font-size: 0.85rem;
-}
-
-.craps-rack .take-down {
+.craps-felt .take-down,
+.craps-dock .take-down {
   min-height: 44px;
-  padding: 0 0.25rem;
+  padding: 0 0.5rem;
   font-size: 0.82rem;
   font-weight: 800;
   line-height: 1.05;
@@ -3268,9 +3257,13 @@ body.no-scroll {
 
 .craps-tools {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
+}
+
+.craps-tools.no-take-down {
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .craps-tools .btn {
@@ -3281,39 +3274,16 @@ body.no-scroll {
 }
 
 .craps-meter {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.1rem 0.5rem;
   font-size: 0.78rem;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
-  color: #f3f3ee;
+  color: rgba(255, 255, 255, 0.8);
   min-width: 0;
 }
 
-.craps-meter-room {
-  color: var(--accent);
-  font-weight: 700;
-}
-
-.craps-meter-room.full {
-  color: var(--danger);
-}
-
-.craps-meter-bar {
-  flex-basis: 100%;
-  height: 5px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  overflow: hidden;
-}
-
-.craps-meter-bar > span {
-  display: block;
-  height: 100%;
-  background: var(--gold);
-  border-radius: inherit;
+.craps-meter strong {
+  color: #f3f3ee;
+  font-size: 0.9rem;
 }
 
 /* Spots: dense grids, every spot at least 44 px tall */
@@ -3441,6 +3411,16 @@ body.no-scroll {
   box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.35);
 }
 
+.craps-dock-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 0.35rem;
+}
+
+.craps-dock-row.solo {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .craps-dock .craps-roll-btn {
   width: 100%;
 }
@@ -3564,6 +3544,25 @@ body.no-scroll {
   --chip-ink: #fff;
 }
 
+/* 0.16.0: $25 green, $100 black (casino standard colors) */
+.chip-25 {
+  --chip: #1f8f4e;
+  --chip-edge: #f7f2e8;
+  --chip-ink: #fff;
+}
+
+.chip-100 {
+  --chip: #1b1b1f;
+  --chip-edge: #e9c46a;
+  --chip-ink: #f5d27a;
+}
+
+/* Three digits fit on the smaller faces */
+.chip-100 .chip-face {
+  font-size: 0.82em;
+  letter-spacing: -0.04em;
+}
+
 .chip-rack {
   display: flex;
   flex-direction: column;
@@ -3572,8 +3571,17 @@ body.no-scroll {
 
 .chip-choices {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.35rem;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+
+/* Six chips in one row: the token shrinks to fit the cell on narrow phones (the button stays ≥ 44 px tall). */
+.chip-choices .chip-md,
+.craps-rack-chips .chip-md {
+  width: min(38px, 100%);
+  height: auto;
+  aspect-ratio: 1;
+  font-size: 0.85rem;
 }
 
 .chip-pick {
