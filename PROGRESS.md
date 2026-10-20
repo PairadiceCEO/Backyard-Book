@@ -5,6 +5,25 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.16.0 (Will, 2026-10-20 11:47 CT; full spec re-sent 11:48) — IN PROGRESS on wip
+Spec: Will's attachment of 2026-10-20 11:48 (the 11:47 message was cut off mid-sentence; the attachment is the whole
+spec). One phase on a fresh wip off main (c3769b4); merge after every CLAUDE.md check; stop servers at the end.
+
+### Checklist
+- [ ] 1 Shared rules: `CHIP_VALUES = [1, 2, 5, 10, 25, 100]` in shared/casino/constants.js; `isValidCasinoBet` split
+      into a chip check and an amount check (whole dollars, ≥ $1, safe integer); sanity ceiling
+      MAX_WALLET_CHANGE_CENTS ($1,000,000) per bet/stake → "That bet is larger than the table allows.";
+      CASINO_MAX_BET_DOLLARS and CRAPS_LIMITS removed; craps Odds stay ≤ oddsMultiple × line bet.
+- [ ] 2 Server: Blackjack, Baccarat, Craps/Crapless, Slots, Battles, Sportsbook use the new checks; INSUFFICIENT_BALANCE
+      still inside the debit's transaction. Every other stake/bet maximum found is removed and listed here.
+- [ ] 3 Phone: $25 / $100 chips on every game and Slots; no max checks; craps meter → "On the felt $X"; every
+      "up to $10", "$1–$10", "$20", "$30", "$60" text → "Minimum $1. Bet as much as your wallet holds."
+      Craps no-scroll still passes at every size.
+- [ ] 4 Tests: old-maximum tests rewritten; new tests (big bets accepted / refused for lack of funds with no wallet
+      change, double/split need funds, Odds > 2× refused, $1,000,001 refused, chips $25/$100 ok and $3 chip refused,
+      $50,000 Battle); casino tests mutation-checked. CLAUDE.md "Deliberate decisions" lines.
+- [ ] 5 Checks: test:all, lint, build, interact.mjs, dealcheck.mjs, phone check. Version 0.16.0. Merge wip → main.
+
 ## Phase 0.15.0 (Will, 2026-10-20 10:22 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 10:22. One phase on a fresh wip off main (d09682b); merge after every
 CLAUDE.md check; stop dev/harness servers at the end.
@@ -344,7 +363,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.15.0 is merged. Wait for Will's test results.
+0.16.0 items 1–5 in order.
 
 ## Open questions
 None open.
