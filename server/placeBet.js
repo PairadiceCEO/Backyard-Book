@@ -36,6 +36,12 @@ function bad(message, extra) {
   return new HttpError(400, 'BAD_SLIP', message, extra);
 }
 
+function cleanPlayerName(value) {
+  if (typeof value !== 'string') return '';
+  const text = [...value].filter((ch) => ch.charCodeAt(0) >= 32 && ch.charCodeAt(0) !== 127 && ch !== '<' && ch !== '>').join('').trim();
+  return text.length <= 60 ? text : '';
+}
+
 function parseRequest(body) {
   const mode = body.mode;
   if (mode !== 'singles' && mode !== 'parlay') throw bad('mode must be "singles" or "parlay".');
@@ -79,6 +85,9 @@ function parseRequest(body) {
 
     // The slip's own id for this pick is echoed back in LINE_CHANGED / MARKET_CLOSED answers.
     const clientLegId = typeof leg.legId === 'string' && leg.legId.length <= 200 ? leg.legId : null;
+    // A prop's player name, used only as text in the "one leg per player per stat" refusal (the rule itself is decided
+    // on the Kalshi ticker, never on this name); nothing else reads it and it is never stored.
+    const playerName = leg.marketType === PROP_MARKET ? cleanPlayerName(leg.playerName) : '';
 
     return {
       league,
@@ -90,6 +99,7 @@ function parseRequest(body) {
       stakeCents,
       kalshiTicker,
       kalshiSide,
+      playerName,
       legId: clientLegId ?? makeLegId({ league, gameId, marketType: leg.marketType, selection: leg.selection, line, ticker: kalshiTicker ?? '' }),
     };
   });

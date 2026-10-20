@@ -284,22 +284,87 @@ test('placing a prop stores label, strike and ticker; the 50-point odds rule app
 
 // ---------- parlays ----------
 
-test('parlays: prop + same-game moneyline refused; two props from one game refused; prop + another game\'s leg accepted', async () => {
-  const ml = { league: 'mlb', gameId: 'g4', marketType: 'moneyline', selection: 'home', line: null, quotedAmerican: 0 };
-  const parlay = (legs) => placeBets(caller('mike'), { mode: 'parlay', clientRequestId: rid(), stakeCents: 500, legs }, { now: NOW, fetchImpl, ctx: pctx() });
-  await assert.rejects(parlay([propLeg(G4HR), ml]), (e) => e.code === 'BAD_SLIP' && e.message === P.PROP_PARLAY_MESSAGE);
-  await assert.rejects(parlay([propLeg(G4HR), propLeg('KXMLBHIT-26OCT161800TBCLE-CLEJRAMIREZ11-1')]), (e) => e.code === 'BAD_SLIP' && e.message === P.PROP_PARLAY_MESSAGE);
-  assert.equal(fake.get('users/mike').balanceCents, 10_000);
-  // Same player, another threshold: one pick per player per stat (the slip swaps it).
-  assert.equal(rules.conflictKey(propLeg(G4HR)), rules.conflictKey(propLeg('KXMLBHR-26OCT161800TBCLE-CLEJRAMIREZ11-2')));
-  assert.notEqual(rules.conflictKey(propLeg(G4HR)), rules.conflictKey(propLeg('KXMLBHR-26OCT161800TBCLE-TBJCAMINERO13-1')));
-  // Different games: fine.
-  const ok = await parlay([propLeg(G4HR), propLeg(G5HR)]);
-  assert.equal(ok.bets[0].type, 'parlay');
-  assert.equal(ok.bets[0].legs.length, 2);
-  // Singles from the same game are fine too.
-  const singles = await placeBets(caller('dan'), { mode: 'singles', clientRequestId: rid(), legs: [{ ...propLeg(G4HR), stakeCents: 100 }, { ...propLeg('KXMLBHR-26OCT161800TBCLE-TBJCAMINERO13-1'), stakeCents: 100 }] }, { now: NOW, fetchImpl, ctx: pctx() });
+// 0.15.0: same-game parlays with props are allowed; at most one leg per player per stat (series + the ticker's player
+// segment). ML + spread from one game and crypto singles-only are unchanged.
+// A team-market leg exactly as the board quotes it (Kalshi ticker when the quote is Kalshi's).
+function teamLeg(gameId, marketType, selection) {
+  const q = board.games.find((g) => g.id === gameId).markets[marketType][selection];
+  assert.ok(q, `board quote ${gameId} ${marketType} ${selection}`);
+  const ticker = q.source === 'kalshi' ? q.ref?.ticker : null;
+  return { league: 'mlb', gameId, marketType, selection, line: q.line ?? null, quotedAmerican: q.american, ...(ticker ? { kalshiTicker: ticker, kalshiSide: q.ref.side } : {}) };
+}
+const HIT1 = 'KXMLBHIT-26OCT161800TBCLE-CLEJRAMIREZ11-1';
+const HIT2 = 'KXMLBHIT-26OCT161800TBCLE-CLEJRAMIREZ11-2';
+const CAM = 'KXMLBHR-26OCT161800TBCLE-TBJCAMINERO13-1';
+const parlayOf = (uid, legs) => placeBets(caller(uid), { mode: 'parlay', clientRequestId: rid(), stakeCents: 500, legs }, { now: NOW, fetchImpl, ctx: pctx() });
+
+test('parlays accepted: prop + same-game moneyline; two players from one game; same player on different stats; props from two games', async () => {
+  const a = await parlayOf('mike', [propLeg(G4HR), teamLeg('g4', 'moneyline', 'home')]);
+  assert.equal(a.bets[0].type, 'parlay');
+  assert.deepEqual(a.bets[0].legs.map((l) => l.marketType), ['prop', 'moneyline']);
+  const b = await parlayOf('mike', [propLeg(G4HR), propLeg(CAM)]);
+  assert.deepEqual(b.bets[0].legs.map((l) => l.label), ['José Ramírez 1+ HR', 'Junior Caminero 1+ HR']);
+  const c = await parlayOf('dan', [propLeg(G4HR), propLeg(HIT2)]);
+  assert.deepEqual(c.bets[0].legs.map((l) => l.label), ['José Ramírez 1+ HR', 'José Ramírez 2+ Hits'], 'Rush Yds + Anytime TD style: different stats');
+  const d = await parlayOf('dan', [propLeg(CAM), propLeg(G5HR), teamLeg('g4', 'total', 'over')]);
+  assert.equal(d.bets[0].legs.length, 3, 'a prop with another game and with a same-game total');
+  assert.equal(fake.get('users/mike').balanceCents, 10_000 - 1000);
+  assert.equal(fake.get('users/dan').balanceCents, 10_000 - 1000);
+  // Singles from the same game, as before.
+  const singles = await placeBets(caller('dan'), { mode: 'singles', clientRequestId: rid(), legs: [{ ...propLeg(G4HR), stakeCents: 100 }, { ...propLeg(CAM), stakeCents: 100 }] }, { now: NOW, fetchImpl, ctx: pctx() });
   assert.equal(singles.bets.length, 2);
+});
+
+test('parlays refused: same player + stat at two thresholds, YES and NO on one market, ML + spread from one game; nothing placed or fetched', async () => {
+  const msg = 'You already have a José Ramírez Hits pick in this parlay.';
+  const named = (ticker, side = 'yes') => ({ ...propLeg(ticker, side), playerName: 'José Ramírez' });
+  const before = world.calls.length;
+  await assert.rejects(parlayOf('mike', [named(HIT1), named(HIT2)]), (e) => e.code === 'BAD_SLIP' && e.message === msg);
+  await assert.rejects(parlayOf('mike', [named(HIT2, 'no'), named(HIT2, 'yes')]), (e) => e.code === 'BAD_SLIP' && e.message === msg);
+  await assert.rejects(parlayOf('mike', [named(HIT1, 'yes'), propLeg(G4HR), named(HIT2, 'no')]), (e) => e.code === 'BAD_SLIP' && e.message === msg, 'not next to each other');
+  // The decision is the ticker's: another name (or none) changes only the text, never the answer.
+  await assert.rejects(parlayOf('mike', [propLeg(HIT1), { ...propLeg(HIT2), playerName: 'Someone Else' }]), (e) => e.code === 'BAD_SLIP' && e.message === 'You already have a Someone Else Hits pick in this parlay.');
+  await assert.rejects(parlayOf('mike', [propLeg(HIT1), propLeg(HIT2)]), (e) => e.code === 'BAD_SLIP' && e.message === 'You already have a Hits pick on that player in this parlay.');
+  // Same player and stat in two different games: still one player per stat in this parlay (the rule names no game).
+  await assert.rejects(parlayOf('mike', [named(G4HR), named(G5HR)]), (e) => e.code === 'BAD_SLIP' && e.message === 'You already have a José Ramírez HR pick in this parlay.');
+  // Unchanged: ML + spread from one game.
+  await assert.rejects(parlayOf('mike', [teamLeg('g4', 'moneyline', 'home'), teamLeg('g4', 'spread', 'away'), propLeg(G4HR)]), (e) => e.code === 'BAD_SLIP' && e.message === rules.PARLAY_ML_SPREAD_MESSAGE);
+  assert.equal(world.calls.length, before, 'refused before pricing: no Kalshi or ESPN request');
+  assert.equal(fake.get('users/mike').balanceCents, 10_000);
+  assert.equal([...fake.store.keys()].filter((k) => k.startsWith('bets/')).length, 0, 'no bet written');
+});
+
+test('slip rules mirror the server: named message in a parlay; singles keep one pick per player per stat by swapping', async () => {
+  const { betSlipReducer, initialSlipState } = await import(url('src/lib/betSlipReducer.js'));
+  const pick = (ticker, side, threshold, stat = 'Hits') => ({
+    legId: `mlb:g4:prop:${ticker}:${side}:${threshold - 0.5}`, kalshi: { ticker, side }, league: 'mlb', gameId: 'g4', marketType: 'prop', selection: side,
+    line: threshold - 0.5, american: 120, decimal: 2.2, source: 'kalshi', gameLabel: 'Rays @ Guardians',
+    prop: { series: ticker.split('-')[0], stat, player: 'José Ramírez', team: 'Guardians', threshold }, label: `José Ramírez ${threshold}+ ${stat}`,
+  });
+  const ml = { legId: 'mlb:g4:moneyline:home:kalshi', league: 'mlb', gameId: 'g4', marketType: 'moneyline', selection: 'home', line: null, american: -120, decimal: 1.83, source: 'kalshi' };
+  let s = betSlipReducer(initialSlipState, { type: 'toggle', pick: pick(HIT1, 'yes', 1) });
+  s = betSlipReducer(s, { type: 'toggle', pick: ml });
+  s = betSlipReducer(s, { type: 'setMode', mode: 'parlay' });
+  assert.equal(s.mode, 'parlay', 'prop + same-game moneyline can be a parlay');
+  assert.deepEqual(rules.slipProblems({ mode: 'parlay', legs: s.legs, stakeCents: 500 }), []);
+  const refused = betSlipReducer(s, { type: 'toggle', pick: pick(HIT2, 'yes', 2) });
+  assert.equal(refused.notice, 'You already have a José Ramírez Hits pick in this parlay.');
+  assert.deepEqual(refused.legs.map((l) => l.legId), s.legs.map((l) => l.legId), 'nothing swapped or added');
+  assert.equal(betSlipReducer(s, { type: 'toggle', pick: pick(HIT1, 'no', 1) }).notice, 'You already have a José Ramírez Hits pick in this parlay.', 'YES then NO, same market');
+  const other = betSlipReducer(s, { type: 'toggle', pick: pick(G4HR, 'yes', 1, 'HR') });
+  assert.equal(other.legs.length, 3, 'same player, another stat');
+  assert.equal(other.notice, '');
+  // Tapping the same pick again still removes it.
+  assert.equal(betSlipReducer(s, { type: 'toggle', pick: pick(HIT1, 'yes', 1) }).legs.length, 1);
+  // Singles: another threshold replaces the old one (0.14.0 behavior).
+  let single = betSlipReducer(initialSlipState, { type: 'toggle', pick: pick(HIT1, 'yes', 1) });
+  single = betSlipReducer(single, { type: 'toggle', pick: pick(HIT2, 'yes', 2) });
+  assert.deepEqual(single.legs.map((l) => l.kalshi.ticker), [HIT2]);
+  // slipProblems on a hand-made parlay (as the server would see it) names the player from the pick.
+  assert.deepEqual(rules.slipProblems({ mode: 'parlay', stakeCents: 500, legs: [pick(HIT1, 'yes', 1), pick(HIT2, 'no', 2)] }), ['You already have a José Ramírez Hits pick in this parlay.']);
+  assert.equal(rules.propStatKey({ marketType: 'prop', kalshiTicker: 'KXNFLRSHYDS-26OCT18BALCLE-CLEDWATSON4-30' }), 'KXNFLRSHYDS-CLEDWATSON4');
+  assert.equal(rules.propStatKey({ marketType: 'moneyline' }), null);
+  assert.equal(P.propConflictMessage({ player: 'Derrick Henry', stat: 'Rush Yds' }), 'You already have a Derrick Henry Rush Yds pick in this parlay.');
 });
 
 // ---------- grading and settlement ----------

@@ -138,7 +138,7 @@ export default function PlayerPropsPage() {
                 <PlayerRow key={player.key} game={game} tab={tab} player={player} />
               ))}
               <p className="muted small">
-                Props are pre-game only and close when the game starts. A prop can't be parlayed with another pick from the same game.
+                Props are pre-game only and close when the game starts. A parlay can hold one pick per player per stat.
                 Kalshi&apos;s own result settles every prop; a player who doesn&apos;t play is a void (stake back).
               </p>
             </>

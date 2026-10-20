@@ -1,7 +1,7 @@
 // Pure bet slip state. Every change goes through this reducer, so it is easy to test and
 // can never loop: actions only run from clicks and server responses.
 
-import { MAX_LEGS, MIN_PARLAY_LEGS, conflictKey, makeLegId, pickLabel } from '../../shared/betRules.js';
+import { MAX_LEGS, MIN_PARLAY_LEGS, conflictKey, makeLegId, pickLabel, propConflictMessageFor } from '../../shared/betRules.js';
 
 // Exact Kalshi market behind a quote (main or alternate line), if any.
 function kalshiRef(quote) {
@@ -60,8 +60,12 @@ export function betSlipReducer(state, action) {
       if (state.legs.some((l) => l.legId === pick.legId)) {
         return { ...state, legs: state.legs.filter((l) => l.legId !== pick.legId), notice: '' };
       }
-      // Picking the other side of the same game + market replaces the old pick.
+      // Picking the other side of the same game + market replaces the old pick. A prop on a player + stat already in
+      // a parlay is refused instead, with the reason (one leg per player per stat in a parlay; singles still swap).
       const key = conflictKey(pick);
+      if (state.mode === 'parlay' && pick.marketType === 'prop' && state.legs.some((l) => conflictKey(l) === key)) {
+        return { ...state, notice: propConflictMessageFor(pick) };
+      }
       const others = state.legs.filter((l) => conflictKey(l) !== key);
       if (others.length >= MAX_LEGS) {
         return { ...state, notice: `A slip can hold at most ${MAX_LEGS} picks.` };

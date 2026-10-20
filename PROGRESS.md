@@ -10,10 +10,25 @@ Spec: Will's attachment of 2026-10-20 10:22. One phase on a fresh wip off main (
 CLAUDE.md check; stop dev/harness servers at the end.
 
 ### Checklist
-- [ ] 1 Same-game parlays with props allowed; new rule: at most one leg per player per stat in a parlay (player =
-      ticker player segment + series). Server (placeBets) + slip message "You already have a {player} {stat} pick in
-      this parlay." Old PROP_PARLAY_MESSAGE and its server check removed. ML + spread same game and crypto singles
-      stay. Tests (6 listed cases) + mutation check. CLAUDE.md "Deliberate decisions" line.
+- [x] 1 Same-game parlays with props allowed. `PROP_PARLAY_MESSAGE` / `hasPropSameGame` and the slip warning removed.
+      New key: `parsePropTicker().statKey` = series + the ticker's player segment ("KXNFLRSHYDS-CLEDWATSON4"), never a
+      name; `propStatKey(leg)` and `conflictKey` (props: `prop|{statKey}`) in shared/betRules.js. slipProblems: a
+      repeated prop key in a parlay → `propConflictMessageFor(leg)` = "You already have a Derrick Henry Rush Yds pick
+      in this parlay." (stat from the series config; name from the pick, only as text). placeBets refuses in
+      parseRequest, before any pricing fetch (BAD_SLIP, nothing placed). The slip sends `playerName` (sanitized,
+      ≤ 60 chars, never stored, only used in that message; no name → "You already have a Hits pick on that player in
+      this parlay."). Slip: in parlay mode a second pick on the same player + stat is refused with that notice
+      (singles still swap, as in 0.14.0); the notice also shows above the closed slip bar (× dismiss, 44 px).
+      Decision (literal spec): the key has no game in it, so the same player's same stat in two different games is
+      also refused in one parlay (0.14.0 allowed it); singles unaffected. Kept: ML + spread same game, crypto singles.
+      Tests (test/props, replacing the 0.14.0 parlay test): accepted = prop + same-game ML, two players same game, same
+      player different stats, props from two games + a same-game total; refused = two thresholds, YES + NO same market,
+      non-adjacent, same player/stat across games, ML + spread with a prop (no fetch, no bet, no money); slip reducer
+      and slipProblems mirror. Mutation-checked: threshold in key (2 fail), no series (3), game suffix in key (2), key
+      by name (3), key per market ticker (2), slip refusal off (1), generic message in parlay (2). CLAUDE.md line,
+      README line, props help text.
+      Lint: the repo has no eslint config (eslint 10 via npx refuses to run without one); I lint `src` + `shared` with
+      a scratch flat config outside the repo (@eslint/js recommended + react + react-hooks recommended), clean.
 - [ ] 2 Player props on the game page: section tabs "Game lines" / "Player props" (pre-game + tradable props only),
       props fetched only when the tab opens (same /api/board props call, 30 s memory cache), section remembered in
       sessionStorage (try/catch), tab disappears at game start (back to Game lines), /props redirects to the game

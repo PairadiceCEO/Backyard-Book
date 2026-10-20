@@ -123,7 +123,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 
 - **Crypto cash out:** open crypto bets show "Live cash out value" = potential payout × the fresh Kalshi bid for your side × 0.90, until 60 s before the market closes.
 - **Crypto chart:** always the last 60 minutes, ending now; close times shown as text with countdowns above it.
-- **Player props** (Kalshi, pre-game only): a **Player props** button on a game's page opens tabs per stat, one row per player with a line wheel over that player's thresholds and **50+** / **Under 50** buttons. Props close at the game's start, can't be parlayed with another pick from the same game, and are settled by Kalshi's result (a player who doesn't play is a void).
+- **Player props** (Kalshi, pre-game only): a **Player props** button on a game's page opens tabs per stat, one row per player with a line wheel over that player's thresholds and **50+** / **Under 50** buttons. Props close at the game's start and are settled by Kalshi's result (a player who doesn't play is a void). They can go in same-game parlays (with other props, the moneyline, spread or total) and with other games, but a parlay holds at most one pick per player per stat: a second Derrick Henry Rush Yds pick is refused with "You already have a Derrick Henry Rush Yds pick in this parlay."
 - **Line wheel:** alternate spreads and totals (and each props player) are one swipeable row of lines; the middle line is selected and its two bets sit underneath. ‹ › and the arrow keys step one line.
 
 ## 0.13.0

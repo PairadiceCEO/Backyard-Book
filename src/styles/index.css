@@ -4759,3 +4759,19 @@ fieldset.field legend {
   align-items: center;
   justify-content: center;
 }
+
+/* 0.15.0: a refused pick's reason above the closed slip bar */
+.slip-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem 0.35rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.slip-notice .icon-button {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+}

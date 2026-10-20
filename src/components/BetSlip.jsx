@@ -10,8 +10,6 @@ import { formatAmerican, formatMoney, parseDollarsToCents } from '../lib/format.
 import { formatStrike } from '../../shared/crypto/coins.js';
 import {
   CRYPTO_PARLAY_MESSAGE,
-  PROP_PARLAY_MESSAGE,
-  hasPropSameGame,
   MIN_PARLAY_LEGS,
   combinedAmerican,
   combinedDecimal,
@@ -74,7 +72,7 @@ export default function BetSlip() {
   const parlayStakeCents = stakeCents(parlayStake);
   const draft = {
     mode,
-    legs: parsedLegs.map((l) => ({ gameId: l.gameId, marketType: l.marketType, selection: l.selection, kalshi: l.kalshi, stakeCents: l.stakeCents ?? undefined })),
+    legs: parsedLegs.map((l) => ({ gameId: l.gameId, marketType: l.marketType, selection: l.selection, kalshi: l.kalshi, prop: l.prop, stakeCents: l.stakeCents ?? undefined })),
     stakeCents: parlayStakeCents ?? undefined,
   };
   const problems = slipProblems(draft, { balanceCents });
@@ -104,6 +102,7 @@ export default function BetSlip() {
           legId: l.legId,
           kalshiTicker: l.kalshi?.ticker,
           kalshiSide: l.kalshi?.side,
+          ...(l.marketType === 'prop' && l.prop?.player ? { playerName: l.prop.player } : {}),
           league: l.league,
           gameId: l.gameId,
           marketType: l.marketType,
@@ -178,6 +177,16 @@ export default function BetSlip() {
       {isOpen ? <div className="slip-backdrop" role="presentation" onClick={() => setOpen(false)} /> : null}
       {legs.length > 0 ? (
         <aside className={isOpen ? 'bet-slip open' : 'bet-slip'} aria-label="Bet slip">
+          {notice && !isOpen ? (
+            // A refused pick (e.g. a second leg on the same player and stat in a parlay) explains itself even with the
+            // drawer closed; the next pick or the × clears it.
+            <div className="slip-notice" role="status">
+              <span className="warning-text small">{notice}</span>
+              <button type="button" className="icon-button" aria-label="Dismiss" onClick={() => slip.dismissNotice()}>
+                ×
+              </button>
+            </div>
+          ) : null}
           <button type="button" className="slip-bar" onClick={() => setOpen((v) => !v)} aria-expanded={isOpen}>
             <span className="slip-bar-title">
               <span className="slip-count" key={legs.length} aria-label={`${legs.length} pick${legs.length === 1 ? '' : 's'}`}>
@@ -220,7 +229,6 @@ export default function BetSlip() {
               </div>
 
               {hasCrypto ? <p className="muted small">{CRYPTO_PARLAY_MESSAGE}</p> : null}
-              {mode === 'parlay' && hasPropSameGame(draft.legs) ? <p className="warning-text small">{PROP_PARLAY_MESSAGE}</p> : null}
 
               <ul className="slip-legs">
                 {legs.map((leg) => (

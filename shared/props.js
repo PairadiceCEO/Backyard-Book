@@ -13,7 +13,6 @@
 // KXNBAH2HPTS, KXNBAFIRSTBASKET, KXNHLFIRSTGOAL, season and leader series).
 
 export const PROP_MARKET = 'prop';
-export const PROP_PARLAY_MESSAGE = "Props can't be parlayed with picks from the same game.";
 export const PROP_CLOSED_MESSAGE = 'Player props close when the game starts.';
 
 // series → { league, stat (tab and label), anytime: threshold 1 reads "1+ TD" / "No TD" }
@@ -53,14 +52,16 @@ export function propSeriesForLeague(leagueId) {
   return Object.keys(PROP_SERIES).filter((s) => PROP_SERIES[s].league === leagueId);
 }
 
-// "KXNFLRSHYDS-26OCT18BALCLE-CLEDWATSON4-30" → { series, suffix, eventTicker, playerCode, playerKey, threshold }, or null.
-// playerKey (the market ticker without its threshold) is one player's markets in one stat.
+// "KXNFLRSHYDS-26OCT18BALCLE-CLEDWATSON4-30" → { series, suffix, eventTicker, playerCode, playerKey, statKey, threshold },
+// or null. playerKey (the market ticker without its threshold) is one player's markets in one stat of one game.
+// statKey ("KXNFLRSHYDS-CLEDWATSON4": series + the ticker's player segment) is one player in one stat: the parlay rule
+// allows at most one leg per statKey (0.15.0). Players are never identified by their display names.
 export function parsePropTicker(ticker) {
   const parts = String(ticker ?? '').split('-');
   if (parts.length !== 4 || parts.some((p) => !p)) return null;
   const [series, suffix, playerCode, n] = parts;
   if (!/^[A-Z0-9]+$/.test(series) || !/^[A-Z0-9]+$/.test(suffix) || !/^[A-Z0-9]+$/.test(playerCode) || !/^\d{1,4}$/.test(n)) return null;
-  return { series, suffix, eventTicker: `${series}-${suffix}`, playerCode, playerKey: `${series}-${suffix}-${playerCode}`, threshold: Number(n) };
+  return { series, suffix, eventTicker: `${series}-${suffix}`, playerCode, playerKey: `${series}-${suffix}-${playerCode}`, statKey: `${series}-${playerCode}`, threshold: Number(n) };
 }
 
 // The part of an event ticker after the series: "KXMLBGAME-26OCT181700TBCLE" → "26OCT181700TBCLE".
@@ -84,6 +85,15 @@ export function propBelongsToGame(ticker, { league, gameEventTicker }) {
   if (!config || config.league !== league || !suffix) return false;
   const gameSuffix = tickerSuffix(gameEventTicker);
   return Boolean(gameSuffix) && suffix === gameSuffix;
+}
+
+// Parlay rule (0.15.0): props may be parlayed with anything from the same game (other props, moneyline, spread, total)
+// and with other games, but at most one leg per player per stat (statKey above): "50+" with "Under 50" or "60+" on
+// the same player and stat is refused. The message names the player and the stat.
+export function propConflictMessage({ player = '', stat = '' } = {}) {
+  const name = String(player ?? '').trim();
+  const what = String(stat ?? '').trim() || 'prop';
+  return name ? `You already have a ${name} ${what} pick in this parlay.` : `You already have a ${what} pick on that player in this parlay.`;
 }
 
 // Props are bet only before the game: ESPN still says 'pre' AND the server clock is before the start time.

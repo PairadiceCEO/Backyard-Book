@@ -73,7 +73,8 @@ Vercel deploys the live site from `main`.
 - Win rate = won ÷ (won + lost). Pushes, voids, cash outs and Battles don't count; Challenge bets do.
 - A Challenge's poster may bet on it; that bet is tagged "Poster's bet".
 - Player props: Kalshi only, pre-game only (close at game start), matched by the game's winner-event ticker suffix,
-  scratched/non-binary results are void; no same-game parlays with a prop.
+  scratched/non-binary results are void; props may be in same-game parlays; at most one leg per player per stat in a
+  parlay (player = the ticker's player segment + the series).
 - Crypto bets: singles only, betting closes 60 s before the market closes, settled by Kalshi's result (never our chart).
 
 ## Working with Will
