@@ -71,3 +71,9 @@ dealer turn 5–8, craps roll 6–9); after 2 (one batched read + commit), 3 whe
 - All timing values in `shared/casino/timing.js`; deadlines start after each step's cards finish.
 - useTimedReveal now counts from the server deal time even when a phone's clock reads slightly early.
 - On-screen check: `tools/phone-check/dealcheck.mjs`.
+
+## 0.15.0 (2026-10-20): Craps / Crapless layout without scrolling
+Compact top bar (puck, dice, total, countdown, Roll / Sit down / Table full), then the betting interface (chips + Take
+down, meter + Undo/Clear, every spot in dense grids, two columns ≥ 720 px), then seats, last rolls, Leave seat, help and
+rules. Short screens (max-height 620px) dock the chips, Take down and Roll above the bottom nav. No rule, limit, payout,
+timer or turn-order change. Details in PROGRESS.md 0.15.0 item 3.

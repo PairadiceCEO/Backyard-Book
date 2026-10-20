@@ -3011,35 +3011,40 @@ body.no-scroll {
   }
 }
 
-/* ===================== Craps / Crapless ===================== */
+/* ===================== Craps / Crapless (0.15.0: no-scroll layout) ===================== */
+/* Top bar: puck, dice + last total, status, countdown, Roll / Sit down. Then the felt (rack, tools, spots in grids;
+   two columns on a computer). Then seats, last rolls, Leave seat, help, rules. Short screens: rack + Roll docked. */
 
-.craps-status {
-  justify-content: flex-start;
+.craps-page {
+  gap: 0.5rem;
 }
 
-.craps-status-text {
+.craps-bar {
   display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.5rem;
+  min-height: 56px;
+  background: radial-gradient(ellipse at center, #1d5a3a 0%, #134029 70%, #0f3322 100%);
+  border-color: #24694a;
 }
 
 .puck {
   flex: 0 0 auto;
-  min-width: 3.2rem;
-  height: 3.2rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 900;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   background: #1b1b1b;
   color: #ddd;
   border: 3px solid #555;
   text-align: center;
   line-height: 1.05;
-  padding: 0 0.2rem;
+  padding: 0 0.15rem;
 }
 
 .puck.on {
@@ -3048,36 +3053,77 @@ body.no-scroll {
   border-color: var(--gold);
 }
 
-.craps-dice-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.6rem;
-  background: radial-gradient(ellipse at center, #1d5a3a 0%, #134029 70%, #0f3322 100%);
-  border-color: #24694a;
+.craps-dice {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 0.3rem;
 }
 
-.craps-dice {
+.craps-bar-text {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
-  gap: 1rem;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.craps-roll-text {
+  font-weight: 800;
+  font-size: 0.92rem;
+  line-height: 1.1;
+  color: #f3f3ee;
+}
+
+.craps-bar-status {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.75);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.craps-bar .countdown {
+  flex: 0 0 auto;
+  min-width: 2.2rem;
+  height: 2.2rem;
+  font-size: 0.85rem;
+}
+
+.craps-roll-btn,
+.craps-sit-btn {
+  flex: 0 0 auto;
+  min-height: 44px;
+  min-width: 4rem;
+  padding: 0 0.7rem;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.craps-full {
+  flex: 0 0 auto;
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--gold);
+  padding: 0 0.3rem;
 }
 
 .die {
-  width: 58px;
-  height: 58px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   background: #fbfbf8;
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), inset 0 -3px 0 rgba(0, 0, 0, 0.12);
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
-  padding: 8px;
-  gap: 2px;
+  padding: 4px;
+  gap: 1px;
 }
 
 .pip {
   border-radius: 999px;
-  margin: 2px;
+  margin: 1.5px;
 }
 
 .pip.on {
@@ -3105,19 +3151,6 @@ body.no-scroll {
     animation: none;
     opacity: 0.5;
   }
-}
-
-.craps-roll-text {
-  font-weight: 800;
-  font-size: 1.15rem;
-  min-height: 1.5rem;
-}
-
-.craps-roll-btn {
-  width: 100%;
-  min-height: 56px;
-  font-size: 1.1rem;
-  font-weight: 800;
 }
 
 .craps-rolls {
@@ -3154,10 +3187,13 @@ body.no-scroll {
   color: var(--gold);
 }
 
+/* The felt */
 .craps-felt {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.35rem;
+  padding: 0.5rem;
   background: linear-gradient(180deg, #17553a 0%, #10402b 100%);
   border-color: #24694a;
   transition: opacity 0.2s;
@@ -3168,36 +3204,145 @@ body.no-scroll {
   pointer-events: none;
 }
 
-.craps-chips {
+.craps-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.craps-toast {
+  position: absolute;
+  z-index: 2;
+  left: 0.5rem;
+  right: 0.5rem;
+  top: -0.25rem;
+  transform: translateY(-100%);
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  background: #3a1416;
+  border: 1px solid var(--danger);
+  color: #ffd9d9;
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+
+.craps-rack {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.5fr);
+  grid-template-columns: minmax(0, 4fr) minmax(0, 1.35fr);
   gap: 0.35rem;
 }
 
-.craps-chips .btn {
-  padding-left: 0.2rem;
-  padding-right: 0.2rem;
-  font-size: 0.9rem;
+.craps-rack-chips {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.3rem;
 }
 
-.btn.chip.take-down.active {
+.craps-rack .chip-pick {
+  min-height: 44px;
+  border-radius: 10px;
+}
+
+.craps-rack .chip-md {
+  width: 36px;
+  height: 36px;
+  font-size: 0.85rem;
+}
+
+.craps-rack .take-down {
+  min-height: 44px;
+  padding: 0 0.25rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.05;
+  white-space: normal;
+}
+
+.btn.take-down.active {
   border-color: var(--gold);
   color: var(--gold);
+  background: rgba(245, 196, 81, 0.12);
 }
 
-.craps-place {
+.craps-tools {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
   gap: 0.35rem;
 }
 
-.craps-place.n10 {
+.craps-tools .btn {
+  min-height: 44px;
+  padding: 0 0.6rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.craps-meter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.1rem 0.5rem;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: #f3f3ee;
+  min-width: 0;
+}
+
+.craps-meter-room {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.craps-meter-room.full {
+  color: var(--danger);
+}
+
+.craps-meter-bar {
+  flex-basis: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.craps-meter-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  border-radius: inherit;
+}
+
+/* Spots: dense grids, every spot at least 44 px tall */
+.craps-grid {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.craps-grid.cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.craps-grid.cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.craps-place.n6,
+.craps-come-row.n6 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.craps-place.n10,
+.craps-come-row.n10 {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .craps-spot {
-  min-height: 60px;
-  border-radius: 10px;
+  min-height: 46px;
+  border-radius: 8px;
   border: 1.5px solid rgba(255, 255, 255, 0.35);
   background: rgba(0, 0, 0, 0.18);
   color: #f3f3ee;
@@ -3206,34 +3351,45 @@ body.no-scroll {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.05rem;
-  padding: 0.3rem 0.2rem;
+  gap: 0;
+  padding: 0.15rem 0.1rem;
   cursor: pointer;
   min-width: 0;
+  line-height: 1.1;
 }
 
 .craps-spot .spot-name {
   font-weight: 900;
-  font-size: 1.05rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.craps-place .craps-spot .spot-name {
+  font-size: 1rem;
 }
 
 .craps-spot .spot-odds {
-  font-size: 0.66rem;
+  font-size: 0.6rem;
   color: rgba(255, 255, 255, 0.7);
   text-align: center;
+  white-space: nowrap;
 }
 
 .craps-spot .spot-bet {
   font-weight: 800;
-  font-size: 0.85rem;
-  min-height: 1.1em;
+  font-size: 0.72rem;
+  min-height: 0.85rem;
   color: var(--gold);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .craps-spot.has-bet {
   border-color: var(--gold);
-  background: rgba(245, 196, 81, 0.1);
+  background: rgba(245, 196, 81, 0.12);
 }
 
 .craps-spot.blocked {
@@ -3244,39 +3400,97 @@ body.no-scroll {
   box-shadow: inset 0 0 0 2px #fbfbf8;
 }
 
-.craps-spot.band {
-  flex-direction: row;
-  justify-content: space-between;
-  gap: 0.5rem;
-  min-height: 52px;
-  padding: 0.4rem 0.75rem;
-  text-align: left;
-}
-
-.craps-spot.band .spot-odds {
-  flex: 1;
-  text-align: left;
-}
-
-.craps-spot.band.pass {
+.craps-spot.line.pass {
   border-color: #fbfbf8;
 }
 
-.craps-spot.band.dont {
+.craps-spot.line.dont {
   border-style: dashed;
 }
 
-.craps-spot.band.odds {
+.craps-spot.line.odds {
   border-color: var(--gold);
 }
 
-@media (max-width: 360px) {
-  .craps-place.n10 .craps-spot .spot-odds {
-    font-size: 0.58rem;
+.craps-spot.line.come {
+  border-color: #9fd8ff;
+}
+
+.craps-spot.come-on {
+  border-color: var(--gold);
+  border-style: solid;
+}
+
+.craps-back {
+  align-self: flex-start;
+}
+
+/* Short screens (e.g. 320×568): chip rack, Take down and Roll in a bar fixed above the bottom nav; the spots scroll. */
+.craps-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--bottom-nav-h, 0px);
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.4rem 0.75rem;
+  background: #10402b;
+  border-top: 1px solid #24694a;
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.craps-dock .craps-roll-btn {
+  width: 100%;
+}
+
+.craps-page.docked {
+  padding-bottom: 7.5rem;
+}
+
+/* A computer: the felt in two columns */
+@media (min-width: 720px) {
+  .craps-felt {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 0.5rem 0.75rem;
+    padding: 0.75rem;
+  }
+  .craps-spot {
+    min-height: 52px;
+  }
+  .craps-spot .spot-name {
+    font-size: 0.95rem;
+  }
+  .craps-spot .spot-odds {
+    font-size: 0.68rem;
+  }
+  .craps-spot .spot-bet {
+    font-size: 0.8rem;
+  }
+  .craps-place .craps-spot .spot-name {
+    font-size: 1.15rem;
   }
   .die {
-    width: 52px;
-    height: 52px;
+    width: 42px;
+    height: 42px;
+  }
+}
+
+@media (max-width: 360px) {
+  .craps-bar {
+    gap: 0.3rem;
+  }
+  .die {
+    width: 32px;
+    height: 32px;
+    padding: 3px;
+  }
+  .puck {
+    width: 2.5rem;
+    height: 2.5rem;
   }
 }
 
@@ -3456,15 +3670,6 @@ body.no-scroll {
   color: rgba(255, 255, 255, 0.75);
 }
 
-.btn.take-down.active {
-  border-color: var(--gold);
-  color: var(--gold);
-}
-
-.craps-spot .spot-bet .chip-stack {
-  margin-right: 0.15rem;
-}
-
 .slot-bet {
   min-height: 64px;
   border-radius: 14px;
@@ -3583,66 +3788,6 @@ body.no-scroll {
 .leave-all-btn {
   min-height: 44px;
   margin-left: auto;
-}
-
-/* Craps: $60 meter, Come bets on their numbers, Come box, Hard ways */
-.craps-meter {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.25rem 0.75rem;
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.craps-meter-room {
-  color: var(--accent);
-  font-weight: 700;
-}
-
-.craps-meter-room.full {
-  color: var(--danger);
-}
-
-.craps-meter-bar {
-  flex-basis: 100%;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  overflow: hidden;
-}
-
-.craps-meter-bar > span {
-  display: block;
-  height: 100%;
-  background: var(--gold);
-  border-radius: inherit;
-}
-
-.craps-come-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 0.35rem;
-}
-
-.craps-spot.come-on {
-  border-color: var(--gold);
-  border-style: solid;
-}
-
-.craps-spot.band.come {
-  border-color: #9fd8ff;
-}
-
-.craps-hard {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.35rem;
-}
-
-.craps-hard .craps-spot .spot-odds {
-  font-size: 0.68rem;
 }
 
 /* ===================== Battles ===================== */

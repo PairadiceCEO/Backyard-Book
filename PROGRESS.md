@@ -51,11 +51,28 @@ CLAUDE.md check; stop dev/harness servers at the end.
       Mutation-checked: tab kept after the start (fails), props section always mounted/hidden (fails "no props call").
       Phone screens (replacing props-page*): game-lines-tab, game-props-tab, game-no-props, game-props-old-url,
       game-props-pick, game-props-td, game-props-none, props-parlay-conflict (item 1's notice above the slip bar).
-- [ ] 3 Craps/Crapless layout: top bar (puck, dice + total, countdown, Roll), betting interface (chips, Take down,
-      Undo/Clear, $60 meter, every spot), then seats, history, Leave seat, help, rules. No scroll at 375×667,
-      390×844, 414×896, 1280×720, 1440×900; sticky bottom bar (chips, Take down, Roll) at 320×568. Tap targets
-      ≥ 44 px; two columns on a computer. "Sit down" in the top bar (first open seat / "Table full"). No game-logic
-      change. interact.mjs no-scroll check. Phone screens: point on, come-out, watching, full table (both variants).
+- [x] 3 Craps/Crapless layout (src/pages/casino/CrapsPage.jsx, both variants; game logic untouched: same validate /
+      sendChips / tapSpot / rollDice / seatDetail code, no change to shared/casino or server/casino). Top: one compact
+      bar `.craps-bar` (puck, two 36 px dice, last total + kind, a status line, countdown, Roll when it's my turn; for a
+      player not seated "Sit down" = first open seat, or "Table full"). Then the felt: `CrapsRack` (4 chips + Take down
+      in one row; craps-only, so Blackjack/Baccarat's ChipRack is unchanged), tools row ($60 meter + Undo + Clear), then
+      grids: Pass / Odds / Don't Pass / Don't Odds (crapless: Pass / Odds / Come / Field), Come + Field, Place numbers
+      (6 across; crapless 5 × 2), Come bets on their numbers (tap = their Odds), Hard ways (4 across). Spots are always
+      shown (Odds etc. dimmed until they apply; tapping one says why, from the existing placeBlocker). Payouts moved to
+      the rules text (spots keep a short ratio); amounts as whole dollars. Errors show as a toast over the felt (no
+      layout shift). Below: seats, last rolls, Leave seat, help, rules, then "‹ Casino" (moved from the top to save
+      height; the bottom nav also goes back; the page title is a visually hidden h2). ≥ 720 px: the felt is two
+      columns. Short screens: `DOCK_QUERY` = (max-height: 620px) via the new src/hooks/useMediaQuery.js
+      (useSyncExternalStore + the media query's change event, removed on unmount; no resize listener) moves the rack
+      and Roll into `.craps-dock`, fixed above the bottom nav; the spots scroll. All tap targets ≥ 44 px.
+      interact.mjs: per variant, the busiest felt (my roll, point on, countdown, 3 Come bets) measured at 375×667,
+      390×844, 414×896, 1280×720, 1440×900 (Roll, 4 chips, Take down, Undo, Clear and all 19 / 21 spots inside the area
+      between the sticky top bar and the bottom nav at scrollY 0, each ≥ 44 px) and 320×568 (dock only). Lowest control
+      at 375×667: 501 px of 607 visible. "Sit down" check: first open seat, empty seat below still seats, "Table full",
+      dock follows the query both ways, media listeners added = removed after leaving the page. Mutation-checked: spots
+      80 px tall (fails at 375×667), dock off (fails at 320×568), subscription never removed (fails cleanup).
+      Phone screens added: cr-full, cr-my-roll, cx-point, cx-comeout, cx-watch, cx-full, cx-my-roll (existing cr-point,
+      cr-comeout, cr-watch, cr-takedown, cr-chips, cr-come-hard, cr-dont-odds, cr-solo, cr-crapless kept).
 - [ ] 4 Checks: test:all, lint, build, interact.mjs (incl. no-scroll), dealcheck.mjs, phone check. Version 0.15.0.
       Merge wip → main. Tonight's prop games for Will's test steps. Servers stopped.
 

@@ -103,6 +103,12 @@ const cr = {
   rolling: () => crTable('craps', { point: null, deadline: null, lastRoll: { dice: [3, 4], total: 7, at: Date.now() - 200, kind: 'sevenOut', pointBefore: 6, seq: 57, shooter: 1 }, shooter: 3, seats: [crSeat('u0', 'Will'), crSeat('u1', 'Mike'), null, crSeat('u2', 'Dan'), null] }),
   crapless: () => ({ ...crTable('crapless', { point: 11, deadline: Date.now() + 9000, seats: [null, crSeat('u1', 'Mike', { pass: 500, odds: 500, place: { 2: 200, 12: 200, 6: 600 } }), crSeat('u0', 'Will', { pass: 100 }), null, null] }) }),
   watch: () => crTable('craps', { point: 8, deadline: Date.now() + 9000, shooter: 0, seats: [crSeat('u0', 'Will', { pass: 500 }), null, crSeat('u2', 'Dan', { field: 300 }), null, null] }),
+  // 0.15.0 phone screens for both variants: seated with a point on, seated on the come-out, watching, a full table.
+  full: (game) => crTable(game, { point: game === 'crapless' ? 3 : 9, deadline: Date.now() + 9000, shooter: 2, seats: ['u0', 'u2', 'u3', 'u4', 'u5'].map((u, i) => crSeat(u, ['Will', 'Dan', 'Ann', 'Bo', 'Cy'][i], { pass: 500 })) }),
+  cxComeout: () => crTable('crapless', { point: null, deadline: Date.now() + 12000, shooter: 1, seats: [crSeat('u0', 'Will', { pass: 300 }), crSeat('u1', 'Mike', { pass: 500, field: 200 }), null, null, null] }),
+  cxWatch: () => crTable('crapless', { point: 5, deadline: Date.now() + 9000, shooter: 0, seats: [crSeat('u0', 'Will', { pass: 500, odds: 500 }), null, crSeat('u2', 'Dan', { place: { 2: 200 } }), null, null] }),
+  // My turn to roll with Come bets on numbers: the busiest felt.
+  myRoll: (game) => crTable(game, { point: game === 'crapless' ? 11 : 6, deadline: Date.now() + 20000, shooter: 1, seats: [crSeat('u0', 'Will', { pass: 500 }), crSeat('u1', 'Mike', game === 'crapless' ? { pass: 500, odds: 1000, come: 300, comeOn: { 3: { bet: 300, odds: 300 }, 9: { bet: 200, odds: 0 } }, place: { 2: 200, 6: 600 }, hard: { 4: 100 } } : { pass: 500, odds: 1000, come: 300, comeOn: { 5: { bet: 300, odds: 600 }, 9: { bet: 200, odds: 0 } }, place: { 6: 600, 8: 600 }, hard: { 8: 100 }, field: 200 }), null, null, null] }),
 };
 const withTable = (make) => () => ({ ...fsDefault, casinoTables: make ? [make()] : [] });
 // Several seats per player (Mike = u1) and the new craps bets.
@@ -165,7 +171,14 @@ const scenarios = [
   S('cr-comeout', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.comeout) }),
   S('cr-point', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point) }),
   S('cr-takedown', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point), act: async (p) => { await p.getByRole('button', { name: 'Take down' }).click(); await p.waitForTimeout(100); } }),
-  S('cr-chips', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point), act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.craps-place .craps-spot').nth(2).click(); await p.locator('.craps-place .craps-spot').nth(2).click(); await p.getByRole('radio', { name: '$2 chip' }).click(); await p.locator('.craps-spot.band.odds').click(); await p.waitForTimeout(100); } }),
+  S('cr-chips', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point), act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.craps-place .craps-spot').nth(2).click(); await p.locator('.craps-place .craps-spot').nth(2).click(); await p.getByRole('radio', { name: '$2 chip' }).click(); await p.locator('.craps-spot.line.odds:not(.dont)').click(); await p.waitForTimeout(100); } }),
+  S('cr-full', '/casino/craps', { admin: false, user: 'u1', fs: withTable(() => cr.full('craps')) }),
+  S('cr-my-roll', '/casino/craps', { admin: false, user: 'u1', fs: withTable(() => cr.myRoll('craps')) }),
+  S('cx-point', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(cr.crapless) }),
+  S('cx-comeout', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(cr.cxComeout) }),
+  S('cx-watch', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(cr.cxWatch) }),
+  S('cx-full', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(() => cr.full('crapless')) }),
+  S('cx-my-roll', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(() => cr.myRoll('crapless')) }),
   S('cr-rolling', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.rolling) }),
   S('cr-crapless', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(cr.crapless) }),
   S('cr-watch', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.watch) }),
