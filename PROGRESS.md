@@ -29,11 +29,28 @@ CLAUDE.md check; stop dev/harness servers at the end.
       README line, props help text.
       Lint: the repo has no eslint config (eslint 10 via npx refuses to run without one); I lint `src` + `shared` with
       a scratch flat config outside the repo (@eslint/js recommended + react + react-hooks recommended), clean.
-- [ ] 2 Player props on the game page: section tabs "Game lines" / "Player props" (pre-game + tradable props only),
-      props fetched only when the tab opens (same /api/board props call, 30 s memory cache), section remembered in
-      sessionStorage (try/catch), tab disappears at game start (back to Game lines), /props redirects to the game
-      page with the tab selected, "Player props (N players) ›" button removed. Hooks checked. Phone screens: Game
-      lines, Player props, no-props game.
+- [x] 2 Player props on the game page. src/pages/GameDetailPage.jsx: section tabs "Game lines" / "Player props" right
+      under the score header (GameCard), shown only when `hasProps` (ESPN game, pre-game, not canceled, propsCount > 0);
+      no tab bar at all otherwise. Game lines = the alternate spread/total wheels as before. Player props =
+      src/components/PlayerPropsSection.jsx (the old page's stat tabs, search, a wheel per player), MOUNTED ONLY while
+      that tab shows, so usePropsData's props call (/api/board …&props=1, 30 s server memory cache) runs only then and
+      its 30 s poll stops when the player goes back to Game lines. src/pages/PlayerPropsPage.jsx deleted; the
+      "Player props (N players) ›" button removed. Section remembered in sessionStorage `bb.gameSection`
+      (`readSavedSection` / `saveSection`, both try/catch). Visible section is derived (`visibleSection(choice,
+      hasProps)`): when the game starts the next detail refresh has state 'in' / propsCount 0, the tab disappears and
+      Game lines shows, with no effect or state change needed. /sportsbook/{league}/{gameId}/props → `PropsRedirect` →
+      the game page with `?section=props`, which one effect turns into the saved choice and then strips from the URL
+      (replace). Hooks: one effect (only acts while the param is present; after it removes the param it is a no-op),
+      no state set during render, the props section keyed by game.
+      Interpretation (recorded, not a contradiction): "opening the game page alone must not fetch props" = the phone
+      makes no props call; the game detail's server-side `propsCount` (needed to decide whether to show the tab) stays
+      as in 0.14.0, from the same 30 s memory cache.
+      interact.mjs: new check "props tab" (no props call on the game page; tab loads once; lines hidden; saved; Game
+      lines → no props call on refresh; reload reopens Player props; kickoff refresh removes the tabs and calls no props;
+      404 shows no tabs; old URL redirects, cleans the URL, selects the tab) and "sessionStorage blocked" (no errors).
+      Mutation-checked: tab kept after the start (fails), props section always mounted/hidden (fails "no props call").
+      Phone screens (replacing props-page*): game-lines-tab, game-props-tab, game-no-props, game-props-old-url,
+      game-props-pick, game-props-td, game-props-none, props-parlay-conflict (item 1's notice above the slip bar).
 - [ ] 3 Craps/Crapless layout: top bar (puck, dice + total, countdown, Roll), betting interface (chips, Take down,
       Undo/Clear, $60 meter, every spot), then seats, history, Leave seat, help, rules. No scroll at 375×667,
       390×844, 414×896, 1280×720, 1440×900; sticky bottom bar (chips, Take down, Roll) at 320×568. Tap targets

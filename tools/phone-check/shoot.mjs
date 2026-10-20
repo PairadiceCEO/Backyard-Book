@@ -194,11 +194,16 @@ const scenarios = [
   S('crypto-coin-no-chart', '/sportsbook/crypto/sol', { admin: false, user: 'u1', noChart: true }),
   S('game-detail-wheels-moved', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: async (p) => { const w = p.locator('.line-wheel'); await w.nth(0).getByRole('button', { name: /^Higher/ }).click(); await w.nth(0).getByRole('button', { name: /^Higher/ }).click(); await w.nth(1).getByRole('button', { name: /^Lower/ }).click(); await p.waitForTimeout(500); } }),
   S('game-detail-wheel-pick', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: async (p) => { const w = p.locator('.line-wheel').nth(1); await w.getByRole('button', { name: /^Higher/ }).click(); await p.waitForTimeout(400); await w.locator('.wheel-buttons .odds-button').first().click(); await w.getByRole('button', { name: /^Lower/ }).click(); await p.waitForTimeout(500); } }),
-  S('props-page', '/sportsbook/nfl/401/props', { admin: false, user: 'u1' }),
-  S('props-page-pick', '/sportsbook/nfl/401/props', { admin: false, user: 'u1', act: async (p) => { const w = p.locator('.line-wheel').first(); await w.getByRole('button', { name: /^Higher/ }).click(); await p.waitForTimeout(400); await w.locator('.wheel-buttons .odds-button').first().click(); await p.waitForTimeout(300); } }),
-  S('props-page-td', '/sportsbook/nfl/401/props', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: 'TD' }).click(); await p.getByLabel('Search players').fill('mixon'); await p.waitForTimeout(300); } }),
-  S('props-page-none', '/sportsbook/nfl/401/props', { admin: false, user: 'u1', noProps: true }),
-  S('props-parlay-same-game', '/sportsbook/nfl/401/props', { admin: false, user: 'u1', act: async (p) => { await p.locator('.line-wheel').first().locator('.wheel-buttons .odds-button').first().click(); await p.locator('.line-wheel').nth(1).locator('.wheel-buttons .odds-button').nth(1).click(); await openSlip(p); await p.getByRole('tab', { name: 'Parlay' }).click(); await p.waitForTimeout(250); } }),
+  // 0.15.0: player props live in the game page's "Player props" tab (401 has props; 404 has none, so no tabs).
+  S('game-lines-tab', '/sportsbook/nfl/401', { admin: false, user: 'u1' }),
+  S('game-props-tab', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: openPropsTab }),
+  S('game-no-props', '/sportsbook/nfl/404', { admin: false, user: 'u1' }),
+  S('game-props-old-url', '/sportsbook/nfl/401/props', { admin: false, user: 'u1' }),
+  S('game-props-pick', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: async (p) => { await openPropsTab(p); const w = p.locator('.line-wheel').first(); await w.getByRole('button', { name: /^Higher/ }).click(); await p.waitForTimeout(400); await w.locator('.wheel-buttons .odds-button').first().click(); await p.waitForTimeout(300); } }),
+  S('game-props-td', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: async (p) => { await openPropsTab(p); await p.getByRole('tab', { name: 'TD' }).click(); await p.getByLabel('Search players').fill('mixon'); await p.waitForTimeout(300); } }),
+  S('game-props-none', '/sportsbook/nfl/401', { admin: false, user: 'u1', noProps: true, act: openPropsTab }),
+  // Same-game parlay with props is fine; a second Etienne Rush Yds pick is refused with the reason above the slip bar.
+  S('props-parlay-conflict', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: async (p) => { await openPropsTab(p); await p.locator('.line-wheel').first().locator('.wheel-buttons .odds-button').first().click(); await p.locator('.line-wheel').nth(1).locator('.wheel-buttons .odds-button').nth(1).click(); await openSlip(p); await p.getByRole('tab', { name: 'Parlay' }).click(); await p.locator('.slip-bar').click(); await p.waitForTimeout(250); await p.locator('.line-wheel').first().locator('.wheel-buttons .odds-button').nth(1).click(); await p.waitForTimeout(250); } }),
   S('cr-solo', '/casino/craps', { admin: false, user: 'u1', fs: withTable(crSolo) }),
   S('sportsbook-custom', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: /^Custom/ }).click(); await p.waitForTimeout(400); } }),
   S('battle-new', '/sportsbook/battles/new', { admin: false, user: 'u1', act: async (p) => { await p.getByLabel('Title').fill('Saturday golf'); await p.getByRole('button', { name: 'Dan' }).click(); await p.getByRole('button', { name: 'Ann' }).click(); await p.getByRole('button', { name: '70 / 30' }).click(); await p.waitForTimeout(150); } }),
@@ -242,6 +247,12 @@ async function clickPrices(p, n) {
   for (const i of [0, 8, 12].slice(0, n)) await buttons.nth(i).click();
   await p.waitForTimeout(200);
 }
+async function openPropsTab(p) {
+  await p.getByRole('tab', { name: 'Player props' }).click();
+  await p.waitForSelector('.prop-player, .props-section .empty-state', { timeout: 5000 }).catch(() => {});
+  await p.waitForTimeout(300);
+}
+
 async function openSlip(p) {
   await p.locator('.slip-bar').click();
   await p.waitForTimeout(250);

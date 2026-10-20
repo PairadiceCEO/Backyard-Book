@@ -475,6 +475,124 @@ await check('line wheel: starts on the main line, centered; tap / arrow key / sw
   await context.close();
 });
 
+// ---------- 0.15.0: player props in the game page's tab ----------
+await check('props tab: game page alone fetches no props; tab opens them; remembered for the session; gone at the start; old URL redirects; no tab without props', async () => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  const detail = F.gameDetail('401');
+  let started = false;
+  let propsCalls = 0;
+  let detailCalls = 0;
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: [], customGames: [], battles: [] } });
+  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/board' && u.searchParams.get('props')) { propsCalls += 1; return json(route, 200, F.propsPage(u.searchParams.get('game'))); }
+    if (u.pathname === '/api/board' && u.searchParams.get('game')) {
+      detailCalls += 1;
+      const id = u.searchParams.get('game');
+      if (id !== '401') return json(route, 200, F.gameDetail(id));
+      if (!started) return json(route, 200, detail);
+      // Kickoff: ESPN says in progress and the server reports no props any more.
+      return json(route, 200, { ...detail, fetchedAt: new Date().toISOString(), propsCount: 0, game: { ...detail.game, state: 'in', statusText: '1st Qtr 14:10', bettingClosed: false } });
+    }
+    return json(route, 200, { ok: true, ran: false });
+  });
+  const tab = (name) => page.getByRole('tab', { name });
+  const saved = () => page.evaluate(() => { try { return sessionStorage.getItem('bb.gameSection'); } catch { return 'blocked'; } });
+  const refresh = async () => { const n = detailCalls; await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); for (let i = 0; i < 40 && detailCalls === n; i++) await page.waitForTimeout(50); await page.waitForTimeout(300); };
+
+  await page.goto(BASE + '/sportsbook/nfl/401', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.line-wheel');
+  await page.waitForTimeout(1200);
+  assert.equal(propsCalls, 0, 'opening the game page alone asks for no props');
+  assert.equal(await tab('Game lines').getAttribute('aria-selected'), 'true', 'Game lines is the default');
+  assert.equal(await page.getByRole('link', { name: /Player props/ }).count(), 0, 'the old "Player props (N players) ›" button is gone');
+  const tabsBelowHeader = await page.evaluate(() => {
+    const card = document.querySelector('.game-card').getBoundingClientRect();
+    const tabs = document.querySelector('.section-tabs').getBoundingClientRect();
+    const wheel = document.querySelector('.line-wheel').getBoundingClientRect();
+    return tabs.top >= card.bottom - 1 && tabs.bottom <= wheel.top + 1;
+  });
+  assert.ok(tabsBelowHeader, 'section tabs sit between the score header and the alternate lines');
+
+  await tab('Player props').click();
+  await page.waitForSelector('.prop-player');
+  assert.equal(propsCalls, 1, 'opening the tab loads props once');
+  assert.equal(await page.locator('.line-wheel .wheel-chip', { hasText: '-2.5' }).count(), 0, 'alternate lines hidden on Player props');
+  assert.match(await page.locator('.prop-player').first().innerText(), /Travis Etienne Jr\./);
+  assert.equal(await page.locator('.prop-player').first().locator('.wheel-chip.selected').innerText(), '50+');
+  assert.equal(await saved(), 'props', 'chosen section saved for the session');
+
+  // Back to Game lines: the props poll stops (the section unmounts), and a refresh asks for none.
+  await tab('Game lines').click();
+  await page.waitForSelector('.line-wheel .wheel-chip');
+  assert.equal(await saved(), 'lines');
+  const callsOnLines = propsCalls;
+  await refresh();
+  assert.equal(propsCalls, callsOnLines, 'no props request while Game lines is open');
+
+  // The session remembers Player props across a reload.
+  await tab('Player props').click();
+  await page.waitForSelector('.prop-player');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.prop-player');
+  assert.equal(await tab('Player props').getAttribute('aria-selected'), 'true', 'reopened on Player props');
+
+  // Kickoff: on the next refresh the tab disappears and the page is back on Game lines.
+  started = true;
+  await refresh();
+  assert.equal(await page.getByRole('tab', { name: 'Player props' }).count(), 0, 'Player props tab gone once the game starts');
+  assert.equal(await page.locator('.section-tabs').count(), 0, 'no section tabs at all');
+  assert.equal(await page.locator('.prop-player').count(), 0);
+  assert.ok((await page.locator('.line-wheel').count()) >= 1, 'Game lines shown');
+  const callsAfterStart = propsCalls;
+  await refresh();
+  assert.equal(propsCalls, callsAfterStart, 'no props request after the start');
+  started = false;
+
+  // A game with no props: no tabs at all.
+  await page.goto(BASE + '/sportsbook/nfl/404', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.game-card');
+  await page.waitForTimeout(600);
+  assert.equal(await page.locator('.section-tabs').count(), 0, 'no tabs on a game without props');
+
+  // Old /props links: the game page with Player props selected, and the URL cleaned up.
+  await page.evaluate(() => { try { sessionStorage.removeItem('bb.gameSection'); } catch { /* blocked */ } });
+  await page.goto(BASE + '/sportsbook/nfl/401/props', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.prop-player');
+  assert.equal(new URL(page.url()).pathname, '/sportsbook/nfl/401');
+  assert.equal(new URL(page.url()).search, '', 'the section parameter leaves the URL');
+  assert.equal(await tab('Player props').getAttribute('aria-selected'), 'true');
+  assert.equal(await saved(), 'props');
+  await context.close();
+});
+
+// Storage blocked (sessionStorage throws): the tabs still work, nothing crashes.
+await check('props tab works with sessionStorage blocked', async () => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(() => { Object.defineProperty(window, 'sessionStorage', { get() { throw new Error('blocked'); } }); });
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: [], customGames: [], battles: [] } });
+  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/board' && u.searchParams.get('props')) return json(route, 200, F.propsPage('401'));
+    if (u.pathname === '/api/board' && u.searchParams.get('game')) return json(route, 200, F.gameDetail('401'));
+    return json(route, 200, { ok: true, ran: false });
+  });
+  await page.goto(BASE + '/sportsbook/nfl/401', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.line-wheel');
+  await page.getByRole('tab', { name: 'Player props' }).click();
+  await page.waitForSelector('.prop-player');
+  await page.getByRole('tab', { name: 'Game lines' }).click();
+  await page.waitForSelector('.line-wheel .wheel-chip');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 await browser.close();
 console.log(results.join('\n'));
 if (results.some((r) => r.startsWith('FAIL'))) process.exit(1);

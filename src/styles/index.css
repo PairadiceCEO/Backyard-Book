@@ -4752,12 +4752,29 @@ fieldset.field legend {
   gap: 0.5rem;
 }
 
-.props-link {
-  width: 100%;
+/* 0.15.0: game page sections (Game lines / Player props) under the score header; two equal tabs */
+.section-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  overflow: visible;
+  padding-bottom: 0;
+}
+
+.section-tabs .sub-tab {
   min-height: 44px;
+  font-weight: 600;
+}
+
+.section-panel,
+.props-section {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.props-close-note {
+  margin: 0;
 }
 
 /* 0.15.0: a refused pick's reason above the closed slip bar */
