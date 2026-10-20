@@ -37,6 +37,9 @@ Vercel deploys the live site from `main`.
   Crypto data is cached in function memory only (10 s), never in Firestore.
 - `package-lock.json` is committed: Vercel installs exactly those versions. Change dependencies with `npm install`
   and commit the updated lockfile.
+- Vercel Web Analytics: `@vercel/analytics` (package.json + package-lock.json) and `<Analytics />` from
+  '@vercel/analytics/react', rendered once in src/App.jsx after <Routes>. Never remove, move or duplicate it; keep it
+  when editing App.jsx or dependencies.
 
 ## Code rules
 - Deliver complete, runnable files. No placeholders like `// add logic here`.
@@ -81,6 +84,7 @@ Vercel deploys the live site from `main`.
 
 ## Working with Will
 - Will works in the browser only (no terminal). Claude pushes to GitHub.
+- Vercel deploys Production only from main; every other branch is a Preview. Never ask Will to promote a Preview.
 - After each phase, give step-by-step test instructions for the live site, using Will plus a test player
   in an incognito window.
 - Commit messages end with the Co-Authored-By / Claude-Session lines the session provides.

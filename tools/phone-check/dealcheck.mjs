@@ -23,7 +23,7 @@ async function openPage(path, table) {
   const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: [table] } });
-  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
   await page.route('**/api/**', (route) => json(route, 200, { ok: true, applied: false }));
   await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
   return { page, context };
