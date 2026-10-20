@@ -105,21 +105,29 @@ export function fetchCoinbasePrice(product, { nowMs, fetchImpl }) {
   });
 }
 
-// 1-minute candles from `fromMs` to now, oldest first: [{ t (ms), c (close) }].
-// Coinbase answers [time (s), low, high, open, close, volume], newest first.
-export function fetchCoinbaseCandles(product, fromMs, { nowMs, fetchImpl }) {
-  return cached(`candles:${product}:${fromMs}`, nowMs, async () => {
+// The coin page's chart window: the last 60 minutes, ending now.
+export const CHART_WINDOW_MS = 60 * 60 * 1000;
+
+// 1-minute candles for the last 60 minutes (now − 60 min → now), oldest first: { from, to, points: [{ t (ms), c }] }.
+// Coinbase is asked for exactly that window and answers [time (s), low, high, open, close, volume], newest first.
+// Cached per product for 10 s; the window is taken when the request is made, so it rolls forward with every refresh.
+export function fetchCoinbaseCandles(product, { nowMs, fetchImpl }) {
+  return cached(`candles:${product}`, nowMs, async () => {
+    const toMs = nowMs;
+    const fromMs = nowMs - CHART_WINDOW_MS;
     const rows = await coinbaseGet(
       `/products/${encodeURIComponent(product)}/candles`,
-      { granularity: 60, start: new Date(fromMs).toISOString(), end: new Date(nowMs).toISOString() },
+      { granularity: 60, start: new Date(fromMs).toISOString(), end: new Date(toMs).toISOString() },
       fetchImpl,
     );
-    if (!Array.isArray(rows)) return [];
-    return rows
-      .filter((r) => Array.isArray(r) && Number.isFinite(Number(r[0])) && Number.isFinite(Number(r[4])))
-      .map((r) => ({ t: Number(r[0]) * 1000, c: Number(r[4]) }))
-      .filter((p) => p.t >= fromMs - 60 * 1000)
-      .sort((a, b) => a.t - b.t);
+    const points = Array.isArray(rows)
+      ? rows
+          .filter((r) => Array.isArray(r) && Number.isFinite(Number(r[0])) && Number.isFinite(Number(r[4])))
+          .map((r) => ({ t: Number(r[0]) * 1000, c: Number(r[4]) }))
+          .filter((p) => p.t >= fromMs - 60 * 1000 && p.t <= toMs)
+          .sort((a, b) => a.t - b.t)
+      : [];
+    return { from: new Date(fromMs).toISOString(), to: new Date(toMs).toISOString(), points };
   });
 }
 
@@ -254,28 +262,24 @@ export async function getCryptoBoard({ nowMs = Date.now(), fetchImpl = fetch } =
   return { league: CRYPTO_LEAGUE, fetchedAt: new Date(nowMs).toISOString(), serverNow: nowMs, coins };
 }
 
-const HOUR_MS = 60 * 60 * 1000;
-
-// One coin: its card plus the full hourly ladder and this hour's 1-minute candles (the chart's x-axis runs from
-// the top of the hour to the hourly close, or the end of the hour).
+// One coin: its card plus the full hourly ladder and the last 60 minutes of 1-minute candles (the chart's x-axis
+// ends at now; the 15-min and hourly close times are shown as text above the chart, not drawn on it).
 export async function getCryptoCoin(coinId, { nowMs = Date.now(), fetchImpl = fetch } = {}) {
   const coin = cryptoCoin(coinId);
   if (!coin) throw new HttpError(404, 'GAME_NOT_FOUND', 'That coin is not offered.');
-  const fromMs = Math.floor(nowMs / HOUR_MS) * HOUR_MS;
-  const [summary, candles] = await Promise.all([
+  const [summary, chart] = await Promise.all([
     coinSummary(coin, { nowMs, fetchImpl, ladder: true }),
-    fetchCoinbaseCandles(coin.product, fromMs, { nowMs, fetchImpl }).catch((err) => {
+    fetchCoinbaseCandles(coin.product, { nowMs, fetchImpl }).catch((err) => {
       console.error(`crypto ${coin.id} candles failed:`, err.message);
       return null;
     }),
   ]);
-  const toMs = summary.hourly ? Math.max(ms(summary.hourly.closeTime), fromMs + HOUR_MS) : fromMs + HOUR_MS;
   return {
     league: CRYPTO_LEAGUE,
     fetchedAt: new Date(nowMs).toISOString(),
     serverNow: nowMs,
     coin: summary,
-    chart: candles ? { from: new Date(fromMs).toISOString(), to: new Date(toMs).toISOString(), points: candles } : null,
+    chart: chart && chart.points.length ? chart : null,
   };
 }
 

@@ -256,13 +256,13 @@ await check('My Bets: a player under 200 bets costs no extra reads', async () =>
 });
 
 // ---------- Crypto chart scrubber ----------
-await check('crypto chart: touch-drag scrubs (time + price + target), keeps its minute through the 10 s refresh, lifts away; mouse hover too', async () => {
+await check('crypto chart: touch-drag scrubs (time + price + target), keeps its minute through the 10 s refresh, moves to the oldest point once its minute rolls off, lifts away; mouse hover too', async () => {
   const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   const first = F.cryptoCoin('btc');
-  // A full hour of 1-minute closes, so the right-edge flip is always exercised.
+  // A full window of 1-minute closes (the last 60 minutes, ending now), so the right-edge flip is always exercised.
   const hourFrom = Date.parse(first.chart.from);
-  first.chart.points = Array.from({ length: 60 }, (_, i) => ({ t: hourFrom + i * 60000, c: 81900 + 120 * Math.sin(i / 6) + i }));
+  first.chart.points = Array.from({ length: 61 }, (_, i) => ({ t: hourFrom + i * 60000, c: 81900 + 120 * Math.sin(i / 6) + i }));
   // Put the 15-min target right on one minute's close, so scrubbing there shows "Target $X".
   const onTarget = first.chart.points[Math.floor(first.chart.points.length / 2)];
   first.coin.fifteen.market.strike = Number(onTarget.c.toFixed(2));
@@ -275,9 +275,16 @@ await check('crypto chart: touch-drag scrubs (time + price + target), keeps its 
       answers += 1;
       // The refresh drops the minute being scrubbed (and nudges every price): the scrubber moves to the nearest minute.
       if (answers === 1) return json(route, 200, first);
-      const scrubbed = Number(page.__scrubbedT);
-      const points = first.chart.points.filter((p) => p.t !== scrubbed).map((p) => ({ ...p, c: p.c + 1 }));
-      return json(route, 200, { ...first, serverNow: Date.now(), chart: { ...first.chart, points } });
+      if (!page.__rolled) {
+        const scrubbed = Number(page.__scrubbedT);
+        const points = first.chart.points.filter((p) => p.t !== scrubbed).map((p) => ({ ...p, c: p.c + 1 }));
+        return json(route, 200, { ...first, serverNow: Date.now(), chart: { ...first.chart, points } });
+      }
+      // Later refreshes roll the window 10 minutes forward: the held minute scrolls off the left edge.
+      const shift = 10 * 60000;
+      const kept = first.chart.points.filter((p) => p.t >= hourFrom + shift);
+      const added = Array.from({ length: 10 }, (_, i) => ({ t: kept[kept.length - 1].t + (i + 1) * 60000, c: 81950 + i }));
+      return json(route, 200, { ...first, serverNow: Date.now(), chart: { from: new Date(hourFrom + shift).toISOString(), to: new Date(Date.parse(first.chart.to) + shift).toISOString(), points: [...kept, ...added] } });
     }
     return json(route, 200, { ok: true, ran: false });
   });
@@ -331,6 +338,13 @@ await check('crypto chart: touch-drag scrubs (time + price + target), keeps its 
   assert.ok(Math.abs(minutes(after[0]) - minutes(held)) <= 1, `stayed on its minute or the nearest (${held} → ${after[0]})`);
   assert.notEqual(after[1], before[1], 'shows the refreshed price');
 
+  // The window rolls on: once the held minute has scrolled off the left edge, the scrubber sits on the oldest point.
+  page.__rolled = true;
+  await page.waitForTimeout(10600);
+  const rolled = await label();
+  const oldest = new Date(hourFrom + 10 * 60000).toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' });
+  assert.equal(rolled[0], oldest, `moved to the oldest point (${held} → ${rolled[0]})`);
+
   await fire('pointerup', 0.05);
   assert.equal(await page.locator('.chart-scrub').count(), 0, 'lifting the finger hides it');
 
@@ -339,6 +353,125 @@ await check('crypto chart: touch-drag scrubs (time + price + target), keeps its 
   assert.equal(await page.locator('.chart-scrub').count(), 1, 'hover shows it');
   await fire('pointerout', 0.08, 'mouse'); // how a browser reports the mouse leaving (React turns it into onPointerLeave)
   assert.equal(await page.locator('.chart-scrub').count(), 0, 'leaving hides it');
+  await context.close();
+});
+
+// ---------- Line wheel: alternate lines and player props ----------
+await check('line wheel: starts on the main line, centered; tap / arrow key / swipe select; slip dot; a refresh keeps the line or moves to the nearest without jumping; props rows', async () => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  const first = F.gameDetail('401');
+  let answers = 0;
+  let dropLine = null;
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: [], customGames: [], battles: [] } });
+  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/board' && u.searchParams.get('props')) return json(route, 200, F.propsPage('401'));
+    if (u.pathname === '/api/board' && u.searchParams.get('game')) {
+      answers += 1;
+      if (answers === 1 || dropLine === null) return json(route, 200, first);
+      // A refresh that drops the selected total and nudges every price.
+      const totals = first.ladders.totals.filter((r) => r.line !== dropLine).map((r) => ({ ...r, over: { ...r.over, american: r.over.american - 5 }, under: { ...r.under, american: r.under.american + 5 } }));
+      return json(route, 200, { ...first, fetchedAt: new Date().toISOString(), ladders: { ...first.ladders, totals } });
+    }
+    return json(route, 200, { ok: true, ran: false });
+  });
+  await page.goto(BASE + '/sportsbook/nfl/401', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.line-wheel');
+  await page.waitForTimeout(400);
+  const wheel = (i) => page.locator('.line-wheel').nth(i);
+  const selected = (i) => wheel(i).locator('.wheel-chip.selected').innerText();
+  const buttons = (i) => wheel(i).locator('.wheel-buttons .odds-cell').allInnerTexts();
+  const centered = (i) =>
+    page.evaluate((i) => {
+      const track = document.querySelectorAll('.line-wheel .wheel-track')[i];
+      const chip = track.querySelector('.wheel-chip.selected');
+      const t = track.getBoundingClientRect();
+      const c = chip.getBoundingClientRect();
+      return Math.abs(c.left + c.width / 2 - (t.left + t.width / 2));
+    }, i);
+
+  assert.equal(await selected(0), '-2.5', 'spread starts on the main board line (home side)');
+  assert.equal(await selected(1), '42.5', 'total starts on the main line');
+  assert.ok((await centered(0)) < 4 && (await centered(1)) < 4, 'both start centered');
+  const spreadButtons = await buttons(0);
+  assert.match(spreadButtons[0], /Texans -2\.5/);
+  assert.match(spreadButtons[1], /Jaguars \+2\.5/);
+  const chipTexts = await wheel(0).locator('.wheel-chip').allInnerTexts();
+  const values = chipTexts.map(Number);
+  assert.deepEqual([...values].sort((a, b) => a - b), values, 'spread chips lowest to highest');
+  const css = await page.evaluate(() => {
+    const track = document.querySelector('.wheel-track');
+    return { touch: getComputedStyle(track).touchAction, snap: getComputedStyle(track).scrollSnapType, chipH: document.querySelector('.wheel-chip').getBoundingClientRect().height };
+  });
+  assert.ok(!/^pan-x$/.test(css.touch) && /pan-y|auto/.test(css.touch), `vertical swipes still scroll the page (${css.touch})`);
+  assert.match(css.snap, /x mandatory/);
+  assert.ok(css.chipH >= 44, `chips at least 44 px tall (${css.chipH})`);
+  const arrowsInside = await page.evaluate(() =>
+    [...document.querySelectorAll('.line-wheel')].every((w) => {
+      const card = w.closest('.card').getBoundingClientRect();
+      return [...w.querySelectorAll('.wheel-arrow')].every((a) => { const r = a.getBoundingClientRect(); return r.left >= card.left - 0.5 && r.right <= card.right + 0.5; });
+    }));
+  assert.ok(arrowsInside, '‹ › buttons stay inside the card');
+  assert.match(await wheel(1).locator('.wheel-chip.selected').getAttribute('aria-label'), /^Total 42\.5, Over [−-]?\+?\d+, Under /);
+
+  // Tap a chip: it becomes the line and glides to the middle.
+  await wheel(1).locator('.wheel-chip', { hasText: '47.5' }).click();
+  await page.waitForTimeout(700);
+  assert.equal(await selected(1), '47.5');
+  assert.ok((await centered(1)) < 4, 'tapped chip centered');
+  assert.match((await buttons(1))[0], /Over 47\.5/);
+  // Arrow key on the focused wheel.
+  await wheel(1).locator('.wheel-track').focus();
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(700);
+  assert.equal(await selected(1), '44.5', 'left arrow steps one line lower');
+  // Swipe: scroll the track so 50.5 sits in the middle; the selection follows once scrolling stops.
+  await page.evaluate(() => {
+    const track = document.querySelectorAll('.line-wheel .wheel-track')[1];
+    const chip = [...track.querySelectorAll('.wheel-chip')].find((c) => c.textContent.trim() === '50.5');
+    track.scrollTo({ left: chip.offsetLeft - (track.clientWidth - chip.offsetWidth) / 2, behavior: 'auto' });
+  });
+  await page.waitForTimeout(600);
+  assert.equal(await selected(1), '50.5', 'a swipe that stops on a chip selects it');
+
+  // A pick in the slip: its button stays highlighted, its chip carries a dot when the wheel moves away.
+  await wheel(1).locator('.wheel-chip', { hasText: '44.5' }).click();
+  await page.waitForTimeout(600);
+  await wheel(1).locator('.wheel-buttons .odds-button').first().click();
+  assert.equal(await wheel(1).locator('.wheel-buttons .odds-button').first().getAttribute('aria-pressed'), 'true');
+  await wheel(1).getByRole('button', { name: /^Higher/ }).click();
+  await page.waitForTimeout(600);
+  assert.equal(await selected(1), '47.5');
+  assert.equal(await wheel(1).locator('.wheel-chip', { hasText: '44.5' }).locator('.chip-dot').count(), 1, 'dot on the picked line');
+
+  // Refresh (every 30 s) that drops the selected line 47.5: the wheel moves to the nearest line, still centered.
+  dropLine = 47.5;
+  const before = answers;
+  await page.waitForTimeout(31000);
+  assert.ok(answers > before, 'refreshed');
+  const now = await selected(1);
+  assert.ok(now === '44.5' || now === '50.5', `moved to the nearest remaining line (${now})`);
+  assert.ok((await centered(1)) < 4, 'and stays centered (no jump)');
+  assert.equal(await selected(0), '-2.5', 'the other wheel kept its line');
+
+  // Player props page: a wheel per multi-threshold player, starting on the YES ask nearest $0.50; single threshold = two buttons.
+  await page.goto(BASE + '/sportsbook/nfl/401/props', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.prop-player');
+  await page.waitForTimeout(400);
+  const etienne = page.locator('.prop-player').first();
+  assert.match(await etienne.innerText(), /Travis Etienne Jr\./);
+  assert.equal(await etienne.locator('.wheel-chip.selected').innerText(), '50+', 'starts on the threshold nearest $0.50');
+  const propButtons = await etienne.locator('.wheel-buttons .odds-cell').allInnerTexts();
+  assert.match(propButtons[0], /^50\+/);
+  assert.match(propButtons[1], /^Under 50/);
+  await page.getByRole('tab', { name: 'TD' }).click();
+  const td = page.locator('.prop-player').first();
+  assert.equal(await td.locator('.line-wheel').count(), 0, 'single threshold: no wheel');
+  assert.match((await td.locator('.odds-cell').allInnerTexts()).join(' | '), /1\+ TD.*No TD/s);
+  await page.getByLabel('Search players').fill('etienne');
+  assert.equal(await page.locator('.prop-player').count(), 1, 'search filters players');
   await context.close();
 });
 

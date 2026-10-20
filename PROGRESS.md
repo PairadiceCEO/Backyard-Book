@@ -5,6 +5,94 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.14.0 (Will, 2026-10-18 12:25 CT; re-sent 2026-10-20 09:33) — COMPLETE (2026-10-20), merged to main, ready for Will to test
+Spec: Will's attachment of 2026-10-18 12:25. One phase on a fresh wip off main; merge after every CLAUDE.md check;
+stop dev/harness servers at the end.
+
+### Checklist
+- [x] 1 Crypto cash out: `quoteCryptoCashout` in server/cashout.js (crypto bets take this path; singles only). Always
+      "live" once the market has opened; value = `liveValueCents(potential, [bid])` (× 0.90, floored). The market
+      is fetched fresh every time — estimates too (`ctx.freshKalshiMarket`, memoized only within one request), so a
+      cached bid is never used. `cryptoCashoutProblem`: result set / settled → no; not active; not yet open; ≤ 60 s
+      to close (same cutoff as betting); bid missing or 0; ask − bid > MAX_BID_ASK_GAP; ticker must be the leg's
+      stored ticker, of the leg's event, of a configured series (and Kalshi's answer must be that ticker). Same
+      cashOutBet transaction / `cashout_{betId}`. `NO_CASHOUT_PREFIXES` is now custom + Challenge only, so My Bets
+      quotes crypto bets and shows the "Live cash out value" button. Tests (test/crypto): YES $20 × 0.62 × 0.9 =
+      $11.16, NO $6.48, fresh bid each quote, double cash out pays once, CASHOUT_CHANGED; refusals (60/30/0 s, bid 0 /
+      missing, wide gap, closed, settled, result set, leg graded, another event's ticker incl. Kalshi answer without
+      event_ticker, unconfigured series, wrong ticker answered). Mutation-checked: 0.90 → 0.95, 0.90 dropped, 60 s
+      cutoff, ticker check, gap check — each fails a test. CLAUDE.md + README cash out lines; phone fixture b9.
+- [x] 2 Crypto chart, rolling: `fetchCoinbaseCandles(product)` asks Coinbase for exactly now − 60 min → now
+      (granularity 60) and returns { from, to, points }; cached per product for 10 s (window taken at fetch time, so
+      the rolling start never defeats the cache). getCryptoCoin returns that window. Coin page: close times as text
+      above the chart, "15-min closes 12:38 PM (6:00)" / "Hourly closes 1:10 PM (37:48)", live countdowns; nothing
+      drawn for them on the chart. Targets and scrubber unchanged; the held minute moves to the oldest point once it
+      rolls off (nearest point). Tests: window, exact Coinbase request, 10 s memory, rolls after 3 min. interact.mjs
+      scrubber check now also rolls the window 10 min and expects the oldest point. Fixtures use the rolling window.
+- [x] 3 Player props (server). Series discovery (2026-10-18 ~17:35Z): GET /series?category=Sports is cut off by the
+      fetch tool at ~119k characters (also per tag: Basketball/Baseball/Hockey/Football), has no cursor and comes
+      back in a different order each time, so it could NOT be read to the end (spec item impossible as written).
+      Safest option taken: sampled the list (whole and per tag) and probed every plausible player-stat ticker
+      directly (open per-game events, min_close_ts now); included only verified series with "Player: N+" markets,
+      strike_type greater, a floor_strike, no cap, one event per game. Config: shared/props.js `PROP_SERIES`.
+      Included (24): NFL KXNFLPASSYDS, KXNFLRSHYDS, KXNFLRECYDS, KXNFLREC, KXNFLTD · MLB KXMLBHR, KXMLBHIT, KXMLBKS,
+      KXMLBTB, KXMLBRBI, KXMLBHRR, KXMLBSB · NHL KXNHLGOAL, KXNHLPTS, KXNHLAST, KXNHLSAVE · NBA KXNBAPTS, KXNBAREB,
+      KXNBAAST, KXNBA3PT, KXNBASTL, KXNBABLK, KXNBASTOCK (Stl+Blk), KXNBAPRA (Pts+Reb+Ast).
+      Left out: KXNHLSAVES (named in the spec; no events — the live series is KXNHLSAVE, used instead), KXNHLSOG,
+      KXNHLBLK, KXNFLPASSTD, KXMLBRUN, KXMLBWALK, KXNCAAFPASSYDS/RSHYDS/RECYDS/TD (no open events); KXNFLLADDERRSHYDS
+      (scalar ladder, no floor_strike), KXNBAONE3PT (season-long), KXNFLLONGESTREC, KXNFLMOSTRECYDS,
+      KXNFLWEEKMOST*, KXNBAH2HPTS, KXNBAFIRSTBASKET, KXNHLFIRSTGOAL, season/leader/award series (not per player per
+      threshold per game). No college-football or college-basketball prop series found.
+      Matching: `propBelongsToGame` — configured series of the game's league AND ticker suffix = the mapped winner
+      event's suffix (so the playoff game-number rule carries over); prop event ticker = `{series}-{suffix}`; no
+      mapped winner → no props. Pre-game: `propsOpen` (ESPN 'pre' and server clock < startTime). server/props.js:
+      loadGameProps (one /events/{ticker} per configured series, 30 s memory, never Firestore; tabs per stat; players
+      sorted away team, home team, then most-traded; thresholds whose price fails the checks hidden, players with none
+      hidden; main = YES ask nearest $0.50), pricePropLeg (configured series, mapped event, fresh market active and
+      prop-shaped, pre-game, price checks, ask; LINE_CHANGED on another strike; ODDS_CHANGED as usual),
+      resultFromPropMarket (finalized yes/no → graded; voided or final non-yes/no → void). Leg marketType 'prop',
+      gameId = ESPN id, `prop` {series, stat, player, team, threshold, anytime}; labels "Derrick Henry 50+ Rush Yds" /
+      "… Under 50 …", TD/HR at 1: "1+ TD" / "No TD". Bet rules: conflictKey one pick per player per stat; legId
+      includes the ticker; `hasPropSameGame` → PROP_PARLAY_MESSAGE. Cash out: generic pre-game × 0.90; live bid from
+      the prop's own market (suffix-checked) with the gap check. Settlement: gameKey per prop market; Kalshi result.
+      /api/board &game={id}&props=1 → getGameDetail(…, { props: true }); the normal game detail adds `propsCount`
+      (pre-game only). Team of a player: ticker code prefix = the game's Kalshi team code (`teamCodeOf`).
+      Tests: test/props/props.test.mjs (9, `npm run test:props`, in test:all). Mutation-checked: clock cutoff (2 fail),
+      state check (2), suffix helper (2), bet-time suffix check (1), same-game parlay rule (1), non-yes/no → void (2),
+      cash out gap (1). CLAUDE.md props line.
+- [x] 4 LineWheel (src/components/LineWheel.jsx), no library: one row of chips, CSS scroll-snap (x mandatory),
+      centered chip = selected (larger, accent), chips fade to the edges (mask), two bet buttons under it. Starts on
+      the main line (spreads/totals: the main board line, else the nearest Kalshi strike; props: YES ask nearest
+      $0.50). Tap a chip to center it; ‹ › buttons and ←/→ keys (track focusable) step one line. Centered chip found
+      on a debounced scroll end (120 ms) plus `scrollend` — never per frame; listeners/timer removed on unmount. On a
+      refresh it keeps its line; a vanished line moves to the nearest by value, re-centered instantly (layout effect
+      keyed on the set of lines, not prices). Slip pick: button stays pressed, chip shows a gold dot. aria: selected
+      chip "Total 44.5, Over −110, Under −110", plus a polite live region. `touch-action: pan-x pan-y` on the track:
+      the spec's "pan-x" alone would stop vertical swipes on the wheel from scrolling the page, which the spec also
+      forbids, so I kept the requirement (vertical swipes scroll) — decision. Chips ≥ 44 px (non-selected chips are
+      never scaled down; the selected one grows). Spacers are ::before/::after sized against the track (a % padding
+      pushed the › button out of the card — caught in review and now asserted by interact.mjs).
+      Game page: spread wheel (chips from the home side, lowest → highest; buttons "Browns −3.5" / "Ravens +3.5";
+      only lines with both sides tradable) and total wheel ("Over 44.5" / "Under 44.5"); main-line card unchanged;
+      "Player props (N players) ›" button when pre-game and N > 0 (N = distinct players, not players × stat tabs).
+      Props page /sportsbook/{league}/{gameId}/props (src/pages/PlayerPropsPage.jsx, src/lib/props.js): stat tabs,
+      search, one card per player (name, team) sorted by team then most-traded; a wheel per player, or just the two
+      buttons for a single threshold ("1+ TD" / "No TD"); 30 s poll; closed / none states. Slip: same-game prop parlay
+      warning (PROP_PARLAY_MESSAGE), prop line text, LINE_CHANGED on a prop updates its threshold.
+      Phone check: game-detail-wheels-moved, game-detail-wheel-pick, props-page, props-page-pick, props-page-td,
+      props-page-none, props-parlay-same-game. interact.mjs "line wheel" check: main line + centered, sorted chips,
+      pan-y, snap, 44 px, arrows inside the card, aria, tap / arrow key / swipe select, slip dot, a 30 s refresh that
+      drops the selected line → nearest and still centered, props rows (start nearest $0.50, single-threshold
+      buttons, search).
+      Also fixed: test/sportsbook/phase6b "/api/board … ladders" read the real clock against Oct 18 Kalshi fixtures
+      and started failing on Oct 20 (outside the 1-day lookback); the clock is now pinned in that test.
+- [x] 5 Checks: test:all (31 + 97 + 21 + 104 + 15 + 11 + 11 + 9 = 299), lint, build, interact.mjs (10 checks incl.
+      the wheel), dealcheck.mjs, phone check 115 screens × 320/375/414 clean. Version 0.14.0. Merged wip → main.
+      No firestore.rules change, no new index. Harness server stopped.
+      Props to test with (Kalshi, checked 2026-10-20 ~09:45 CT): NBA tonight BOS@DET, PHI@NYK, OKC@SAS (rebounds etc.;
+      KXNBAPTS had no events yet); NHL tonight 11 games (goals, e.g. COL@NJ, TB@VGK, BOS@DAL); MLB World Series opener
+      Fri Oct 23 TB vs MIL (HR). No NFL week-8 prop events listed yet.
+
 ## Phase 0.13.0 (Will, 2026-10-18 01:56 CT; re-sent 11:31) — COMPLETE (2026-10-18), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-18 01:56. One phase on a fresh wip off main; merge after every CLAUDE.md check.
 
@@ -177,7 +265,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.13.0 is merged. Wait for Will's test results.
+Nothing queued: 0.14.0 is merged. Wait for Will's test results.
 
 ## Open questions
 None open.

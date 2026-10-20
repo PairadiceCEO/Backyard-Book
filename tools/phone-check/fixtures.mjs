@@ -84,6 +84,7 @@ export function gameDetail(id) {
   const sp = (lines, side) => lines.map((l) => kq(l < 0 ? 100 + Math.round(-l * 40) : -100 - Math.round(l * 30), l, `KXNFLSPREAD-X-${side}${Math.abs(l)}`, l < 0 ? 'yes' : 'no'));
   return {
     league: 'nfl', fetchedAt: new Date().toISOString(), stale: false, kalshiStatus: 'ok', game,
+    propsCount: game.id === '401' ? 5 : 0,
     ladders: {
       spreads: { home: sp([-10.5, -6.5, -3.5, -2.5, -1.5, 1.5, 2.5, 3.5, 7.5], 'HOU'), away: sp([-7.5, -3.5, -2.5, -1.5, 1.5, 2.5, 3.5, 6.5, 10.5], 'JAC') },
       totals: [35.5, 38.5, 41.5, 42.5, 44.5, 47.5, 50.5].map((line, i) => ({ line, over: kq(-250 + i * 60, line, `KXNFLTOTAL-X-${line}`, 'yes'), under: kq(200 - i * 55, line, `KXNFLTOTAL-X-${line}`, 'no') })),
@@ -117,6 +118,8 @@ export const bets = [
       leg({ gameId: '403', marketType: 'moneyline', selection: 'home', label: 'Eagles ML', gameLabel: 'Panthers @ Eagles', americanOdds: -150 }),
       leg({ gameId: '402', marketType: 'spread', selection: 'away', line: 6.5, label: 'Ravens +6.5', gameLabel: 'Ravens @ Browns', americanOdds: 150 }),
     ] },
+  { id: 'b9', uid: 'u1', username: 'mike', type: 'single', status: 'open', stakeCents: 1000, potentialPayoutCents: 2000, payoutCents: 0, combinedAmerican: 100, placedAt: iso(now - 5 * 60000), version: 0,
+    legs: [leg({ gameId: 'crypto:KXBTC15M-26OCT181930', league: 'crypto', marketType: 'crypto', selection: 'yes', line: 81909.14, label: 'BTC Up (≥ $81,909.14, 7:30 PM)', gameLabel: 'Bitcoin · 15 min · closes 7:30 PM', americanOdds: 100, source: 'kalshi' })] },
   { id: 'b8', uid: 'u1', username: 'mike', type: 'single', status: 'open', stakeCents: 1800, potentialPayoutCents: 2800, payoutCents: 0, combinedAmerican: -180, placedAt: iso(now - 3 * H), version: 0, posterBet: true,
     legs: [leg({ league: 'challenge', gameId: 'challenge:c-open', marketType: 'challenge', selection: 'o2', label: 'No', gameLabel: 'Will Mike run a 5K under 25 minutes?', americanOdds: -180, decimalOdds: 1.5556, source: 'challenge', startTime: iso(now + 5 * H) })] },
   { id: 'b5', uid: 'u2', username: 'dan', type: 'single', status: 'push', stakeCents: 2000, potentialPayoutCents: 3818, payoutCents: 2000, combinedAmerican: -110, placedAt: iso(now - 8 * H), settledAt: iso(now - 2 * H), version: 1,
@@ -273,13 +276,14 @@ export function cryptoBoard() {
 }
 export function cryptoCoin(id, { noChart = false } = {}) {
   const coin = cryptoCoins().find((c) => c.id === id) ?? cryptoCoins()[0];
-  const from = Math.floor(now / (60 * MIN)) * 60 * MIN;
+  // The last 60 minutes, ending now (the server's rolling window).
+  const from = now - 60 * MIN;
   const points = [];
   for (let t = from; t <= now; t += MIN) points.push({ t, c: coin.price * (1 + 0.0012 * Math.sin((t - from) / (7 * MIN)) - 0.0004 * ((t - from) / (60 * MIN))) });
   if (points.length < 2) points.unshift({ t: from - MIN, c: coin.price });
   return {
     league: 'crypto', fetchedAt: new Date().toISOString(), serverNow: Date.now(), coin,
-    chart: noChart ? null : { from: iso(from), to: iso(from + 60 * MIN), points },
+    chart: noChart ? null : { from: iso(from), to: iso(now), points },
   };
 }
 
@@ -302,3 +306,44 @@ export function heavyBets(uid = 'u7', finished = 260) {
   return list;
 }
 export const heavyUser = { id: 'u7', username: 'heavy', displayName: 'Heavy Hitter', role: 'player', balanceCents: 5000, stats: { won: 0, lost: 0 }, disabled: false };
+
+// ---------- Player props page (game 401, Jaguars @ Texans, pre-game) ----------
+function propRow(series, code, threshold, yesPrice, volume) {
+  const t = `${series}-26OCT18JACHOU-${code}-${threshold}`;
+  const withPrice = (q, price) => ({ ...q, ref: { ...q.ref, price } });
+  const row = {
+    ticker: t, threshold, strike: threshold - 0.5,
+    yes: kq(yesPrice >= 0.5 ? -Math.round((yesPrice / (1 - yesPrice)) * 100) : Math.round(((1 - yesPrice) / yesPrice) * 100), threshold - 0.5, t, 'yes'),
+    no: kq(yesPrice <= 0.5 ? -Math.round(((1 - yesPrice) / yesPrice) * 100) : Math.round((yesPrice / (1 - yesPrice)) * 100), threshold - 0.5, t, 'no'),
+    labels: series === 'KXNFLTD' && threshold === 1 ? { yes: '1+ TD', no: 'No TD' } : { yes: `${threshold}+`, no: `Under ${threshold}` },
+    volume,
+  };
+  return { ...row, yes: withPrice(row.yes, yesPrice), no: withPrice(row.no, Number((1.01 - yesPrice).toFixed(2))) };
+}
+function propPlayer(series, code, name, team, teamSide, ladder) {
+  const rows = ladder.map(([th, p]) => propRow(series, code, th, p));
+  let main = 0;
+  rows.forEach((r, i) => { if (Math.abs(r.yes.ref.price - 0.5) < Math.abs(rows[main].yes.ref.price - 0.5)) main = i; });
+  return { key: code, name, team, teamSide, volume: 1000, rows, mainTicker: rows[main].ticker };
+}
+export function propsPage(id, { none = false } = {}) {
+  const game = nflGames.find((g) => g.id === id) ?? nflGames[0];
+  const tabs = none ? [] : [
+    { series: 'KXNFLRSHYDS', stat: 'Rush Yds', anytime: false, players: [
+      propPlayer('KXNFLRSHYDS', 'JACTETIENNE1', 'Travis Etienne Jr.', 'Jaguars', 'away', [[25, 0.86], [40, 0.71], [50, 0.56], [60, 0.43], [75, 0.27], [100, 0.1]]),
+      propPlayer('KXNFLRSHYDS', 'HOUJMIXON28', 'Joe Mixon', 'Texans', 'home', [[40, 0.8], [60, 0.58], [70, 0.46], [80, 0.34], [100, 0.16]]),
+    ] },
+    { series: 'KXNFLRECYDS', stat: 'Rec Yds', anytime: false, players: [
+      propPlayer('KXNFLRECYDS', 'JACBTHOMAS7', 'Brian Thomas Jr.', 'Jaguars', 'away', [[40, 0.74], [60, 0.52], [80, 0.31]]),
+      propPlayer('KXNFLRECYDS', 'HOUNCOLLINS12', 'Nico Collins', 'Texans', 'home', [[50, 0.7], [70, 0.49], [90, 0.3]]),
+    ] },
+    { series: 'KXNFLTD', stat: 'TD', anytime: true, players: [
+      propPlayer('KXNFLTD', 'HOUJMIXON28', 'Joe Mixon', 'Texans', 'home', [[1, 0.48]]),
+      propPlayer('KXNFLTD', 'JACTETIENNE1', 'Travis Etienne Jr.', 'Jaguars', 'away', [[1, 0.41]]),
+    ] },
+  ];
+  return {
+    league: 'nfl', fetchedAt: new Date().toISOString(), stale: false, kalshiStatus: 'ok', game, serverNow: Date.now(),
+    props: { open: true, reason: tabs.length ? null : 'No player props for this game.', tabs },
+  };
+}

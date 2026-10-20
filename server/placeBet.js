@@ -28,6 +28,7 @@ import {
 import { needsOddsConfirm, roundDecimal } from '../shared/oddsMath.js';
 import { CHALLENGE_LEAGUE, CHALLENGE_MARKET, challengeDocId, isChallengeLeg } from '../shared/challenges.js';
 import { CRYPTO_LEAGUE, CRYPTO_MARKET, CRYPTO_PREFIX } from '../shared/crypto/coins.js';
+import { PROP_MARKET } from '../shared/props.js';
 
 const KALSHI_TICKER_PATTERN = /^[A-Z0-9][A-Z0-9._-]{3,100}$/;
 
@@ -55,6 +56,7 @@ function parseRequest(body) {
       if (league !== CRYPTO_LEAGUE || leg.marketType !== CRYPTO_MARKET || !gameId.startsWith(CRYPTO_PREFIX)) throw bad(`Pick ${i + 1}: invalid crypto pick.`);
       if (!leg.kalshiTicker) throw bad(`Pick ${i + 1}: a crypto pick needs its Kalshi market.`);
     } else if (!getLeague(league)) throw bad(`Pick ${i + 1}: unknown league.`);
+    if (leg.marketType === PROP_MARKET && (gameId.includes(':') || !leg.kalshiTicker)) throw bad(`Pick ${i + 1}: a prop needs its game and Kalshi market.`);
     if (!isValidSelection(leg.marketType, leg.selection)) throw bad(`Pick ${i + 1}: invalid market.`);
     const line = leg.line === null || leg.line === undefined ? null : Number(leg.line);
     if (line !== null && !Number.isFinite(line)) throw bad(`Pick ${i + 1}: invalid line.`);
@@ -88,7 +90,7 @@ function parseRequest(body) {
       stakeCents,
       kalshiTicker,
       kalshiSide,
-      legId: clientLegId ?? makeLegId({ league, gameId, marketType: leg.marketType, selection: leg.selection, line }),
+      legId: clientLegId ?? makeLegId({ league, gameId, marketType: leg.marketType, selection: leg.selection, line, ticker: kalshiTicker ?? '' }),
     };
   });
 
@@ -117,6 +119,26 @@ async function loadExisting(db, ids, uid) {
 
 function storedLeg(request, priced) {
   const { quote, game } = priced;
+  if (request.marketType === PROP_MARKET) {
+    const prop = game.prop;
+    return {
+      legId: makeLegId({ league: request.league, gameId: request.gameId, marketType: PROP_MARKET, selection: request.selection, line: quote.line, source: quote.source, ticker: quote.ref?.ticker ?? '' }),
+      league: request.league,
+      gameId: request.gameId,
+      gameLabel: `${game.away.shortName} @ ${game.home.shortName}`,
+      startTime: game.startTime,
+      marketType: PROP_MARKET,
+      selection: request.selection,
+      label: pickLabel({ marketType: PROP_MARKET, selection: request.selection, prop }),
+      line: quote.line,
+      americanOdds: quote.american,
+      decimalOdds: quote.decimal,
+      source: quote.source,
+      sourceRef: quote.ref ?? null,
+      prop: { series: prop.series, stat: prop.stat, player: prop.player, team: prop.team ?? null, threshold: prop.threshold, anytime: prop.anytime },
+      result: 'pending',
+    };
+  }
   if (game.kind === 'crypto') {
     return {
       legId: makeLegId({ league: request.league, gameId: request.gameId, marketType: request.marketType, selection: request.selection, line: quote.line, source: quote.source }),

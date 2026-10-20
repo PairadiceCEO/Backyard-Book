@@ -7,6 +7,8 @@ import { HttpError } from './http.js';
 import { getOrRefresh } from './cache.js';
 import { CUSTOM_BOARD_ID, CUSTOM_BOARD_KEY, buildBoard, buildCustomBoard } from './board.js';
 import { buildLadders, compactFromEvents, fetchEvent } from './sources/kalshi.js';
+import { loadGameProps } from './props.js';
+import { propsOpen } from '../shared/props.js';
 
 const TTL_MS = 30 * 1000;
 
@@ -14,7 +16,8 @@ function emptyLadders() {
   return { spreads: { home: [], away: [] }, totals: [] };
 }
 
-export async function getGameDetail(leagueId, gameId, { fetchImpl = fetch, now = () => new Date() } = {}) {
+// props: true → the game's player props page instead of its alternate lines (pre-game only; Kalshi, 30 s memory cache).
+export async function getGameDetail(leagueId, gameId, { fetchImpl = fetch, now = () => new Date(), props = false } = {}) {
   const boardResult =
     leagueId === CUSTOM_BOARD_ID
       ? await getOrRefresh(CUSTOM_BOARD_KEY, TTL_MS, () => buildCustomBoard({ now: now() }))
@@ -22,6 +25,18 @@ export async function getGameDetail(leagueId, gameId, { fetchImpl = fetch, now =
   const board = boardResult.value;
   const game = board.games.find((g) => g.id === String(gameId));
   if (!game) throw new HttpError(404, 'GAME_NOT_FOUND', 'That game is no longer on the board.');
+  const base = {
+    league: leagueId,
+    fetchedAt: new Date(boardResult.fetchedAtMs).toISOString(),
+    stale: boardResult.stale === true,
+    kalshiStatus: board.kalshiStatus || 'ok',
+    game,
+  };
+  const nowMs = now().getTime();
+  if (props) {
+    const loaded = await loadGameProps(game, { nowMs, fetchImpl });
+    return { ...base, props: loaded, serverNow: nowMs };
+  }
 
   let ladders = emptyLadders();
   const priced = game.source === 'espn' && game.state !== 'post' && !game.canceled && game.kalshi;
@@ -48,12 +63,17 @@ export async function getGameDetail(leagueId, gameId, { fetchImpl = fetch, now =
     ladders = buildLadders(compact, game.kalshi.sideByCode);
   }
 
-  return {
-    league: leagueId,
-    fetchedAt: new Date(boardResult.fetchedAtMs).toISOString(),
-    stale: boardResult.stale === true,
-    kalshiStatus: board.kalshiStatus || 'ok',
-    game,
-    ladders,
-  };
+  // The game page shows a "Player props" button only before the game and when at least one prop is tradable.
+  let propsCount = 0;
+  if (game.source === 'espn' && propsOpen(game, nowMs) && game.kalshi?.gameEvent) {
+    try {
+      const loaded = await loadGameProps(game, { nowMs, fetchImpl });
+      // Distinct players (one player usually has several stat tabs).
+      propsCount = new Set(loaded.tabs.flatMap((tab) => tab.players.map((p) => `${p.team ?? ''}|${p.name}`))).size;
+    } catch (err) {
+      console.error(`props count ${leagueId}/${gameId} failed:`, err.message);
+    }
+  }
+
+  return { ...base, ladders, propsCount };
 }

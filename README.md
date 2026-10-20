@@ -74,6 +74,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 
 - **Before any game in the bet starts:** stake × 0.90.
 - **Once a game has started:** potential payout × the Kalshi bid for every undecided leg × 0.90 (legs already won count as 1; pushed/voided legs drop out of the payout). DraftKings lines use the Kalshi market at the same line; with no exact match or no bid, it shows "Cash out unavailable right now".
+- **Crypto bets:** potential payout × the fresh Kalshi bid for your side × 0.90 (no pre-game mode); not in the last 60 s, with no bid, a wide price, or once Kalshi has a result.
 - No cash out once a leg has lost, or when every game is final (settlement pays it). Never on a bet with a custom-game or Challenge leg (singles or parlays, before or after the start); My Bets shows no cash out row on those. Battles have no cash out.
 - Playoff games are matched to Kalshi by series game number (a postponed game keeps its own markets); when the match is unclear, the game gets no Kalshi price.
 
@@ -118,6 +119,13 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
 
+## 0.14.0
+
+- **Crypto cash out:** open crypto bets show "Live cash out value" = potential payout × the fresh Kalshi bid for your side × 0.90, until 60 s before the market closes.
+- **Crypto chart:** always the last 60 minutes, ending now; close times shown as text with countdowns above it.
+- **Player props** (Kalshi, pre-game only): a **Player props** button on a game's page opens tabs per stat, one row per player with a line wheel over that player's thresholds and **50+** / **Under 50** buttons. Props close at the game's start, can't be parlayed with another pick from the same game, and are settled by Kalshi's result (a player who doesn't play is a void).
+- **Line wheel:** alternate spreads and totals (and each props player) are one swipeable row of lines; the middle line is selected and its two bets sit underneath. ‹ › and the arrow keys step one line.
+
 ## 0.13.0
 
 - **Odds changes:** if a pick's price moved 50 points or more from what you saw (−100 and +100 count as the same point), nothing is placed and a popup shows "Old → New" with **Accept new odds** / **Remove pick(s)**. Smaller moves are accepted at the new price as before.
@@ -129,7 +137,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 
 - **Crypto tab** on the Sportsbook (after the leagues, before Custom): one card per coin with the live Coinbase price, Kalshi's 15-minute **Up / Down** market (target, countdown) and the hourly **Above / Below** main strike (the strike whose YES price is nearest $0.50). Tap a card for the coin's page: big price, this hour's 1-minute chart (hand-built SVG) with the 15-min target and hourly strike drawn in and both close times marked, the Up/Down buttons and every hourly strike.
 - Coins and series live in `shared/crypto/coins.js` (BTC, ETH, SOL, XRP, DOGE, BNB, HYPE with both kinds; NEAR and ZEC 15-minute only). Range/bracket and daily series are left out.
-- Betting: singles only; priced at the Kalshi ask fetched fresh at bet time; closes 60 s before each market's close; no cash out. Kalshi's own result settles the bet (voided → stake back) in the normal settlement runs.
+- Betting: singles only; priced at the Kalshi ask fetched fresh at bet time; closes 60 s before each market's close. Cash out (0.14.0): potential payout × the fresh Kalshi bid for your side × 0.90, any time from the market's open until 60 s before its close. Kalshi's own result settles the bet (voided → stake back) in the normal settlement runs.
 - Crypto data is cached in function memory for 10 s and never written to Firestore.
 
 ## Challenges (batch C)

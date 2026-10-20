@@ -5,6 +5,7 @@
 //   custom game → its Firestore doc, closed once the server clock reaches the start time
 //   Challenge   → its Firestore doc: open (admin-approved) and before its close time on the server clock
 //   crypto      → the Kalshi market itself, fetched fresh (server/crypto.js priceCryptoLeg)
+//   prop        → the Kalshi prop market, fetched fresh, pre-game only (server/props.js pricePropLeg)
 //   pre-game    → fresh ESPN odds; if ESPN doesn't price it, the board's Kalshi market, re-fetched
 //   live        → the Kalshi market (re-fetched); if the board still held ESPN's pre-game line,
 //                 the game's live Kalshi market is looked up fresh
@@ -29,6 +30,8 @@ import { makeQuote } from '../shared/oddsMath.js';
 import { CHALLENGE_LEAGUE, CHALLENGE_MARKET, challengeDocId, isChallengeLeg } from '../shared/challenges.js';
 import { isCryptoLeg } from '../shared/crypto/coins.js';
 import { priceCryptoLeg } from './crypto.js';
+import { pricePropLeg } from './props.js';
+import { PROP_MARKET } from '../shared/props.js';
 
 const BOARD_TTL_MS = 30 * 1000;
 
@@ -158,6 +161,7 @@ export async function priceLeg(leg, ctx) {
 
   const board = await ctx.board(league);
   const boardGame = board?.games?.find((g) => g.id === String(gameId)) ?? null;
+  if (marketType === PROP_MARKET) return pricePropLeg(leg, ctx, { fresh, boardGame });
   const boardQuote = boardGame?.markets?.[marketType]?.[selection] ?? null;
 
   // Exact Kalshi market chosen by the player (main or alternate line). The server confirms the

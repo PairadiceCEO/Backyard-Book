@@ -236,7 +236,10 @@ test('game detail: ladders from the board cache, no extra Kalshi calls; finished
   await assert.rejects(getGameDetail('nfl', 'nope', { fetchImpl: routedFetch() }), (err) => err.status === 404);
 });
 
-test('/api/board never sends the alternates copy; ?game= returns ladders', async () => {
+test('/api/board never sends the alternates copy; ?game= returns ladders', async (t) => {
+  // The handler reads the real clock; pin it to the fixtures' week (Kalshi events dated Oct 18 fall outside the
+  // 1-day lookback window on later dates).
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-16T20:00:00Z') });
   cache.clearMemoryCache();
   store.clear();
   const realFetch = globalThis.fetch;

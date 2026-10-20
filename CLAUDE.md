@@ -62,8 +62,9 @@ Vercel deploys the live site from `main`.
 - Crapless 2/12 Odds pay 5:1.
 - The $60 craps table total includes Odds.
 - Payouts round down to the cent.
-- Cash out: pre-game = stake × 0.90; live = potential payout × Kalshi bid(s) × 0.90. Never on a bet containing a
-  custom-game, Challenge or crypto leg; Battles have no cash out.
+- Cash out: pre-game = stake × 0.90; live = potential payout × Kalshi bid(s) × 0.90; crypto = potential payout × Kalshi
+  bid × 0.90 (no cash out in the last 60 s). Never on a bet containing a custom-game or Challenge leg; Battles have no
+  cash out.
 - Kalshi matching picks the closest date; settlement finds games by ESPN game id, never by team names.
 - Kalshi matching: playoff games match by series game number; when unsure, no price.
 - A line change returns LINE_CHANGED (the player must accept); a price change on the same line under 50 points is
@@ -71,6 +72,8 @@ Vercel deploys the live site from `main`.
   confirms.
 - Win rate = won ÷ (won + lost). Pushes, voids, cash outs and Battles don't count; Challenge bets do.
 - A Challenge's poster may bet on it; that bet is tagged "Poster's bet".
+- Player props: Kalshi only, pre-game only (close at game start), matched by the game's winner-event ticker suffix,
+  scratched/non-binary results are void; no same-game parlays with a prop.
 - Crypto bets: singles only, betting closes 60 s before the market closes, settled by Kalshi's result (never our chart).
 
 ## Working with Will

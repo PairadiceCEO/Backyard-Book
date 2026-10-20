@@ -23,6 +23,7 @@ async function routeApi(page, mode) {
         if (u.searchParams.get('game')) return json(route, 200, F.cryptoCoin(u.searchParams.get('game'), { noChart: Boolean(mode.noChart) }));
         return json(route, 200, F.cryptoBoard());
       }
+      if (u.searchParams.get('game') && u.searchParams.get('props')) return json(route, 200, F.propsPage(u.searchParams.get('game'), { none: Boolean(mode.noProps) }));
       if (u.searchParams.get('game')) return json(route, 200, F.gameDetail(u.searchParams.get('game')));
       if (u.searchParams.get('league') === 'custom') return json(route, 200, F.customBoard());
       if (u.searchParams.get('league') === 'live') return json(route, 200, F.liveBoard(Boolean(mode.noLive)));
@@ -42,6 +43,7 @@ async function routeApi(page, mode) {
       return json(route, 200, { ok: true, quotes: {
         b1: { available: true, valueCents: mode.quoteCents ?? 2147, mode: 'live' },
         b2: { available: false, valueCents: null, reason: 'Cash out closes once a custom game starts.' },
+        b9: { available: true, valueCents: 1116, mode: 'live' },
       } });
     }
     if (u.pathname === '/api/bets' && body?.action === 'cashout') {
@@ -190,6 +192,13 @@ const scenarios = [
   S('crypto-coin-closing', '/sportsbook/crypto/eth', { admin: false, user: 'u1' }),
   S('crypto-coin-15m-only', '/sportsbook/crypto/near', { admin: false, user: 'u1' }),
   S('crypto-coin-no-chart', '/sportsbook/crypto/sol', { admin: false, user: 'u1', noChart: true }),
+  S('game-detail-wheels-moved', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: async (p) => { const w = p.locator('.line-wheel'); await w.nth(0).getByRole('button', { name: /^Higher/ }).click(); await w.nth(0).getByRole('button', { name: /^Higher/ }).click(); await w.nth(1).getByRole('button', { name: /^Lower/ }).click(); await p.waitForTimeout(500); } }),
+  S('game-detail-wheel-pick', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: async (p) => { const w = p.locator('.line-wheel').nth(1); await w.getByRole('button', { name: /^Higher/ }).click(); await p.waitForTimeout(400); await w.locator('.wheel-buttons .odds-button').first().click(); await w.getByRole('button', { name: /^Lower/ }).click(); await p.waitForTimeout(500); } }),
+  S('props-page', '/sportsbook/nfl/401/props', { admin: false, user: 'u1' }),
+  S('props-page-pick', '/sportsbook/nfl/401/props', { admin: false, user: 'u1', act: async (p) => { const w = p.locator('.line-wheel').first(); await w.getByRole('button', { name: /^Higher/ }).click(); await p.waitForTimeout(400); await w.locator('.wheel-buttons .odds-button').first().click(); await p.waitForTimeout(300); } }),
+  S('props-page-td', '/sportsbook/nfl/401/props', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: 'TD' }).click(); await p.getByLabel('Search players').fill('mixon'); await p.waitForTimeout(300); } }),
+  S('props-page-none', '/sportsbook/nfl/401/props', { admin: false, user: 'u1', noProps: true }),
+  S('props-parlay-same-game', '/sportsbook/nfl/401/props', { admin: false, user: 'u1', act: async (p) => { await p.locator('.line-wheel').first().locator('.wheel-buttons .odds-button').first().click(); await p.locator('.line-wheel').nth(1).locator('.wheel-buttons .odds-button').nth(1).click(); await openSlip(p); await p.getByRole('tab', { name: 'Parlay' }).click(); await p.waitForTimeout(250); } }),
   S('cr-solo', '/casino/craps', { admin: false, user: 'u1', fs: withTable(crSolo) }),
   S('sportsbook-custom', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: /^Custom/ }).click(); await p.waitForTimeout(400); } }),
   S('battle-new', '/sportsbook/battles/new', { admin: false, user: 'u1', act: async (p) => { await p.getByLabel('Title').fill('Saturday golf'); await p.getByRole('button', { name: 'Dan' }).click(); await p.getByRole('button', { name: 'Ann' }).click(); await p.getByRole('button', { name: '70 / 30' }).click(); await p.waitForTimeout(150); } }),

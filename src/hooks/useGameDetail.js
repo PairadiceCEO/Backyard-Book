@@ -48,6 +48,7 @@ export function useGameDetail(league, gameId) {
   return {
     game: data ? data.game : null,
     ladders: data ? data.ladders : null,
+    propsCount: data ? Number(data.propsCount) || 0 : 0,
     fetchedAt: data ? data.fetchedAt : null,
     stale: data ? data.stale === true : false,
     kalshiStatus: data ? data.kalshiStatus || 'ok' : 'ok',

@@ -3,13 +3,15 @@
 import { REQUEST_ID_PATTERN } from './constants.js';
 import { decimalToAmerican } from './oddsMath.js';
 import { cryptoPickLabel } from './crypto/coins.js';
+import { PROP_PARLAY_MESSAGE, parsePropTicker, propPickLabel } from './props.js';
 
 export const MIN_STAKE_CENTS = 100; // $1.00
 export const MAX_LEGS = 10;
 export const MIN_PARLAY_LEGS = 2;
 // 'challenge' = a player-posted Challenge (selection = one of its outcome ids, no line).
 // 'crypto' = a Kalshi crypto market (selection yes = Up / above, no = Down / below; line = its strike).
-export const MARKET_TYPES = ['moneyline', 'spread', 'total', 'challenge', 'crypto'];
+// 'prop' = a Kalshi player prop (selection yes = N or more, no = fewer; line = its floor_strike; the game is the ESPN game).
+export const MARKET_TYPES = ['moneyline', 'spread', 'total', 'challenge', 'crypto', 'prop'];
 
 const SELECTIONS = {
   moneyline: ['home', 'away'],
@@ -17,12 +19,20 @@ const SELECTIONS = {
   total: ['over', 'under'],
   challenge: ['o1', 'o2', 'o3', 'o4', 'o5', 'o6'],
   crypto: ['yes', 'no'],
+  prop: ['yes', 'no'],
 };
 
 // Spread, total and crypto picks carry a line (a crypto line is the market's strike, so another strike is a
 // different bet); moneyline and Challenge picks don't.
 export function marketHasLine(marketType) {
-  return marketType === 'spread' || marketType === 'total' || marketType === 'crypto';
+  return marketType === 'spread' || marketType === 'total' || marketType === 'crypto' || marketType === 'prop';
+}
+
+export { PROP_PARLAY_MESSAGE };
+
+// A prop pick's Kalshi ticker, whether it comes from the server's request shape or the phone's slip.
+function propTickerOf(leg) {
+  return leg?.kalshiTicker ?? leg?.kalshi?.ticker ?? leg?.sourceRef?.ticker ?? '';
 }
 
 export const CRYPTO_PARLAY_MESSAGE = "Crypto picks are singles only: they can't go in a parlay.";
@@ -32,15 +42,17 @@ export function isValidSelection(marketType, selection) {
 }
 
 // One leg per game + market type: blocks both moneylines, both spread sides, over + under, and two
-// outcomes of the same Challenge.
+// outcomes of the same Challenge. Props: one leg per player per stat (another threshold or side replaces it).
 export function conflictKey(leg) {
+  if (leg.marketType === 'prop') return `${leg.gameId}|prop|${parsePropTicker(propTickerOf(leg))?.playerKey ?? propTickerOf(leg)}`;
   return `${leg.gameId}|${leg.marketType}`;
 }
 
 // Unique id for one priced pick. Spread/total ids include the line and source, so the main line and
 // each alternate line (or the same number from a different source) are separate picks.
-export function makeLegId({ league, gameId, marketType, selection, line = null, source = '' }) {
-  const base = `${league}:${gameId}:${marketType}:${selection}`;
+// Props include their market ticker (two players can share a line).
+export function makeLegId({ league, gameId, marketType, selection, line = null, source = '', ticker = '' }) {
+  const base = marketType === 'prop' ? `${league}:${gameId}:prop:${ticker}:${selection}` : `${league}:${gameId}:${marketType}:${selection}`;
   if (!marketHasLine(marketType)) return source ? `${base}:${source}` : base;
   return `${base}:${line}${source ? `:${source}` : ''}`;
 }
@@ -56,6 +68,12 @@ export function hasMoneylineSpreadConflict(legs) {
     byGame.set(leg.gameId, types);
   }
   return [...byGame.values()].some((types) => types.has('moneyline') && types.has('spread'));
+}
+
+// Parlay-only rule: a prop can't be parlayed with any other leg (prop or team market) from the same game.
+export function hasPropSameGame(legs) {
+  const props = legs.filter((l) => l.marketType === 'prop');
+  return props.some((p) => legs.some((other) => other !== p && String(other.gameId) === String(p.gameId)));
 }
 
 export function combinedDecimal(decimals) {
@@ -104,6 +122,9 @@ export function slipProblems(slip, { balanceCents = Infinity } = {}) {
   if (slip?.mode === 'parlay' && legs.some((leg) => leg.marketType === 'crypto')) {
     problems.push(CRYPTO_PARLAY_MESSAGE);
   }
+  if (slip?.mode === 'parlay' && hasPropSameGame(legs)) {
+    problems.push(PROP_PARLAY_MESSAGE);
+  }
 
   let total = 0;
   if (slip?.mode === 'singles') {
@@ -143,8 +164,9 @@ export function formatSignedLine(line) {
 
 // Human label for a pick, e.g. "Jaguars -2.5", "Over 42.5", "Texans moneyline". A Challenge pick is its
 // outcome's name (outcomeLabel); a crypto pick "BTC Up (≥ $81,931.55, 7:30 PM)" (crypto: { symbol, kind, closeTime }).
-export function pickLabel({ marketType, selection, line, homeName, awayName, outcomeLabel = '', crypto = null }) {
+export function pickLabel({ marketType, selection, line, homeName, awayName, outcomeLabel = '', crypto = null, prop = null }) {
   if (marketType === 'challenge') return outcomeLabel || selection;
+  if (marketType === 'prop') return propPickLabel({ ...(prop ?? {}), selection });
   if (marketType === 'crypto') return cryptoPickLabel({ ...(crypto ?? {}), selection, line });
   if (marketType === 'total') return `${selection === 'over' ? 'Over' : 'Under'} ${line}`;
   const team = selection === 'home' ? homeName : awayName;
@@ -153,12 +175,13 @@ export function pickLabel({ marketType, selection, line, homeName, awayName, out
 }
 
 // ---------- Cash out eligibility ----------
-// Cash out exists only for bets whose every leg is a real game with a market price. A bet with any leg on a
-// custom game ("custom:"), a Challenge ("challenge:") or a crypto market ("crypto:") can never be cashed out,
-// before or after the start, singles and parlays alike. Battles have no cash out at all. Shared by the server
-// (authoritative) and the phone (which then shows no cash out row and asks for no quote).
-export const NO_CASHOUT_PREFIXES = ['custom:', 'challenge:', 'crypto:'];
-export const NO_CASHOUT_REASON = 'No cash out on bets with a custom game, Challenge or crypto pick.';
+// Cash out exists only for bets whose every leg has a market price. A bet with any leg on a custom game
+// ("custom:") or a Challenge ("challenge:") can never be cashed out, before or after the start, singles and
+// parlays alike. Battles have no cash out at all. Crypto singles can (0.14.0): live only, from the fresh Kalshi bid
+// (server/cashout.js quoteCryptoCashout). Shared by the server (authoritative) and the phone (which shows no cash
+// out row and asks for no quote on a bet that can never be cashed out).
+export const NO_CASHOUT_PREFIXES = ['custom:', 'challenge:'];
+export const NO_CASHOUT_REASON = 'No cash out on bets with a custom game or Challenge pick.';
 
 export function legBlocksCashout(leg) {
   const gameId = String(leg?.gameId ?? '');

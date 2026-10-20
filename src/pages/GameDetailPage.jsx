@@ -1,71 +1,71 @@
-// One game: the card with main lines, then every posted alternate spread and total (Kalshi).
+// One game: the card with main lines, then one line wheel for the alternate spreads and one for the alternate totals
+// (Kalshi), and a "Player props" button before the game when Kalshi has tradable props for it.
 
+import { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import EditLog from '../components/EditLog.jsx';
 import GameCard from '../components/GameCard.jsx';
-import PickButton from '../components/PickButton.jsx';
+import LineWheel from '../components/LineWheel.jsx';
 import UpdatedAgo from '../components/UpdatedAgo.jsx';
 import { EmptyState, ErrorState, LoadingState } from '../components/StatusViews.jsx';
 import { useGameDetail } from '../hooks/useGameDetail.js';
+import { makePick } from '../lib/betSlipReducer.js';
 import { formatSpreadLine } from '../lib/format.js';
 
-function SpreadLadder({ game, side, quotes }) {
-  const team = game[side];
-  return (
-    <div className="ladder-column">
-      <h4 className="ladder-team">{team.shortName}</h4>
-      {quotes.length === 0 ? <p className="muted small">None posted</p> : null}
-      <div className="ladder-list">
-        {quotes.map((quote) => (
-          <PickButton
-            key={`${quote.ref?.ticker}:${quote.ref?.side}`}
-            game={game}
-            marketType="spread"
-            selection={side}
-            quote={quote}
-            lineLabel={formatSpreadLine(quote.line)}
-            ariaLabel={`${team.shortName} ${formatSpreadLine(quote.line)}`}
-          />
-        ))}
-      </div>
-    </div>
-  );
+const sameLine = (a, b) => Math.abs(Number(a) - Number(b)) < 1e-9;
+
+// Spread wheel items: chips show the line from the home team's side (−3.5, −2.5, +1.5…), lowest to highest; the
+// buttons are the home team and the away team at that line. Only lines with both sides tradable.
+export function spreadItems(game, ladders) {
+  if (!game || !ladders) return [];
+  const items = [];
+  for (const home of ladders.spreads.home) {
+    const away = ladders.spreads.away.find((q) => sameLine(q.line, -home.line));
+    if (!away) continue;
+    const homeText = `${game.home.shortName} ${formatSpreadLine(home.line)}`;
+    const awayText = `${game.away.shortName} ${formatSpreadLine(away.line)}`;
+    items.push({
+      key: `s${home.line}`,
+      value: home.line,
+      chip: formatSpreadLine(home.line),
+      aria: `Spread ${homeText}`,
+      sides: [
+        { id: 'home', text: homeText, short: homeText, quote: home, pick: makePick(game, 'spread', 'home', home) },
+        { id: 'away', text: awayText, short: awayText, quote: away, pick: makePick(game, 'spread', 'away', away) },
+      ],
+    });
+  }
+  return items.sort((a, b) => a.value - b.value);
 }
 
-function TotalsLadder({ game, rows }) {
-  if (rows.length === 0) return <p className="muted small">No alternate totals posted right now.</p>;
-  return (
-    <div className="totals-ladder">
-      <div className="totals-row totals-head muted small">
-        <span>Line</span>
-        <span>Over</span>
-        <span>Under</span>
-      </div>
-      {rows.map((row) => (
-        <div key={row.line} className="totals-row">
-          <span className="totals-line">{row.line}</span>
-          {row.over ? (
-            <PickButton game={game} marketType="total" selection="over" quote={row.over} lineLabel={`O ${row.line}`} ariaLabel={`Over ${row.line}`} />
-          ) : (
-            <span />
-          )}
-          {row.under ? (
-            <PickButton game={game} marketType="total" selection="under" quote={row.under} lineLabel={`U ${row.line}`} ariaLabel={`Under ${row.line}`} />
-          ) : (
-            <span />
-          )}
-        </div>
-      ))}
-    </div>
-  );
+export function totalItems(game, ladders) {
+  if (!game || !ladders) return [];
+  return ladders.totals
+    .filter((row) => row.over && row.under)
+    .map((row) => ({
+      key: `t${row.line}`,
+      value: row.line,
+      chip: String(row.line),
+      aria: `Total ${row.line}`,
+      sides: [
+        { id: 'over', text: `Over ${row.line}`, short: 'Over', quote: row.over, pick: makePick(game, 'total', 'over', row.over) },
+        { id: 'under', text: `Under ${row.line}`, short: 'Under', quote: row.under, pick: makePick(game, 'total', 'under', row.under) },
+      ],
+    }))
+    .sort((a, b) => a.value - b.value);
 }
 
 export default function GameDetailPage() {
   const { league, gameId } = useParams();
-  const { game, ladders, fetchedAt, stale, kalshiStatus, error, notFound, loading, retry } = useGameDetail(league, gameId);
+  const { game, ladders, propsCount, fetchedAt, stale, kalshiStatus, error, notFound, loading, retry } = useGameDetail(league, gameId);
 
   const finished = game && (game.state === 'post' || game.canceled);
-  const hasSpreads = ladders && (ladders.spreads.home.length > 0 || ladders.spreads.away.length > 0);
+  const spreads = useMemo(() => spreadItems(game, ladders), [game, ladders]);
+  const totals = useMemo(() => totalItems(game, ladders), [game, ladders]);
+  // The wheels start on the main board line.
+  const mainSpread = game?.markets?.spread?.home?.line ?? null;
+  const mainTotal = game?.markets?.total?.over?.line ?? null;
+  const showProps = game && game.source === 'espn' && game.state === 'pre' && !game.canceled && propsCount > 0;
 
   return (
     <section className="page">
@@ -106,15 +106,18 @@ export default function GameDetailPage() {
           ) : null}
           {game.source === 'custom' ? <EditLog edits={game.edits} /> : null}
 
+          {showProps ? (
+            <Link to={`/sportsbook/${encodeURIComponent(game.league)}/${encodeURIComponent(game.id)}/props`} className="btn btn-primary props-link">
+              Player props ({propsCount} players) ›
+            </Link>
+          ) : null}
+
           {!finished && game.source !== 'custom' ? (
             <>
               <div className="card">
                 <h3>Alternate spreads {game.state === 'in' ? <span className="muted small">· live · Kalshi</span> : <span className="muted small">· Kalshi</span>}</h3>
-                {hasSpreads ? (
-                  <div className="ladder-grid">
-                    <SpreadLadder game={game} side="away" quotes={ladders.spreads.away} />
-                    <SpreadLadder game={game} side="home" quotes={ladders.spreads.home} />
-                  </div>
+                {spreads.length ? (
+                  <LineWheel key={`spread-${game.id}`} items={spreads} initialKey={mainSpread === null ? null : `s${mainSpread}`} initialValue={mainSpread} label="spread" />
                 ) : (
                   <p className="muted small">No alternate spreads posted right now.</p>
                 )}
@@ -122,12 +125,16 @@ export default function GameDetailPage() {
 
               <div className="card">
                 <h3>Alternate totals {game.state === 'in' ? <span className="muted small">· live · Kalshi</span> : <span className="muted small">· Kalshi</span>}</h3>
-                <TotalsLadder game={game} rows={ladders ? ladders.totals : []} />
+                {totals.length ? (
+                  <LineWheel key={`total-${game.id}`} items={totals} initialKey={mainTotal === null ? null : `t${mainTotal}`} initialValue={mainTotal} label="total" />
+                ) : (
+                  <p className="muted small">No alternate totals posted right now.</p>
+                )}
               </div>
 
               <p className="muted small">
-                Only lines Kalshi has actually posted and that are trading are shown. A slip can hold one spread and one total per game;
-                picking another replaces the first.
+                Swipe a wheel (or use ‹ ›) to pick a line. Only lines Kalshi has actually posted and that are trading are shown. A slip can
+                hold one spread and one total per game; picking another replaces the first.
               </p>
             </>
           ) : null}

@@ -5,6 +5,7 @@
 // GET /api/board?league=crypto&game={coin}                → one coin: full hourly ladder and 1-minute candles
 //     (crypto is cached in function memory for 10 s only, never in Firestore)
 // GET /api/board?league=…&game={id}                       → one game plus every posted alternate line
+// GET /api/board?league=…&game={id}&props=1               → one game's player props (pre-game; Kalshi; memory 30 s)
 // All read one 30-second cache per league shared by all players. The cache keeps finished games (settlement,
 // pricing and game pages from My Bets need them); only the lists leave them out.
 
@@ -43,7 +44,7 @@ export default withHandler(['GET'], async (req) => {
 
   try {
     if (crypto) return gameId ? await getCryptoCoin(gameId) : await getCryptoBoard();
-    if (gameId) return await getGameDetail(leagueId, gameId);
+    if (gameId) return await getGameDetail(leagueId, gameId, { props: !custom && readParam(req, 'props') === '1' });
 
     if (live) {
       const board = await getLiveBoard();
