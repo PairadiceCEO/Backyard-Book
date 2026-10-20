@@ -3,7 +3,7 @@
 import { REQUEST_ID_PATTERN } from './constants.js';
 import { decimalToAmerican } from './oddsMath.js';
 import { cryptoPickLabel } from './crypto/coins.js';
-import { PROP_PARLAY_MESSAGE, parsePropTicker, propPickLabel } from './props.js';
+import { parsePropTicker, propConflictMessage, propPickLabel, propSeries } from './props.js';
 
 export const MIN_STAKE_CENTS = 100; // $1.00
 export const MAX_LEGS = 10;
@@ -28,11 +28,27 @@ export function marketHasLine(marketType) {
   return marketType === 'spread' || marketType === 'total' || marketType === 'crypto' || marketType === 'prop';
 }
 
-export { PROP_PARLAY_MESSAGE };
+export { propConflictMessage };
 
 // A prop pick's Kalshi ticker, whether it comes from the server's request shape or the phone's slip.
 function propTickerOf(leg) {
   return leg?.kalshiTicker ?? leg?.kalshi?.ticker ?? leg?.sourceRef?.ticker ?? '';
+}
+
+// One player in one stat: the series + the ticker's player segment ("KXNFLRSHYDS-CLEDWATSON4"), never a display name.
+// An unparseable ticker counts as its own key (so it can still never appear twice).
+export function propStatKey(leg) {
+  if (leg?.marketType !== 'prop') return null;
+  const ticker = propTickerOf(leg);
+  return parsePropTicker(ticker)?.statKey ?? `?${ticker}`;
+}
+
+// The message for a second leg on the same player and stat. The stat comes from the series config; the player's name
+// from the pick (only for the text: the decision is made on the ticker).
+export function propConflictMessageFor(leg) {
+  const series = parsePropTicker(propTickerOf(leg))?.series;
+  const stat = propSeries(series)?.stat ?? leg?.prop?.stat ?? '';
+  return propConflictMessage({ player: leg?.prop?.player ?? leg?.playerName ?? '', stat });
 }
 
 export const CRYPTO_PARLAY_MESSAGE = "Crypto picks are singles only: they can't go in a parlay.";
@@ -42,9 +58,10 @@ export function isValidSelection(marketType, selection) {
 }
 
 // One leg per game + market type: blocks both moneylines, both spread sides, over + under, and two
-// outcomes of the same Challenge. Props: one leg per player per stat (another threshold or side replaces it).
+// outcomes of the same Challenge. Props: one leg per player per stat (propStatKey); in singles another threshold or
+// side replaces it, in a parlay it is refused with propConflictMessageFor (betSlipReducer, slipProblems).
 export function conflictKey(leg) {
-  if (leg.marketType === 'prop') return `${leg.gameId}|prop|${parsePropTicker(propTickerOf(leg))?.playerKey ?? propTickerOf(leg)}`;
+  if (leg.marketType === 'prop') return `prop|${propStatKey(leg)}`;
   return `${leg.gameId}|${leg.marketType}`;
 }
 
@@ -68,12 +85,6 @@ export function hasMoneylineSpreadConflict(legs) {
     byGame.set(leg.gameId, types);
   }
   return [...byGame.values()].some((types) => types.has('moneyline') && types.has('spread'));
-}
-
-// Parlay-only rule: a prop can't be parlayed with any other leg (prop or team market) from the same game.
-export function hasPropSameGame(legs) {
-  const props = legs.filter((l) => l.marketType === 'prop');
-  return props.some((p) => legs.some((other) => other !== p && String(other.gameId) === String(p.gameId)));
 }
 
 export function combinedDecimal(decimals) {
@@ -110,7 +121,8 @@ export function slipProblems(slip, { balanceCents = Infinity } = {}) {
     }
     const key = conflictKey(leg);
     if (seen.has(key)) {
-      problems.push('Only one pick per game and market type is allowed.');
+      // A second leg on the same player and stat in a parlay gets the named message (0.15.0).
+      problems.push(slip?.mode === 'parlay' && leg.marketType === 'prop' ? propConflictMessageFor(leg) : 'Only one pick per game and market type is allowed.');
       break;
     }
     seen.add(key);
@@ -121,9 +133,6 @@ export function slipProblems(slip, { balanceCents = Infinity } = {}) {
   }
   if (slip?.mode === 'parlay' && legs.some((leg) => leg.marketType === 'crypto')) {
     problems.push(CRYPTO_PARLAY_MESSAGE);
-  }
-  if (slip?.mode === 'parlay' && hasPropSameGame(legs)) {
-    problems.push(PROP_PARLAY_MESSAGE);
   }
 
   let total = 0;

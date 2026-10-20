@@ -217,6 +217,147 @@ await check('craps: the shooter\'s dice tumble from the tap and land on the repl
   await context.close();
 });
 
+// ---------- 0.15.0: Craps / Crapless without scrolling ----------
+// At scrollY 0, with the app's nav showing, the Roll button, the chip rack, Take down, Undo / Clear and every betting
+// spot must be fully inside the visible area (below the sticky top bar, above the phone's bottom nav). At 320×568 only
+// the docked bar (chips, Take down, Roll) is checked: it must sit fully on screen above the bottom nav.
+const SIZES = [[375, 667], [390, 844], [414, 896], [1280, 720], [1440, 900], [320, 568]];
+// Worst cases: my turn to shoot (Roll shows), a Point on with the countdown, Come bets on numbers, every spot in use.
+const crapsWorst = (game) => {
+  const crapless = game === 'crapless';
+  const bets = crapless
+    ? { pass: 500, odds: 1000, dontPass: 0, dontOdds: 0, come: 300, field: 200, place: { 2: 200, 12: 200, 6: 600 }, hard: { 4: 100, 10: 100 }, comeOn: { 3: { bet: 300, odds: 300 }, 9: { bet: 200, odds: 0 }, 11: { bet: 100, odds: 0 } } }
+    : { pass: 500, odds: 1000, dontPass: 0, dontOdds: 0, come: 300, field: 200, place: { 6: 600, 8: 600 }, hard: { 6: 100, 8: 100 }, comeOn: { 5: { bet: 300, odds: 600 }, 9: { bet: 200, odds: 0 }, 10: { bet: 100, odds: 0 } } };
+  const point = crapless ? 11 : 6;
+  return { id: game, game, epoch: 'z', rollSeq: 9, point, shooter: 1, deadline: now() + 25000, waiting: false, lap: 0, moneySeq: 0, version: 9, updatedAt: now() - 1000,
+    rolls: [8, 6, 7, 4, 9, 9, 5, 11, 7, 6, 8, 3].map((t) => ({ d: [Math.min(6, t - 1), Math.max(1, t - Math.min(6, t - 1))], t, k: t === 7 ? 'sevenOut' : 'roll' })),
+    lastRoll: { dice: crapless ? [5, 6] : [5, 1], total: point, at: now() - 60000, kind: 'point', pointBefore: null, seq: 9, shooter: 1 },
+    seats: [seat('u0', 'Will', { bets: { pass: 500, dontPass: 0, odds: 0, field: 0, place: {} }, lastRoll: null }), seat('u1', 'Mike the Bookie Slayer', { bets, lastRoll: null }), null, seat('u2', 'Dan', { bets: { pass: 0, dontPass: 0, odds: 0, field: 300, place: {} }, lastRoll: null }), null] };
+};
+async function openCraps(path, tables, { width = 375, height = 800, uid = 'u1', onCasino = null, trackMedia = false } = {}) {
+  const phone = width <= 640;
+  const context = await browser.newContext({ viewport: { width, height }, isMobile: phone, hasTouch: phone });
+  const page = await context.newPage();
+  if (trackMedia) {
+    // Count media-query listeners added and removed (the dock's subscription).
+    await page.addInitScript(() => {
+      const orig = window.matchMedia;
+      window.__mq = { added: 0, removed: 0 };
+      window.matchMedia = (q) => {
+        const list = orig.call(window, q);
+        const add = list.addEventListener.bind(list);
+        const remove = list.removeEventListener.bind(list);
+        list.addEventListener = (...a) => { window.__mq.added += 1; add(...a); };
+        list.removeEventListener = (...a) => { window.__mq.removed += 1; remove(...a); };
+        return list;
+      };
+    });
+  }
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: tables } });
+  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route('**/api/**', async (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/casino' && onCasino) return onCasino(route, route.request().postDataJSON());
+    if (u.pathname === '/api/settle') return json(route, 200, { ran: false });
+    return json(route, 200, { ok: true, serverNow: now() });
+  });
+  await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.craps-bar');
+  await page.waitForTimeout(500);
+  return { page, context };
+}
+// Boxes of the must-see controls and whether each is fully inside the visible area at scrollY 0.
+function measureCraps(page, dockedOnly) {
+  return page.evaluate((dockedOnly) => {
+    window.scrollTo(0, 0);
+    const nav = document.querySelector('.navbar')?.getBoundingClientRect();
+    const bottomNav = document.querySelector('.bottom-nav');
+    const bn = bottomNav && getComputedStyle(bottomNav).display !== 'none' ? bottomNav.getBoundingClientRect() : null;
+    const top = nav ? nav.bottom : 0;
+    const bottom = bn ? bn.top : window.innerHeight;
+    const scope = dockedOnly ? '.craps-dock ' : '';
+    const pick = (sel, label) => [...document.querySelectorAll(scope + sel)].map((el, i) => ({ el, label: `${label}${i ? ` #${i + 1}` : ''}` }));
+    const items = [
+      ...pick('.craps-roll-btn', 'Roll'),
+      ...pick('[role=radio][aria-label$="chip"]', 'chip'),
+      ...pick('.take-down', 'Take down'),
+      ...(dockedOnly ? [] : [...document.querySelectorAll('.craps-tools .btn')].map((el) => ({ el, label: el.textContent.trim() }))),
+      ...(dockedOnly ? [] : [...document.querySelectorAll('.craps-felt .craps-spot')].map((el) => ({ el, label: el.getAttribute('aria-label') }))),
+    ];
+    const out = items.map(({ el, label }) => {
+      const r = el.getBoundingClientRect();
+      return { label, top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right), h: Math.round(r.height), inside: r.top >= top - 0.5 && r.bottom <= bottom + 0.5 && r.left >= -0.5 && r.right <= window.innerWidth + 0.5 && r.height > 0 };
+    });
+    return { area: [Math.round(top), Math.round(bottom)], scrollY: window.scrollY, out, docked: Boolean(document.querySelector('.craps-dock')) };
+  }, dockedOnly);
+}
+
+for (const game of ['craps', 'crapless']) {
+  await check(`${game}: Roll, chips, Take down, Undo/Clear and every spot on screen at scrollY 0 (375×667, 390×844, 414×896, 1280×720, 1440×900); docked bar at 320×568`, async () => {
+    const report = [];
+    for (const [width, height] of SIZES) {
+      const { page, context } = await openCraps(`/casino/${game}`, [crapsWorst(game)], { width, height });
+      const dockedOnly = width === 320;
+      const m = await measureCraps(page, dockedOnly);
+      assert.equal(m.scrollY, 0);
+      assert.equal(m.docked, dockedOnly, `${width}×${height}: the docked bar shows only on the short screen`);
+      const need = dockedOnly ? ['Roll', 'chip', 'Take down'] : ['Roll', 'chip', 'Take down', 'Undo', 'Clear'];
+      for (const label of need) assert.ok(m.out.some((o) => o.label.startsWith(label)), `${width}×${height}: ${label} present`);
+      const spots = m.out.filter((o) => !['Roll', 'chip', 'Take down', 'Undo', 'Clear'].some((l) => o.label.startsWith(l)));
+      if (!dockedOnly) // craps: Pass, Odds, Don't, Don't Odds, Come, Field, 6 Place, 3 Come bets, 4 Hard = 19; crapless: 2 + 2 + 10 + 3 + 4 = 21.
+      assert.equal(spots.length, game === 'crapless' ? 21 : 19, `${width}×${height}: every spot measured`);
+      const outside = m.out.filter((o) => !o.inside);
+      assert.deepEqual(outside.map((o) => `${o.label} [${o.top}–${o.bottom}]`), [], `${width}×${height}: outside the visible area ${m.area.join('–')}`);
+      const short = m.out.filter((o) => o.h < 44);
+      assert.deepEqual(short.map((o) => `${o.label} ${o.h}px`), [], `${width}×${height}: tap targets at least 44 px tall`);
+      const lowest = Math.max(...m.out.map((o) => o.bottom));
+      report.push(`${width}×${height}${dockedOnly ? ' docked' : ''}: lowest ${lowest}/${m.area[1]}`);
+      await context.close();
+    }
+    results.push(`     (${game} ${report.join(' · ')})`);
+  });
+}
+
+await check('craps: "Sit down" takes the first open seat; "Table full" when all 5 are taken; an empty seat below still seats; the dock listener goes away on leave', async () => {
+  const sits = [];
+  const t = crapsWorst('craps');
+  const { page, context } = await openCraps('/casino/craps', [t], { uid: 'u4', onCasino: async (route, body) => {
+    if (body.action === 'sit') sits.push(body.seat);
+    return json(route, 200, { ok: true, serverNow: now() });
+  } });
+  await page.getByRole('button', { name: 'Sit down' }).click();
+  await page.waitForTimeout(200);
+  assert.deepEqual(sits, [2], 'first open seat is seat 3 (index 2)');
+  await page.getByRole('button', { name: 'Sit in seat 5' }).click();
+  await page.waitForTimeout(200);
+  assert.deepEqual(sits, [2, 4], 'tapping an empty seat below still works');
+  const seatsTop = await page.locator('.seat-row').evaluate((el) => el.getBoundingClientRect().top);
+  const barBottom = await page.locator('.craps-bar').evaluate((el) => el.getBoundingClientRect().bottom);
+  assert.ok(seatsTop > barBottom, 'seats are below the top bar');
+  await context.close();
+
+  const full = { ...crapsWorst('craps'), seats: ['u0', 'u1', 'u2', 'u3', 'u5'].map((u, i) => seat(u, ['Will', 'Mike', 'Dan', 'Ann', 'Bo'][i], { bets: { pass: 0, dontPass: 0, odds: 0, field: 0, place: {} }, lastRoll: null })) };
+  const second = await openCraps('/casino/craps', [full], { uid: 'u4' });
+  assert.equal(await second.page.getByRole('button', { name: 'Sit down' }).count(), 0);
+  assert.equal(await second.page.locator('.craps-full').innerText(), 'Table full');
+  await second.context.close();
+
+  // The short-screen dock follows the media query both ways, and its subscription is removed on unmount.
+  const third = await openCraps('/casino/craps', [crapsWorst('craps')], { width: 320, height: 568, trackMedia: true });
+  assert.ok((await third.page.evaluate(() => window.__mq.added)) >= 1, 'the page subscribed to the media query');
+  assert.equal(await third.page.locator('.craps-dock').count(), 1);
+  await third.page.setViewportSize({ width: 320, height: 800 });
+  await third.page.waitForTimeout(200);
+  assert.equal(await third.page.locator('.craps-dock').count(), 0, 'taller screen: no dock, Roll back in the top bar');
+  assert.equal(await third.page.locator('.craps-bar .craps-roll-btn').count(), 1);
+  // Go to the lobby (unmounts the page): every listener added after the patch is removed.
+  await third.page.evaluate(() => { window.history.pushState({}, '', '/casino'); window.dispatchEvent(new PopStateEvent('popstate')); });
+  await third.page.waitForTimeout(300);
+  const mq = await third.page.evaluate(() => window.__mq);
+  assert.equal(mq.added, mq.removed, `media-query listeners cleaned up (${mq.added} added, ${mq.removed} removed)`);
+  await third.context.close();
+});
+
 // ---------- My Bets → Finished: every finished bet, sort, filters, remembered view ----------
 await check('My Bets: a player with 263 bets sees all 260 finished (one extra query past the listener\'s 200); filters and sort are remembered', async () => {
   const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
@@ -472,6 +613,124 @@ await check('line wheel: starts on the main line, centered; tap / arrow key / sw
   assert.match((await td.locator('.odds-cell').allInnerTexts()).join(' | '), /1\+ TD.*No TD/s);
   await page.getByLabel('Search players').fill('etienne');
   assert.equal(await page.locator('.prop-player').count(), 1, 'search filters players');
+  await context.close();
+});
+
+// ---------- 0.15.0: player props in the game page's tab ----------
+await check('props tab: game page alone fetches no props; tab opens them; remembered for the session; gone at the start; old URL redirects; no tab without props', async () => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  const detail = F.gameDetail('401');
+  let started = false;
+  let propsCalls = 0;
+  let detailCalls = 0;
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: [], customGames: [], battles: [] } });
+  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/board' && u.searchParams.get('props')) { propsCalls += 1; return json(route, 200, F.propsPage(u.searchParams.get('game'))); }
+    if (u.pathname === '/api/board' && u.searchParams.get('game')) {
+      detailCalls += 1;
+      const id = u.searchParams.get('game');
+      if (id !== '401') return json(route, 200, F.gameDetail(id));
+      if (!started) return json(route, 200, detail);
+      // Kickoff: ESPN says in progress and the server reports no props any more.
+      return json(route, 200, { ...detail, fetchedAt: new Date().toISOString(), propsCount: 0, game: { ...detail.game, state: 'in', statusText: '1st Qtr 14:10', bettingClosed: false } });
+    }
+    return json(route, 200, { ok: true, ran: false });
+  });
+  const tab = (name) => page.getByRole('tab', { name });
+  const saved = () => page.evaluate(() => { try { return sessionStorage.getItem('bb.gameSection'); } catch { return 'blocked'; } });
+  const refresh = async () => { const n = detailCalls; await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); for (let i = 0; i < 40 && detailCalls === n; i++) await page.waitForTimeout(50); await page.waitForTimeout(300); };
+
+  await page.goto(BASE + '/sportsbook/nfl/401', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.line-wheel');
+  await page.waitForTimeout(1200);
+  assert.equal(propsCalls, 0, 'opening the game page alone asks for no props');
+  assert.equal(await tab('Game lines').getAttribute('aria-selected'), 'true', 'Game lines is the default');
+  assert.equal(await page.getByRole('link', { name: /Player props/ }).count(), 0, 'the old "Player props (N players) ›" button is gone');
+  const tabsBelowHeader = await page.evaluate(() => {
+    const card = document.querySelector('.game-card').getBoundingClientRect();
+    const tabs = document.querySelector('.section-tabs').getBoundingClientRect();
+    const wheel = document.querySelector('.line-wheel').getBoundingClientRect();
+    return tabs.top >= card.bottom - 1 && tabs.bottom <= wheel.top + 1;
+  });
+  assert.ok(tabsBelowHeader, 'section tabs sit between the score header and the alternate lines');
+
+  await tab('Player props').click();
+  await page.waitForSelector('.prop-player');
+  assert.equal(propsCalls, 1, 'opening the tab loads props once');
+  assert.equal(await page.locator('.line-wheel .wheel-chip', { hasText: '-2.5' }).count(), 0, 'alternate lines hidden on Player props');
+  assert.match(await page.locator('.prop-player').first().innerText(), /Travis Etienne Jr\./);
+  assert.equal(await page.locator('.prop-player').first().locator('.wheel-chip.selected').innerText(), '50+');
+  assert.equal(await saved(), 'props', 'chosen section saved for the session');
+
+  // Back to Game lines: the props poll stops (the section unmounts), and a refresh asks for none.
+  await tab('Game lines').click();
+  await page.waitForSelector('.line-wheel .wheel-chip');
+  assert.equal(await saved(), 'lines');
+  const callsOnLines = propsCalls;
+  await refresh();
+  assert.equal(propsCalls, callsOnLines, 'no props request while Game lines is open');
+
+  // The session remembers Player props across a reload.
+  await tab('Player props').click();
+  await page.waitForSelector('.prop-player');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.prop-player');
+  assert.equal(await tab('Player props').getAttribute('aria-selected'), 'true', 'reopened on Player props');
+
+  // Kickoff: on the next refresh the tab disappears and the page is back on Game lines.
+  started = true;
+  await refresh();
+  assert.equal(await page.getByRole('tab', { name: 'Player props' }).count(), 0, 'Player props tab gone once the game starts');
+  assert.equal(await page.locator('.section-tabs').count(), 0, 'no section tabs at all');
+  assert.equal(await page.locator('.prop-player').count(), 0);
+  assert.ok((await page.locator('.line-wheel').count()) >= 1, 'Game lines shown');
+  const callsAfterStart = propsCalls;
+  await refresh();
+  assert.equal(propsCalls, callsAfterStart, 'no props request after the start');
+  started = false;
+
+  // A game with no props: no tabs at all.
+  await page.goto(BASE + '/sportsbook/nfl/404', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.game-card');
+  await page.waitForTimeout(600);
+  assert.equal(await page.locator('.section-tabs').count(), 0, 'no tabs on a game without props');
+
+  // Old /props links: the game page with Player props selected, and the URL cleaned up.
+  await page.evaluate(() => { try { sessionStorage.removeItem('bb.gameSection'); } catch { /* blocked */ } });
+  await page.goto(BASE + '/sportsbook/nfl/401/props', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.prop-player');
+  assert.equal(new URL(page.url()).pathname, '/sportsbook/nfl/401');
+  assert.equal(new URL(page.url()).search, '', 'the section parameter leaves the URL');
+  assert.equal(await tab('Player props').getAttribute('aria-selected'), 'true');
+  assert.equal(await saved(), 'props');
+  await context.close();
+});
+
+// Storage blocked (sessionStorage throws): the tabs still work, nothing crashes.
+await check('props tab works with sessionStorage blocked', async () => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(() => { Object.defineProperty(window, 'sessionStorage', { get() { throw new Error('blocked'); } }); });
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: [], customGames: [], battles: [] } });
+  await page.route(/^https:\/\/(?!localhost)/, (r) => r.abort());
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/board' && u.searchParams.get('props')) return json(route, 200, F.propsPage('401'));
+    if (u.pathname === '/api/board' && u.searchParams.get('game')) return json(route, 200, F.gameDetail('401'));
+    return json(route, 200, { ok: true, ran: false });
+  });
+  await page.goto(BASE + '/sportsbook/nfl/401', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.line-wheel');
+  await page.getByRole('tab', { name: 'Player props' }).click();
+  await page.waitForSelector('.prop-player');
+  await page.getByRole('tab', { name: 'Game lines' }).click();
+  await page.waitForSelector('.line-wheel .wheel-chip');
+  assert.deepEqual(errors, []);
   await context.close();
 });
 

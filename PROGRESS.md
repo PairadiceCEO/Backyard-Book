@@ -5,6 +5,85 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.15.0 (Will, 2026-10-20 10:22 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
+Spec: Will's attachment of 2026-10-20 10:22. One phase on a fresh wip off main (d09682b); merge after every
+CLAUDE.md check; stop dev/harness servers at the end.
+
+### Checklist
+- [x] 1 Same-game parlays with props allowed. `PROP_PARLAY_MESSAGE` / `hasPropSameGame` and the slip warning removed.
+      New key: `parsePropTicker().statKey` = series + the ticker's player segment ("KXNFLRSHYDS-CLEDWATSON4"), never a
+      name; `propStatKey(leg)` and `conflictKey` (props: `prop|{statKey}`) in shared/betRules.js. slipProblems: a
+      repeated prop key in a parlay → `propConflictMessageFor(leg)` = "You already have a Derrick Henry Rush Yds pick
+      in this parlay." (stat from the series config; name from the pick, only as text). placeBets refuses in
+      parseRequest, before any pricing fetch (BAD_SLIP, nothing placed). The slip sends `playerName` (sanitized,
+      ≤ 60 chars, never stored, only used in that message; no name → "You already have a Hits pick on that player in
+      this parlay."). Slip: in parlay mode a second pick on the same player + stat is refused with that notice
+      (singles still swap, as in 0.14.0); the notice also shows above the closed slip bar (× dismiss, 44 px).
+      Decision (literal spec): the key has no game in it, so the same player's same stat in two different games is
+      also refused in one parlay (0.14.0 allowed it); singles unaffected. Kept: ML + spread same game, crypto singles.
+      Tests (test/props, replacing the 0.14.0 parlay test): accepted = prop + same-game ML, two players same game, same
+      player different stats, props from two games + a same-game total; refused = two thresholds, YES + NO same market,
+      non-adjacent, same player/stat across games, ML + spread with a prop (no fetch, no bet, no money); slip reducer
+      and slipProblems mirror. Mutation-checked: threshold in key (2 fail), no series (3), game suffix in key (2), key
+      by name (3), key per market ticker (2), slip refusal off (1), generic message in parlay (2). CLAUDE.md line,
+      README line, props help text.
+      Lint: the repo has no eslint config (eslint 10 via npx refuses to run without one); I lint `src` + `shared` with
+      a scratch flat config outside the repo (@eslint/js recommended + react + react-hooks recommended), clean.
+- [x] 2 Player props on the game page. src/pages/GameDetailPage.jsx: section tabs "Game lines" / "Player props" right
+      under the score header (GameCard), shown only when `hasProps` (ESPN game, pre-game, not canceled, propsCount > 0);
+      no tab bar at all otherwise. Game lines = the alternate spread/total wheels as before. Player props =
+      src/components/PlayerPropsSection.jsx (the old page's stat tabs, search, a wheel per player), MOUNTED ONLY while
+      that tab shows, so usePropsData's props call (/api/board …&props=1, 30 s server memory cache) runs only then and
+      its 30 s poll stops when the player goes back to Game lines. src/pages/PlayerPropsPage.jsx deleted; the
+      "Player props (N players) ›" button removed. Section remembered in sessionStorage `bb.gameSection`
+      (`readSavedSection` / `saveSection`, both try/catch). Visible section is derived (`visibleSection(choice,
+      hasProps)`): when the game starts the next detail refresh has state 'in' / propsCount 0, the tab disappears and
+      Game lines shows, with no effect or state change needed. /sportsbook/{league}/{gameId}/props → `PropsRedirect` →
+      the game page with `?section=props`, which one effect turns into the saved choice and then strips from the URL
+      (replace). Hooks: one effect (only acts while the param is present; after it removes the param it is a no-op),
+      no state set during render, the props section keyed by game.
+      Interpretation (recorded, not a contradiction): "opening the game page alone must not fetch props" = the phone
+      makes no props call; the game detail's server-side `propsCount` (needed to decide whether to show the tab) stays
+      as in 0.14.0, from the same 30 s memory cache.
+      interact.mjs: new check "props tab" (no props call on the game page; tab loads once; lines hidden; saved; Game
+      lines → no props call on refresh; reload reopens Player props; kickoff refresh removes the tabs and calls no props;
+      404 shows no tabs; old URL redirects, cleans the URL, selects the tab) and "sessionStorage blocked" (no errors).
+      Mutation-checked: tab kept after the start (fails), props section always mounted/hidden (fails "no props call").
+      Phone screens (replacing props-page*): game-lines-tab, game-props-tab, game-no-props, game-props-old-url,
+      game-props-pick, game-props-td, game-props-none, props-parlay-conflict (item 1's notice above the slip bar).
+- [x] 3 Craps/Crapless layout (src/pages/casino/CrapsPage.jsx, both variants; game logic untouched: same validate /
+      sendChips / tapSpot / rollDice / seatDetail code, no change to shared/casino or server/casino). Top: one compact
+      bar `.craps-bar` (puck, two 36 px dice, last total + kind, a status line, countdown, Roll when it's my turn; for a
+      player not seated "Sit down" = first open seat, or "Table full"). Then the felt: `CrapsRack` (4 chips + Take down
+      in one row; craps-only, so Blackjack/Baccarat's ChipRack is unchanged), tools row ($60 meter + Undo + Clear), then
+      grids: Pass / Odds / Don't Pass / Don't Odds (crapless: Pass / Odds / Come / Field), Come + Field, Place numbers
+      (6 across; crapless 5 × 2), Come bets on their numbers (tap = their Odds), Hard ways (4 across). Spots are always
+      shown (Odds etc. dimmed until they apply; tapping one says why, from the existing placeBlocker). Payouts moved to
+      the rules text (spots keep a short ratio); amounts as whole dollars. Errors show as a toast over the felt (no
+      layout shift). Below: seats, last rolls, Leave seat, help, rules, then "‹ Casino" (moved from the top to save
+      height; the bottom nav also goes back; the page title is a visually hidden h2). ≥ 720 px: the felt is two
+      columns. Short screens: `DOCK_QUERY` = (max-height: 620px) via the new src/hooks/useMediaQuery.js
+      (useSyncExternalStore + the media query's change event, removed on unmount; no resize listener) moves the rack
+      and Roll into `.craps-dock`, fixed above the bottom nav; the spots scroll. All tap targets ≥ 44 px.
+      interact.mjs: per variant, the busiest felt (my roll, point on, countdown, 3 Come bets) measured at 375×667,
+      390×844, 414×896, 1280×720, 1440×900 (Roll, 4 chips, Take down, Undo, Clear and all 19 / 21 spots inside the area
+      between the sticky top bar and the bottom nav at scrollY 0, each ≥ 44 px) and 320×568 (dock only). Lowest control
+      at 375×667: 501 px of 607 visible. "Sit down" check: first open seat, empty seat below still seats, "Table full",
+      dock follows the query both ways, media listeners added = removed after leaving the page. Mutation-checked: spots
+      80 px tall (fails at 375×667), dock off (fails at 320×568), subscription never removed (fails cleanup).
+      Phone screens added: cr-full, cr-my-roll, cx-point, cx-comeout, cx-watch, cx-full, cx-my-roll (existing cr-point,
+      cr-comeout, cr-watch, cr-takedown, cr-chips, cr-come-hard, cr-dont-odds, cr-solo, cr-crapless kept).
+- [x] 4 Checks: test:all (31 + 97 + 21 + 104 + 15 + 11 + 11 + 11 = 301), lint (scratch flat config, see item 1),
+      build, interact.mjs (15 checks incl. the props tab, the craps/crapless no-scroll checks and Sit down),
+      dealcheck.mjs (6), phone check 125 screens × 320/375/414 clean. Version 0.15.0. Merged wip → main.
+      No firestore.rules change, no new index, no new /api function (still 7). Harness server stopped.
+      interact.mjs note: in one full run "three quick taps on Player" (Baccarat batching, untouched by this phase) saw 2
+      requests instead of 1; it passed 5 runs in a row on its own and the next full run passed 15/15. Timing flake in
+      this container (the 0.11.0 note describes the same check's timing sensitivity); not changed.
+      Tonight's props: Kalshi couldn't be re-checked from this session (the shell can't reach Kalshi and the web
+      request needed an approval that timed out). Kalshi had props this morning (0.14.0 check, ~09:45 CT) for NBA
+      BOS@DET, PHI@NYK, OKC@SAS and NHL goals on tonight's 11 games; schedule re-confirmed from public listings.
+
 ## Phase 0.14.0 (Will, 2026-10-18 12:25 CT; re-sent 2026-10-20 09:33) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-18 12:25. One phase on a fresh wip off main; merge after every CLAUDE.md check;
 stop dev/harness servers at the end.
@@ -265,7 +344,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.14.0 is merged. Wait for Will's test results.
+Nothing queued: 0.15.0 is merged. Wait for Will's test results.
 
 ## Open questions
 None open.

@@ -103,6 +103,12 @@ const cr = {
   rolling: () => crTable('craps', { point: null, deadline: null, lastRoll: { dice: [3, 4], total: 7, at: Date.now() - 200, kind: 'sevenOut', pointBefore: 6, seq: 57, shooter: 1 }, shooter: 3, seats: [crSeat('u0', 'Will'), crSeat('u1', 'Mike'), null, crSeat('u2', 'Dan'), null] }),
   crapless: () => ({ ...crTable('crapless', { point: 11, deadline: Date.now() + 9000, seats: [null, crSeat('u1', 'Mike', { pass: 500, odds: 500, place: { 2: 200, 12: 200, 6: 600 } }), crSeat('u0', 'Will', { pass: 100 }), null, null] }) }),
   watch: () => crTable('craps', { point: 8, deadline: Date.now() + 9000, shooter: 0, seats: [crSeat('u0', 'Will', { pass: 500 }), null, crSeat('u2', 'Dan', { field: 300 }), null, null] }),
+  // 0.15.0 phone screens for both variants: seated with a point on, seated on the come-out, watching, a full table.
+  full: (game) => crTable(game, { point: game === 'crapless' ? 3 : 9, deadline: Date.now() + 9000, shooter: 2, seats: ['u0', 'u2', 'u3', 'u4', 'u5'].map((u, i) => crSeat(u, ['Will', 'Dan', 'Ann', 'Bo', 'Cy'][i], { pass: 500 })) }),
+  cxComeout: () => crTable('crapless', { point: null, deadline: Date.now() + 12000, shooter: 1, seats: [crSeat('u0', 'Will', { pass: 300 }), crSeat('u1', 'Mike', { pass: 500, field: 200 }), null, null, null] }),
+  cxWatch: () => crTable('crapless', { point: 5, deadline: Date.now() + 9000, shooter: 0, seats: [crSeat('u0', 'Will', { pass: 500, odds: 500 }), null, crSeat('u2', 'Dan', { place: { 2: 200 } }), null, null] }),
+  // My turn to roll with Come bets on numbers: the busiest felt.
+  myRoll: (game) => crTable(game, { point: game === 'crapless' ? 11 : 6, deadline: Date.now() + 20000, shooter: 1, seats: [crSeat('u0', 'Will', { pass: 500 }), crSeat('u1', 'Mike', game === 'crapless' ? { pass: 500, odds: 1000, come: 300, comeOn: { 3: { bet: 300, odds: 300 }, 9: { bet: 200, odds: 0 } }, place: { 2: 200, 6: 600 }, hard: { 4: 100 } } : { pass: 500, odds: 1000, come: 300, comeOn: { 5: { bet: 300, odds: 600 }, 9: { bet: 200, odds: 0 } }, place: { 6: 600, 8: 600 }, hard: { 8: 100 }, field: 200 }), null, null, null] }),
 };
 const withTable = (make) => () => ({ ...fsDefault, casinoTables: make ? [make()] : [] });
 // Several seats per player (Mike = u1) and the new craps bets.
@@ -165,7 +171,14 @@ const scenarios = [
   S('cr-comeout', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.comeout) }),
   S('cr-point', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point) }),
   S('cr-takedown', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point), act: async (p) => { await p.getByRole('button', { name: 'Take down' }).click(); await p.waitForTimeout(100); } }),
-  S('cr-chips', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point), act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.craps-place .craps-spot').nth(2).click(); await p.locator('.craps-place .craps-spot').nth(2).click(); await p.getByRole('radio', { name: '$2 chip' }).click(); await p.locator('.craps-spot.band.odds').click(); await p.waitForTimeout(100); } }),
+  S('cr-chips', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point), act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.craps-place .craps-spot').nth(2).click(); await p.locator('.craps-place .craps-spot').nth(2).click(); await p.getByRole('radio', { name: '$2 chip' }).click(); await p.locator('.craps-spot.line.odds:not(.dont)').click(); await p.waitForTimeout(100); } }),
+  S('cr-full', '/casino/craps', { admin: false, user: 'u1', fs: withTable(() => cr.full('craps')) }),
+  S('cr-my-roll', '/casino/craps', { admin: false, user: 'u1', fs: withTable(() => cr.myRoll('craps')) }),
+  S('cx-point', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(cr.crapless) }),
+  S('cx-comeout', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(cr.cxComeout) }),
+  S('cx-watch', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(cr.cxWatch) }),
+  S('cx-full', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(() => cr.full('crapless')) }),
+  S('cx-my-roll', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(() => cr.myRoll('crapless')) }),
   S('cr-rolling', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.rolling) }),
   S('cr-crapless', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(cr.crapless) }),
   S('cr-watch', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.watch) }),
@@ -194,11 +207,16 @@ const scenarios = [
   S('crypto-coin-no-chart', '/sportsbook/crypto/sol', { admin: false, user: 'u1', noChart: true }),
   S('game-detail-wheels-moved', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: async (p) => { const w = p.locator('.line-wheel'); await w.nth(0).getByRole('button', { name: /^Higher/ }).click(); await w.nth(0).getByRole('button', { name: /^Higher/ }).click(); await w.nth(1).getByRole('button', { name: /^Lower/ }).click(); await p.waitForTimeout(500); } }),
   S('game-detail-wheel-pick', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: async (p) => { const w = p.locator('.line-wheel').nth(1); await w.getByRole('button', { name: /^Higher/ }).click(); await p.waitForTimeout(400); await w.locator('.wheel-buttons .odds-button').first().click(); await w.getByRole('button', { name: /^Lower/ }).click(); await p.waitForTimeout(500); } }),
-  S('props-page', '/sportsbook/nfl/401/props', { admin: false, user: 'u1' }),
-  S('props-page-pick', '/sportsbook/nfl/401/props', { admin: false, user: 'u1', act: async (p) => { const w = p.locator('.line-wheel').first(); await w.getByRole('button', { name: /^Higher/ }).click(); await p.waitForTimeout(400); await w.locator('.wheel-buttons .odds-button').first().click(); await p.waitForTimeout(300); } }),
-  S('props-page-td', '/sportsbook/nfl/401/props', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: 'TD' }).click(); await p.getByLabel('Search players').fill('mixon'); await p.waitForTimeout(300); } }),
-  S('props-page-none', '/sportsbook/nfl/401/props', { admin: false, user: 'u1', noProps: true }),
-  S('props-parlay-same-game', '/sportsbook/nfl/401/props', { admin: false, user: 'u1', act: async (p) => { await p.locator('.line-wheel').first().locator('.wheel-buttons .odds-button').first().click(); await p.locator('.line-wheel').nth(1).locator('.wheel-buttons .odds-button').nth(1).click(); await openSlip(p); await p.getByRole('tab', { name: 'Parlay' }).click(); await p.waitForTimeout(250); } }),
+  // 0.15.0: player props live in the game page's "Player props" tab (401 has props; 404 has none, so no tabs).
+  S('game-lines-tab', '/sportsbook/nfl/401', { admin: false, user: 'u1' }),
+  S('game-props-tab', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: openPropsTab }),
+  S('game-no-props', '/sportsbook/nfl/404', { admin: false, user: 'u1' }),
+  S('game-props-old-url', '/sportsbook/nfl/401/props', { admin: false, user: 'u1' }),
+  S('game-props-pick', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: async (p) => { await openPropsTab(p); const w = p.locator('.line-wheel').first(); await w.getByRole('button', { name: /^Higher/ }).click(); await p.waitForTimeout(400); await w.locator('.wheel-buttons .odds-button').first().click(); await p.waitForTimeout(300); } }),
+  S('game-props-td', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: async (p) => { await openPropsTab(p); await p.getByRole('tab', { name: 'TD' }).click(); await p.getByLabel('Search players').fill('mixon'); await p.waitForTimeout(300); } }),
+  S('game-props-none', '/sportsbook/nfl/401', { admin: false, user: 'u1', noProps: true, act: openPropsTab }),
+  // Same-game parlay with props is fine; a second Etienne Rush Yds pick is refused with the reason above the slip bar.
+  S('props-parlay-conflict', '/sportsbook/nfl/401', { admin: false, user: 'u1', act: async (p) => { await openPropsTab(p); await p.locator('.line-wheel').first().locator('.wheel-buttons .odds-button').first().click(); await p.locator('.line-wheel').nth(1).locator('.wheel-buttons .odds-button').nth(1).click(); await openSlip(p); await p.getByRole('tab', { name: 'Parlay' }).click(); await p.locator('.slip-bar').click(); await p.waitForTimeout(250); await p.locator('.line-wheel').first().locator('.wheel-buttons .odds-button').nth(1).click(); await p.waitForTimeout(250); } }),
   S('cr-solo', '/casino/craps', { admin: false, user: 'u1', fs: withTable(crSolo) }),
   S('sportsbook-custom', '/sportsbook', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('tab', { name: /^Custom/ }).click(); await p.waitForTimeout(400); } }),
   S('battle-new', '/sportsbook/battles/new', { admin: false, user: 'u1', act: async (p) => { await p.getByLabel('Title').fill('Saturday golf'); await p.getByRole('button', { name: 'Dan' }).click(); await p.getByRole('button', { name: 'Ann' }).click(); await p.getByRole('button', { name: '70 / 30' }).click(); await p.waitForTimeout(150); } }),
@@ -242,6 +260,12 @@ async function clickPrices(p, n) {
   for (const i of [0, 8, 12].slice(0, n)) await buttons.nth(i).click();
   await p.waitForTimeout(200);
 }
+async function openPropsTab(p) {
+  await p.getByRole('tab', { name: 'Player props' }).click();
+  await p.waitForSelector('.prop-player, .props-section .empty-state', { timeout: 5000 }).catch(() => {});
+  await p.waitForTimeout(300);
+}
+
 async function openSlip(p) {
   await p.locator('.slip-bar').click();
   await p.waitForTimeout(250);
