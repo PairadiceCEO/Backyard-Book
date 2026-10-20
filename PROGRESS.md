@@ -5,7 +5,7 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.16.0 (Will, 2026-10-20 11:47 CT; full spec re-sent 11:48) — IN PROGRESS on wip (final checks)
+## Phase 0.16.0 (Will, 2026-10-20 11:47 CT; full spec re-sent 11:48 and 14:30) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 11:48 (the 11:47 message was cut off mid-sentence; the attachment is the whole
 spec). One phase on a fresh wip off main (c3769b4); merge after every CLAUDE.md check; stop servers at the end.
 
@@ -70,11 +70,13 @@ spec). One phase on a fresh wip off main (c3769b4); merge after every CLAUDE.md 
       refuses); with both layers removed each fails (3, 2 and 2 tests).
       CLAUDE.md: "$60 craps total" line removed; "No maximum bets anywhere…" and "Chips: $1, $2, $5, $10, $25 and $100
       on every game." added (there was no chips line before, so "update" = add).
-- [ ] 5 Checks: test:all (31 + 106 + 21 + 104 + 16 + 11 + 11 + 12 = 312), lint (scratch flat config, as 0.15.0),
-      build, interact.mjs (16 checks; "a refused chip…" no longer expects "$10 + $1 refused": with no maximum the tap-time
-      refusal is the wallet — a $100 chip with $96.40 is refused at once with "Not enough in your wallet ($96.40)" and
-      no request), dealcheck.mjs (6) all pass; phone check (125 screens × 320/375/414) running. Version 0.16.0;
-      docs/CASINO_PROGRESS.md note. No firestore.rules change, no new index, no new /api function. Not merged yet.
+- [x] 5 Checks (re-run in full at 14:30 after a session restart, on wip 50eb712): test:all (31 + 106 + 21 + 104 + 16 +
+      11 + 11 + 12 = 312), lint (scratch flat config, as 0.15.0), build, interact.mjs 16/16 ("a refused chip…" now
+      expects the wallet refusal: a $100 chip with $96.40 is refused at once with "Not enough in your wallet ($96.40)"
+      and no request; the craps/crapless no-scroll check passes at 375×667, 390×844, 414×896, 1280×720, 1440×900 and
+      the 320×568 dock with six chips), dealcheck.mjs 6/6, phone check 125 screens × 320/375/414 clean. Version 0.16.0;
+      docs/CASINO_PROGRESS.md note. No firestore.rules change, no new index, no new /api function. Merged wip → main.
+      Harness server stopped.
 
 ## Phase 0.15.0 (Will, 2026-10-20 10:22 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 10:22. One phase on a fresh wip off main (d09682b); merge after every
@@ -415,7 +417,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.16.0 item 5: the full phone check is running; if clean, merge wip → main, stop the harness, give Will test steps.
+Nothing queued: 0.16.0 is merged. Wait for Will's test results.
 
 ## Open questions
 None open.
