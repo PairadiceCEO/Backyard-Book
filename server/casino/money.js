@@ -4,10 +4,41 @@
 
 import { Timestamp } from 'firebase-admin/firestore';
 import { HttpError } from '../http.js';
-import { CASINO_LEDGER_TYPES } from '../../shared/casino/constants.js';
+import {
+  BET_CEILING_MESSAGE,
+  CASINO_LEDGER_TYPES,
+  CHIP_MESSAGE,
+  betAmountProblem,
+  betCeilingProblem,
+  isChip,
+} from '../../shared/casino/constants.js';
 
 export function formatDollars(cents) {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+function amountError(problem) {
+  return new HttpError(400, problem === BET_CEILING_MESSAGE ? 'BET_TOO_LARGE' : 'BAD_BET', problem);
+}
+
+// Amount check for one bet in whole dollars (no maximum, 0.16.0): whole dollars, at least $1, a safe integer, and
+// at most the $1,000,000 sanity ceiling ("That bet is larger than the table allows."). The wallet is checked
+// separately, inside the transaction that debits it.
+export function requireBetAmount(dollars) {
+  const problem = betAmountProblem(dollars);
+  if (problem) throw amountError(problem);
+}
+
+// The same ceiling for an amount already in cents (a spot or seat total after a change).
+export function requireUnderCeiling(cents) {
+  const problem = betCeilingProblem(cents);
+  if (problem) throw amountError(problem);
+}
+
+// Chip check: the tapped chip is one of CHIP_VALUES ($1, $2, $5, $10, $25, $100). A total built from chips is an
+// amount (requireBetAmount), not a chip: $3 = $1 + $2 is fine as a bet, but not as one chip.
+export function requireChip(dollars) {
+  if (!isChip(dollars)) throw new HttpError(400, 'BAD_CHIP', CHIP_MESSAGE);
 }
 
 // entries: [{ id, type, amountCents (negative = debit), game, note, roundId?, extra? }], applied in order.

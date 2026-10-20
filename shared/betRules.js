@@ -1,11 +1,21 @@
 // Bet slip rules shared by the browser (to guide the user) and /api/bets (to enforce them).
 
-import { REQUEST_ID_PATTERN } from './constants.js';
+import { MAX_WALLET_CHANGE_CENTS, REQUEST_ID_PATTERN } from './constants.js';
+import { BET_CEILING_MESSAGE } from './casino/constants.js';
 import { decimalToAmerican } from './oddsMath.js';
 import { cryptoPickLabel } from './crypto/coins.js';
 import { parsePropTicker, propConflictMessage, propPickLabel, propSeries } from './props.js';
 
 export const MIN_STAKE_CENTS = 100; // $1.00
+// No maximum stake (0.16.0): the wallet is the cap, plus a technical per-bet ceiling ($1,000,000) and a payout that
+// must stay a safe integer (a $1,000,000 ten-leg longshot parlay could otherwise overflow).
+export const MAX_STAKE_CENTS = MAX_WALLET_CHANGE_CENTS;
+export { BET_CEILING_MESSAGE };
+
+// '' if a stake (cents) is under the sanity ceiling, else BET_CEILING_MESSAGE.
+export function stakeCeilingProblem(cents) {
+  return Number.isInteger(cents) && cents > MAX_STAKE_CENTS ? BET_CEILING_MESSAGE : '';
+}
 export const MAX_LEGS = 10;
 export const MIN_PARLAY_LEGS = 2;
 // 'challenge' = a player-posted Challenge (selection = one of its outcome ids, no line).
@@ -96,6 +106,11 @@ export function payoutCents(stakeCents, decimal) {
   return Math.floor(stakeCents * decimal + 1e-9);
 }
 
+// A payout the ledger can hold exactly (a safe integer). Anything bigger is refused with BET_CEILING_MESSAGE.
+export function payoutTooLarge(cents) {
+  return !Number.isSafeInteger(cents);
+}
+
 export function combinedAmerican(decimals) {
   return decimalToAmerican(combinedDecimal(decimals));
 }
@@ -143,10 +158,14 @@ export function slipProblems(slip, { balanceCents = Infinity } = {}) {
         break;
       }
     }
+    const tooBig = legs.find((leg) => stakeCeilingProblem(leg.stakeCents));
+    if (tooBig) problems.push(BET_CEILING_MESSAGE);
     total = legs.reduce((sum, leg) => sum + (Number.isInteger(leg.stakeCents) ? leg.stakeCents : 0), 0);
   } else if (slip?.mode === 'parlay') {
     if (!Number.isInteger(slip.stakeCents) || slip.stakeCents < MIN_STAKE_CENTS) {
       problems.push('The parlay needs a stake of at least $1.00.');
+    } else if (stakeCeilingProblem(slip.stakeCents)) {
+      problems.push(BET_CEILING_MESSAGE);
     }
     total = Number.isInteger(slip.stakeCents) ? slip.stakeCents : 0;
   }

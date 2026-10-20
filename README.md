@@ -114,10 +114,16 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 
 - No console step (same rules). Casino → **Craps** or **Crapless Craps**: 5 seats each, separate tables.
 - **One engine, two games:** `shared/casino/dice.js` settles every roll; `shared/casino/diceVariants.js` is the only place the two games differ (come-out winners/losers, Don't Pass, point numbers, Odds and Place payouts). Crapless Odds on 2/12 pay 5:1.
-- **Bets:** pick a chip, tap a spot; "Take down" + tap takes a bet back (Pass / Don't Pass stay up once a Point is set). $1–$10 a bet, up to $10 a spot. Place bets work only while a Point is on and stay up after a win; Field is one roll.
+- **Bets:** pick a chip, tap a spot; "Take down" + tap takes a bet back (Pass / Don't Pass stay up once a Point is set). Minimum $1. Bet as much as your wallet holds. Place bets work only while a Point is on and stay up after a win; Field is one roll.
 - **Shooter:** only the shooter can roll, and only with a line bet. Roll carries `rollSeq`, so a double tap rolls once and other players' bets never block it. The clock starts at the first bet after a come-out roll, or right after each roll while a Point is on; at zero the server rolls (or, on a come-out with no line bet, passes the dice). Seven-out: dice to the next seat clockwise.
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
+
+## 0.16.0
+
+- **No maximum bets** on any game: Blackjack, Baccarat, Craps, Crapless, Slots, Battles and the sportsbook. Minimum $1, whole dollars; the wallet balance is the only cap. A single bet or stake over $1,000,000 is refused ("That bet is larger than the table allows."), a technical guard, not a game limit. Craps Odds stay at 2× the line bet.
+- **$25 and $100 chips** on every casino game and Slots.
+- The craps meter now reads "On the felt $X" (no $60 total, no "room left").
 
 ## 0.15.0
 
@@ -170,9 +176,9 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 
 ## Casino seats and craps (batch A)
 
-- No console step. **Blackjack and Baccarat:** sit in as many open seats as you like (up to all 5). Each seat plays like a separate player: its own $1–$10 bet (Baccarat: its own Player / Banker / Tie bets), hands, insurance, double, split and 15 s turn, in normal seat order. Tabs under the seats switch between your seats and jump to the one that needs a decision. **Craps / Crapless:** one seat per player.
+- No console step. **Blackjack and Baccarat:** sit in as many open seats as you like (up to all 5). Each seat plays like a separate player: its own bet (Baccarat: its own Player / Banker / Tie bets), hands, insurance, double, split and 15 s turn, in normal seat order. Tabs under the seats switch between your seats and jump to the one that needs a decision. **Craps / Crapless:** one seat per player.
 - **Leaving:** "Leave seat N" gives up one seat; "Leave all seats" gives up every one and you keep watching. Leaving the table page (lobby, another tab, another game) leaves all your seats there automatically. Bets in play play out first (Craps: line, Come and Odds keep working; Place, Field and Hard ways are refunded). Closing the browser is still the 60 s heartbeat rule.
-- **Craps limits:** Pass, Don't Pass and each Come bet $1–$20; Odds up to 2× their line bet; each Place number, Field and Hard way $1–$30; $60 on the felt in all, Odds included. The meter above the felt shows what's down and the room left.
+- **Craps bets (0.16.0):** Minimum $1. Bet as much as your wallet holds, on any spot. Odds stay at most 2× their line bet (a game rule). The felt shows "On the felt $X".
 - **New bets:** Hard 4/6/8/10 (4 and 10 pay 6:1, 6 and 8 pay 8:1; off on the come-out; win stays up). Come (opens with a Point; then sits on its number, where Odds can go behind it; Come Odds are off on the come-out). Don't Pass Odds (Craps only) pay the inverse of Pass Odds. Every number lives in `shared/casino/diceVariants.js`.
 
 ## Casino speed and chips (batch 5)
@@ -181,8 +187,8 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Fewer round trips:** each casino action reads everything it's known to need in one `tx.getAll` (table, your profile + wallet, your presence, the shoe when it may deal, the bet's retry check), then commits: 2 round trips, 3 when a step pays other players (their wallets come in one batch). The profile is read once, inside the transaction (`disabled` checked there); the ID token is verified locally. The private shoe is only written when a card moved.
 - **Timing:** every `/api/casino` reply has a `Server-Timing` header (auth, read, read-more, commit, total), visible in the browser's developer tools → Network → the request → Timing, and one JSON log line per call in Vercel → Logs. `test/casino/bench.mjs` replays the calls against an in-memory Firestore with a modeled delay.
 - **Instant results:** replies carry the public table (never the shoe or the hole card) and your balance, so your own action shows before the live listener brings it back; the Roll reply carries the dice.
-- **Chips:** $1 white, $2 yellow, $5 red, $10 blue on every game. Pick a chip, tap a spot; each tap stacks a chip. Taps within 300 ms go as one request; a refused chip comes back off with the reason; the nav wallet counts chips on the felt right away. Undo takes back your last chip this round, Clear the rest. Blackjack bets are built from chips and locked in with "Deal me in".
+- **Chips:** $1 white, $2 yellow, $5 red, $10 blue, $25 green, $100 black on every game and on Slots. Pick a chip, tap a spot; each tap stacks a chip. Taps within 300 ms go as one request; a refused chip comes back off with the reason; the nav wallet counts chips on the felt right away. Undo takes back your last chip this round, Clear the rest. Blackjack bets are built from chips and locked in with "Deal me in".
 - **Slots:** tap Spin again while the reels spin to stop them on the result at once (it never starts or charges another spin).
 - **Card timing:** cards are dealt one at a time. Blackjack: seat 1 → 5 (empty or no-bet seats skipped), dealer, then the second card in the same order, 1 s apart; every later card (hits, doubles, split cards, the hole-card reveal, each dealer draw) 1.5 s. Baccarat: Player, Banker, Player, Banker 1 s apart, 1.5 s before each third card. Timed from the server's deal time so every phone shows the same card at the same moment; insurance, turn and results clocks start after the cards finish. All the numbers are in `shared/casino/timing.js`.
-- **Craps Odds:** up to 2× your Pass bet (above the $10 spot limit); the Odds spot shows the current maximum.
+- **Craps Odds:** up to 2× your Pass bet; the Odds spot's description gives the current maximum.
 - **Phone check tool:** `tools/phone-check/` (see its README).

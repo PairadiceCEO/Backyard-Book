@@ -3,9 +3,9 @@
 //
 //   Bets       bets { changes: [{ kind, number?, cents }], requestId } puts chips down / takes them back
 //              (bet { kind, number?, amount } = one chip). Kinds: pass, dontPass, odds, dontOdds, come,
-//              comeOdds (number), place (number), hard (number), field. Limits (diceVariants.js):
-//              line bets $20 each, Odds 2× their line bet, every other spot $30, $60 on the felt in
-//              all. removeBet { kind, number? } takes one down before the next roll (Pass / Don't Pass
+//              comeOdds (number), place (number), hard (number), field. No maximum (0.16.0): the
+//              wallet is the cap, Odds stay at most 2× their line bet (a game rule), and no spot may pass
+//              the $1,000,000 sanity ceiling. removeBet { kind, number? } takes one down before the next roll (Pass / Don't Pass
 //              only before a come-out; a Come bet that moved to its number can't come down) and
 //              refunds it.
 //   Roll       the shooter only, with a line bet, carrying rollSeq (rolls so far at the table). It's
@@ -30,9 +30,9 @@
 import { HttpError } from '../http.js';
 import { requireSeat } from './tableRunner.js';
 import { seatIsStale } from './seats.js';
-import { formatDollars } from './money.js';
+import { formatDollars, requireChip, requireUnderCeiling } from './money.js';
 import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
-import { CASINO_SEATS, CRAPS_TURN_SECONDS, DICE_ANIMATION_MS, isValidCasinoBet } from '../../shared/casino/constants.js';
+import { BET_CEILING_MESSAGE, CASINO_SEATS, CRAPS_TURN_SECONDS, DICE_ANIMATION_MS } from '../../shared/casino/constants.js';
 import { DICE_VARIANTS } from '../../shared/casino/diceVariants.js';
 import {
   BET_KINDS,
@@ -222,6 +222,7 @@ export function makeDiceEngine(variantId) {
       const { kind, number } = parseKind(change);
       const cents = change.cents;
       if (!Number.isInteger(cents) || cents === 0 || cents % 100 !== 0) throw new HttpError(400, 'BAD_BET', 'Chips are whole dollars.');
+      requireUnderCeiling(Math.abs(cents)); // a change is several chips on one spot: an amount, not a chip
       const label = labelOf(kind, number);
       const have = spotAmount(bets, kind, number);
       if (cents > 0) {
@@ -237,9 +238,11 @@ export function makeDiceEngine(variantId) {
       }
       setSpot(bets, kind, number, have + cents);
     }
-    // Every limit is checked on the bets as they would be: each spot, each Odds, and the $60 total.
+    // The rules are checked on the bets as they would be: each Odds at most 2× its line bet, and no spot past the
+    // sanity ceiling. There is no table total and no per-spot maximum.
     const problem = limitProblem(variant, bets, lastAdded ?? {});
-    if (problem && addCents > 0) throw new HttpError(409, 'SPOT_LIMIT', problem);
+    if (problem && addCents > 0) throw new HttpError(problem === BET_CEILING_MESSAGE ? 400 : 409, problem === BET_CEILING_MESSAGE ? 'BET_TOO_LARGE' : 'SPOT_LIMIT', problem);
+    requireUnderCeiling(addCents);
     return { bets: cloneBets(bets), addCents, backCents };
   }
 
@@ -304,7 +307,7 @@ export function makeDiceEngine(variantId) {
   async function bet(ctx, body) {
     const index = requireSeat(ctx, body);
     const { kind, number } = parseKind(body);
-    if (!isValidCasinoBet(body.amount)) throw new HttpError(400, 'BAD_BET', 'A chip is $1, $2, $5 or $10 (whole dollars up to $10).');
+    requireChip(body.amount); // one chip: $1, $2, $5, $10, $25 or $100
     const result = await placeChips(ctx, index, [{ kind, number, cents: body.amount * 100 }], body.requestId);
     return result.duplicate ? result : { spotCents: spotAmount(result.bets, kind, number) };
   }

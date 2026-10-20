@@ -10,15 +10,41 @@ Spec: Will's attachment of 2026-10-20 11:48 (the 11:47 message was cut off mid-s
 spec). One phase on a fresh wip off main (c3769b4); merge after every CLAUDE.md check; stop servers at the end.
 
 ### Checklist
-- [ ] 1 Shared rules: `CHIP_VALUES = [1, 2, 5, 10, 25, 100]` in shared/casino/constants.js; `isValidCasinoBet` split
-      into a chip check and an amount check (whole dollars, ≥ $1, safe integer); sanity ceiling
-      MAX_WALLET_CHANGE_CENTS ($1,000,000) per bet/stake → "That bet is larger than the table allows.";
-      CASINO_MAX_BET_DOLLARS and CRAPS_LIMITS removed; craps Odds stay ≤ oddsMultiple × line bet.
-- [ ] 2 Server: Blackjack, Baccarat, Craps/Crapless, Slots, Battles, Sportsbook use the new checks; INSUFFICIENT_BALANCE
-      still inside the debit's transaction. Every other stake/bet maximum found is removed and listed here.
-- [ ] 3 Phone: $25 / $100 chips on every game and Slots; no max checks; craps meter → "On the felt $X"; every
-      "up to $10", "$1–$10", "$20", "$30", "$60" text → "Minimum $1. Bet as much as your wallet holds."
-      Craps no-scroll still passes at every size.
+- [x] 1 Shared rules. shared/casino/constants.js: `CHIP_VALUES = [1, 2, 5, 10, 25, 100]` (src/components/casino/
+      Chips.jsx re-exports it); `isValidCasinoBet` replaced by `isChip` (chip check) and `isValidBetAmount` (whole
+      dollars, ≥ $1, safe integer), `betCeilingProblem(cents)` / `betAmountProblem(dollars)`; `BET_CEILING_CENTS` =
+      MAX_WALLET_CHANGE_CENTS ($1,000,000), `BET_CEILING_MESSAGE` "That bet is larger than the table allows.",
+      `BET_HELP_TEXT` "Minimum $1. Bet as much as your wallet holds." Craps (shared/casino/dice.js): `spotLimitCents`
+      is now Odds only (oddsMultiple × the line bet; null elsewhere); `limitProblem` = Odds rule + the ceiling on every
+      spot; a fresh Come bet moving onto a number with a Come bet already there adds all of it (nothing given back).
+      Battles: `battleProblems` = whole dollars ≥ $1, then the ceiling. Sportsbook (shared/betRules.js):
+      `stakeCeilingProblem` for singles and the parlay stake; `payoutTooLarge` (payout must be a safe integer).
+- [x] 2 Server. Every bet still goes through the same transaction as its debit, which refuses INSUFFICIENT_BALANCE
+      (tableRunner `ctx.balance` / applyCasinoEntries, slots' own transaction, Battles, placeBets) — unchanged.
+      server/casino/money.js: `requireBetAmount` (400 BAD_BET, or 400 BET_TOO_LARGE with the ceiling message),
+      `requireUnderCeiling`, `requireChip` (400 BAD_CHIP). Blackjack `bet` and Baccarat `bet` (each spot) and Slots
+      `spin`: amount check (a total built from chips). Craps `bets` (the phone's batches): each change whole dollars
+      under the ceiling, the batch's charge under the ceiling, then limitProblem (Odds 2× → 409 SPOT_LIMIT, ceiling →
+      400 BET_TOO_LARGE). Craps `bet` (documented as one chip, not used by the phone): chip check. Double / split /
+      insurance unchanged: requireFunds before the charge (insurance ≤ half the bet is a game rule). placeBets refuses a
+      payout that isn't a safe integer (a $1,000,000 ten-leg longshot parlay would be ~10^23 cents) before reading
+      anything, with the ceiling message.
+      Maximums removed (searched MAX, LIMIT, "up to $", "$1–$", digit caps):
+        CASINO_MAX_BET_DOLLARS ($10: Blackjack seat, Baccarat spot, Slots; server + Blackjack/Baccarat/Slots pages);
+        MAX_SPOT_CENTS (BaccaratPage); CRAPS_LIMITS line $20 / spot $30 / total $60 (diceVariants `limits`, dice.js
+        limitProblem + the Come "at the $20 limit" give-back, craps meter "of $60 / Room"); BATTLE_STAKE_MAX_DOLLARS
+        ($10,000, shared + NewBattlePage); the Battle stake input's `.slice(0, 5)` (a hidden $99,999 cap, now 10
+        digits). Kept (not bet limits): MAX_LEGS, insurance ≤ half the bet, craps CHANGE_LIMIT (20 chip changes per
+        request, a request-size guard; any amount per change), text lengths, page sizes, MAX_WALLET_CHANGE_CENTS (admin
+        wallet change, now also the bet ceiling). The sportsbook had no maximum stake before; it gets only the ceiling.
+- [x] 3 Phone. Six chips on every game and Slots (rack 6 across; $25 green, $100 black/gold; tokens shrink to fit
+      at 320 px, buttons ≥ 44 px). Craps: chips in one row, Take down moved into the tools row ("On the felt $X" +
+      Take down + Undo + Clear; in the 320×568 dock: chips row, then Take down + Roll). Validators keep the wallet
+      check and add only the ceiling. Text: lobby, Blackjack, Baccarat, Craps help and rules, Slots, Battle stake →
+      "Minimum $1. Bet as much as your wallet holds."; README; Odds "up to 2×" kept (rule). Slots shows big bets with
+      separators ($1,250). interact.mjs: the no-scroll check now also asserts the six chips at every size; new check
+      "no maximum bets" ($100 + $100 + $25 → one $225 bet on Blackjack, Baccarat Banker, Craps/Crapless Pass, Slots;
+      six chips; no old limit text; help text present).
 - [ ] 4 Tests: old-maximum tests rewritten; new tests (big bets accepted / refused for lack of funds with no wallet
       change, double/split need funds, Odds > 2× refused, $1,000,001 refused, chips $25/$100 ok and $3 chip refused,
       $50,000 Battle); casino tests mutation-checked. CLAUDE.md "Deliberate decisions" lines.

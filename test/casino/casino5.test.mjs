@@ -83,13 +83,13 @@ test('Blackjack: one player in seats 2 and 4 plays each like a separate player, 
   // Seat 2: 8 8 (split → 8 3, 8 2) · seat 3: T 7 · seat 4: 5 6 (doubles a 9) · dealer 9 up, 7 hole, draws K.
   stackShoe(BJ, ['8S', 'TS', '5C', '9D', '8H', '7S', '6C', '7D', '3H', '2H', '9C', 'KD'], 6);
 
-  // Each seat has its own bet and its own $10 limit; an action must say which seat.
+  // Each seat has its own bet; an action must say which seat. No maximum: only the wallet.
   await err(bj('p1', 'bet', { amount: 5, requestId: rid() }), 'PICK_SEAT', /2, 4/);
   await err(bj('p1', 'bet', { seat: 2, amount: 5, requestId: rid() }), 'NOT_YOUR_SEAT');
-  await err(bj('p1', 'bet', { seat: 1, amount: 11, requestId: rid() }), 'BAD_BET');
+  await err(bj('p1', 'bet', { seat: 1, amount: 1.5, requestId: rid() }), 'BAD_BET');
   await bj('p1', 'bet', { seat: 1, amount: 10, requestId: rid() });
   await bj('p1', 'bet', { seat: 3, amount: 10, requestId: rid() });
-  assert.equal(wallet('p1'), 10000 - 2000, '$10 on each seat: each seat is limited on its own');
+  assert.equal(wallet('p1'), 10000 - 2000, '$10 on each seat: each seat is charged on its own');
   await bj('p1', 'bet', { seat: 1, amount: 5, requestId: rid() });
   await bj('p1', 'bet', { seat: 3, amount: 5, requestId: rid() });
   await bj('p2', 'bet', { amount: 5, requestId: rid() });
@@ -214,11 +214,11 @@ const BAC = 'baccarat';
 const bac = (uid, action, fields, now) => act(BAC, uid, action, fields, now);
 const bacBet = (uid, seat, bets) => bac(uid, 'bet', { seat, player: 0, banker: 0, tie: 0, ...bets, requestId: rid() });
 
-test('Baccarat: each of my seats has its own Player / Banker / Tie bets and limits, and its own payout', async () => {
+test('Baccarat: each of my seats has its own Player / Banker / Tie bets, and its own payout', async () => {
   seed();
   await bac('p1', 'sit', { seat: 0 });
   await bac('p1', 'sit', { seat: 3 });
-  await err(bacBet('p1', 0, { player: 11 }), 'BAD_BET');
+  await err(bacBet('p1', 0, { player: 1.5 }), 'BAD_BET');
   await bacBet('p1', 0, { player: 10, banker: 10, tie: 10 });
   await bacBet('p1', 3, { banker: 5 });
   await err(bac('p1', 'confirm', {}), 'PICK_SEAT');
@@ -368,16 +368,24 @@ test("Odds pay true odds to the cent; Don't Pass Odds pay the inverse", () => {
   assert.equal(roll(CL, 11, { pass: 100, odds: 500 }, 5, 6).returnCents, 200 + 500 + 1500, '11 at 3:1');
 });
 
-test('limit messages name the limit (line $20, spot $30, Odds 2×, $60 total)', () => {
-  assert.match(D.limitProblem(CR, bets({ pass: 2100 }), { kind: 'pass' }), /Line limit.*\$20/);
-  assert.match(D.limitProblem(CR, bets({ come: 2100 }), { kind: 'come' }), /Line limit: Come/);
-  assert.match(D.limitProblem(CR, bets({ place: { 6: 3100 } }), { kind: 'place', number: 6 }), /Spot limit: Place 6.*\$30/);
-  assert.match(D.limitProblem(CR, bets({ hard: { 8: 3100 } }), { kind: 'hard', number: 8 }), /Spot limit: Hard 8/);
+test('the only craps caps left: Odds 2× their line bet (named in the message) and the $1,000,000 sanity ceiling', () => {
+  // No line limit, no spot limit, no table total (0.16.0).
+  assert.equal(D.limitProblem(CR, bets({ pass: 50_000 }), { kind: 'pass' }), '', '$500 Pass');
+  assert.equal(D.limitProblem(CR, bets({ come: 2100 }), { kind: 'come' }), '');
+  assert.equal(D.limitProblem(CR, bets({ place: { 6: 300_000 } }), { kind: 'place', number: 6 }), '', '$3,000 Place 6');
+  assert.equal(D.limitProblem(CR, bets({ hard: { 8: 3100 } }), { kind: 'hard', number: 8 }), '');
+  assert.equal(D.limitProblem(CR, bets({ pass: 50_000, odds: 100_000, field: 20_000, place: { 6: 60_000 } }), { kind: 'field' }), '', '$2,300 on the felt');
+  assert.equal(D.spotLimitCents(CR, bets({}), 'field'), null, 'no maximum on a non-Odds spot');
+  // Odds stay at 2× their line bet.
   assert.match(D.limitProblem(CR, bets({ pass: 1000, odds: 2100 }), { kind: 'odds' }), /2× your Pass bet \(\$20\)/);
   assert.match(D.limitProblem(CR, bets({ dontPass: 1000, dontOdds: 2100 }), { kind: 'dontOdds' }), /2× your Don't Pass bet/);
   assert.match(D.limitProblem(CR, bets({ comeOn: { 5: { bet: 500, odds: 1100 } } }), { kind: 'comeOdds', number: 5 }), /2× your Come 5 bet \(\$10\)/);
-  assert.equal(D.limitProblem(CR, bets({ pass: 2000, odds: 4000 }), { kind: 'odds' }), '', '$40 Odds behind $20: not capped by $30, total exactly $60');
-  assert.match(D.limitProblem(CR, bets({ pass: 2000, odds: 4000, field: 100 }), { kind: 'field' }), /Table limit.*\$60.*\$61/);
+  assert.equal(D.limitProblem(CR, bets({ pass: 50_000, odds: 100_000 }), { kind: 'odds' }), '', '$1,000 Odds behind $500 Pass');
+  assert.match(D.limitProblem(CL, bets({ pass: 50_000, odds: 100_100 }), { kind: 'odds' }), /2× your Pass bet/, 'Crapless the same');
+  // The sanity ceiling, on any spot.
+  assert.equal(D.limitProblem(CR, bets({ field: 100_000_000 }), { kind: 'field' }), '', 'exactly $1,000,000');
+  assert.equal(D.limitProblem(CR, bets({ field: 100_000_100 }), { kind: 'field' }), 'That bet is larger than the table allows.');
+  assert.equal(D.limitProblem(CR, bets({ place: { 8: 100_000_100 } }), {}), 'That bet is larger than the table allows.', 'found without a hint');
 });
 
 // ================= Craps at the table =================
@@ -390,40 +398,32 @@ const crRoll = (uid, d1, d2, seq = table(CRAPS).rollSeq) => {
 };
 const betsOf = (seat) => table(CRAPS).seats[seat].bets;
 
-test('every limit at the table, with cent-exact payouts: line $20, spot $30, Odds 2×, $60 on the felt', async () => {
-  seed(20000);
+test('big craps bets at the table, with cent-exact payouts: any amount the wallet covers; Odds still 2×; Come moves whole', async () => {
+  seed(500_000); // $5,000
   await cr('p1', 'sit', { seat: 0 });
-  await err(chips('p1', [{ kind: 'pass', cents: 2100 }]), 'SPOT_LIMIT', /Line limit: Pass holds up to \$20/);
-  await chips('p1', [{ kind: 'pass', cents: 2000 }]);
-  await err(chips('p1', [{ kind: 'field', cents: 3100 }]), 'SPOT_LIMIT', /Spot limit: Field holds up to \$30/);
-  await err(chips('p1', [{ kind: 'hard', number: 4, cents: 3100 }]), 'SPOT_LIMIT', /Spot limit: Hard 4/);
+  await chips('p1', [{ kind: 'pass', cents: 50_000 }]); // $500 Pass: was capped at $20
+  await chips('p1', [{ kind: 'field', cents: 3100 }, { kind: 'hard', number: 4, cents: 3100 }]); // were capped at $30
   await err(chips('p1', [{ kind: 'come', cents: 500 }]), 'BET_NOT_ALLOWED', /Come spot opens once a Point is set/);
-  await chips('p1', [{ kind: 'field', cents: 3000 }]);
-  await err(chips('p1', [{ kind: 'hard', number: 4, cents: 1100 }]), 'SPOT_LIMIT', /Table limit/);
-  await chips('p1', [{ kind: 'hard', number: 4, cents: 1000 }]); // exactly $60
-  assert.equal(D.totalOnFelt(betsOf(0)), 6000);
+  assert.equal(D.totalOnFelt(betsOf(0)), 56_200, '$562 on the felt: no table total');
   await cr('p1', 'removeBet', { kind: 'field' });
   await cr('p1', 'removeBet', { kind: 'hard', number: 4 }); // Hard ways come down any time before a roll
-  assert.equal(wallet('p1'), 20000 - 2000);
+  assert.equal(wallet('p1'), 500_000 - 50_000);
 
   await crRoll('p1', 2, 2); // point 4
   assert.equal(table(CRAPS).point, 4);
-  await err(chips('p1', [{ kind: 'odds', cents: 4100 }]), 'SPOT_LIMIT', /2× your Pass bet \(\$40\)/);
-  await chips('p1', [{ kind: 'odds', cents: 4000 }]); // above the $30 spot max: Odds aren't capped by it
-  await err(chips('p1', [{ kind: 'come', cents: 100 }]), 'SPOT_LIMIT', /Table limit/);
-  await chips('p1', [{ kind: 'odds', cents: -2000 }]);
-  await chips('p1', [{ kind: 'come', cents: 2000 }]);
-  await err(chips('p1', [{ kind: 'come', cents: 100 }]), 'SPOT_LIMIT', /Line limit: Come/);
+  await err(chips('p1', [{ kind: 'odds', cents: 100_100 }]), 'SPOT_LIMIT', /2× your Pass bet \(\$1000\)/);
+  await chips('p1', [{ kind: 'odds', cents: 100_000 }]); // $1,000 Odds behind $500
+  await chips('p1', [{ kind: 'come', cents: 2500 }]);
+  await chips('p1', [{ kind: 'come', cents: 2500 }]); // $50 Come: was capped at $20
 
-  // 1+3: point made. Pass $20 at 1:1, Odds $20 at 2:1; the fresh Come moves to 4.
+  // 1+3: point made. Pass $500 at 1:1, Odds $1,000 at 2:1; the fresh $50 Come moves to 4, all of it.
   const before = wallet('p1');
   await crRoll('p1', 1, 3);
-  assert.equal(wallet('p1'), before + 4000 + 6000);
-  assert.deepEqual(betsOf(0).comeOn, { 4: { bet: 2000, odds: 0 } });
-  // Come Odds on 4: up to 2× the Come bet.
-  await err(chips('p1', [{ kind: 'comeOdds', number: 4, cents: 4100 }]), 'SPOT_LIMIT', /2× your Come 4 bet/);
+  assert.equal(wallet('p1'), before + 100_000 + 300_000);
+  assert.deepEqual(betsOf(0).comeOn, { 4: { bet: 5000, odds: 0 } });
+  await err(chips('p1', [{ kind: 'comeOdds', number: 4, cents: 10_100 }]), 'SPOT_LIMIT', /2× your Come 4 bet/);
   await err(chips('p1', [{ kind: 'comeOdds', number: 5, cents: 100 }]), 'BET_NOT_ALLOWED', /need a Come bet on 5/);
-  await chips('p1', [{ kind: 'comeOdds', number: 4, cents: 4000 }]);
+  await chips('p1', [{ kind: 'comeOdds', number: 4, cents: 10_000 }]);
   await err(cr('p1', 'removeBet', { kind: 'come' }), 'BET_LOCKED', /stays on its number/);
   await cr('p1', 'removeBet', { kind: 'comeOdds', number: 4 }); // its Odds can come down
   await chips('p1', [{ kind: 'comeOdds', number: 4, cents: 1000 }, { kind: 'pass', cents: 500 }]);
@@ -432,7 +432,7 @@ test('every limit at the table, with cent-exact payouts: line $20, spot $30, Odd
   await crRoll('p1', 3, 4);
   assert.equal(wallet('p1'), w + 1000 + 1000, 'Pass $5 → $10 back, Come Odds $10 returned');
   assert.deepEqual(betsOf(0).comeOn, {});
-  moneyAddsUp(20000);
+  moneyAddsUp(500_000);
 });
 
 test('Come bets at the table: several numbers, one Come bet per number, seven-out takes them all', async () => {

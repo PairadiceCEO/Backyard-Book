@@ -5,15 +5,14 @@
 import { adminDb } from '../firebaseAdmin.js';
 import { HttpError } from '../http.js';
 import { randomInt as defaultRandomInt } from './rng.js';
-import { applyCasinoEntries } from './money.js';
+import { applyCasinoEntries, requireBetAmount } from './money.js';
 import { checkProfile } from '../auth.js';
 import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
-import { isValidCasinoBet } from '../../shared/casino/constants.js';
 import { STOPS_PER_REEL, lineSymbols, lineWin } from '../../shared/casino/slotMachine.js';
 
 function parseSpin(body) {
   const amount = body.amount;
-  if (!isValidCasinoBet(amount)) throw new HttpError(400, 'BAD_BET', 'Bets are whole dollars from $1 to $10.');
+  requireBetAmount(amount); // no maximum: whole dollars ≥ $1 under the sanity ceiling; the wallet is checked below
   if (typeof body.requestId !== 'string' || !REQUEST_ID_PATTERN.test(body.requestId)) {
     throw new HttpError(400, 'BAD_REQUEST_ID', 'Missing or invalid requestId.');
   }

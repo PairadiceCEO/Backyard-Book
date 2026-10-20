@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CASINO_GAMES, CASINO_SEATS } from '../../../shared/casino/constants.js';
+import { BET_HELP_TEXT, CASINO_GAMES, CASINO_SEATS } from '../../../shared/casino/constants.js';
 import SlotSymbol from '../../components/casino/SlotSymbol.jsx';
 import { friendlyError } from '../../components/StatusViews.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -88,7 +88,7 @@ export default function CasinoLobby() {
   return (
     <section className="page">
       <h2 className="section-title">Casino</h2>
-      <p className="muted small">Play money from your wallet. Bets are $1–$10.</p>
+      <p className="muted small">Play money from your wallet. {BET_HELP_TEXT}</p>
       <ul className="lobby-list">
         {CASINO_GAMES.map((game) => {
           if (game.kind === 'table' && !game.opensIn) return <OpenTableCard key={game.id} game={game} />;

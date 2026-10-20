@@ -39,7 +39,15 @@ const rollAs = (...d) => { dice = [...d]; };
 let GAME = 'craps';
 const act = (uid, action, fields = {}, now = T0) => handleTableAction(callerOf(uid), { game: GAME, action, ...fields }, { now, randomInt: (m) => rng(m) });
 let reqNo = 0;
-const bet = (uid, kind, amount, extra = {}, now = T0) => act(uid, 'bet', { kind, amount, requestId: `cr-req-${String(++reqNo).padStart(6, '0')}`, ...extra }, now);
+// Puts `amount` dollars on one spot. A chip amount goes through `bet` (one chip, 0.16.0 chip check); any other whole
+// amount (e.g. $6 on Place 6, built from $5 + $1 chips) goes through `bets` as one change, the way the phone sends it.
+const CHIPS = [1, 2, 5, 10, 25, 100];
+const bet = (uid, kind, amount, extra = {}, now = T0) => {
+  const requestId = `cr-req-${String(++reqNo).padStart(6, '0')}`;
+  if (CHIPS.includes(amount) || !Number.isInteger(amount) || amount <= 0) return act(uid, 'bet', { kind, amount, requestId, ...extra }, now);
+  const { number, ...rest } = extra;
+  return act(uid, 'bets', { changes: [{ kind, ...(number === undefined ? {} : { number }), cents: amount * 100 }], requestId, ...rest }, now);
+};
 const table = () => fake.get(`casinoTables/${GAME}`);
 const wallet = (uid) => fake.get(`users/${uid}`).balanceCents;
 const ledger = () => [...fake.store].filter(([k]) => k.startsWith('ledger/')).map(([k, v]) => ({ id: k.slice(7), ...v }));
@@ -189,24 +197,25 @@ test('taking bets down: Odds, Place and Field any time before the roll; Pass onl
   moneyAddsUp(10000);
 });
 
-test('limits: chips are whole dollars up to $10, Pass up to $20, the wallet, leaving players, unknown bets', async () => {
+test('chips and amounts: a chip is $1–$100 in denominations, a spot has no maximum (the wallet is the cap), leaving players, unknown bets', async () => {
   seed(2200);
   GAME = 'craps';
   await sitAll(['p1', 'p2']);
-  await err(bet('p1', 'pass', 11), 'BAD_BET');
-  await err(bet('p1', 'pass', 0), 'BAD_BET');
-  await err(bet('p1', 'pass', 2.5), 'BAD_BET');
+  await err(act('p1', 'bet', { kind: 'pass', amount: 11, requestId: 'cr-chip-0011' }), 'BAD_CHIP');
+  await err(bet('p1', 'pass', 0), 'BAD_CHIP');
+  await err(bet('p1', 'pass', 2.5), 'BAD_CHIP');
   await err(bet('p1', 'hardways', 1), 'BAD_BET');
   await err(bet('p1', 'place', 1), 'BAD_BET');
   await err(bet('p1', 'hard', 1), 'BAD_BET', 'a Hard way needs its number');
   await bet('p1', 'pass', 10);
   await bet('p1', 'pass', 10);
-  await err(bet('p1', 'pass', 1), 'SPOT_LIMIT');
-  await err(bet('p1', 'field', 3), 'INSUFFICIENT_BALANCE');
-  assert.equal(wallet('p1'), 200);
+  await bet('p1', 'pass', 1); // $21 on Pass: no line limit any more
+  await err(bet('p1', 'field', 2), 'INSUFFICIENT_BALANCE');
+  assert.equal(wallet('p1'), 100);
+  assert.equal(betsOf('p1').pass, 2100);
   await act('p2', 'leave');
   assert.equal(table().seats[1], null, 'nothing riding: freed at once');
-  await bet('p1', 'field', 2);
+  await bet('p1', 'field', 1);
   const r = await act('p1', 'leave');
   assert.equal(r.leaving, true, 'a Pass bet must play out');
   await err(bet('p1', 'field', 1), 'LEAVING');
@@ -433,7 +442,8 @@ test('chips tapped together arrive as one request: all applied with one charge, 
   assert.equal(ledger().filter((e) => e.uid === 'p1' && e.type === 'casino_bet').length, 1, 'one charge for the batch');
   // One bad chip refuses the whole batch and changes nothing.
   const before = table();
-  await err(chipsDown('p1', [{ kind: 'field', cents: 100 }, { kind: 'pass', cents: 1400 }]), 'SPOT_LIMIT');
+  await err(chipsDown('p1', [{ kind: 'field', cents: 100 }, { kind: 'odds', cents: 100 }]), 'BET_NOT_ALLOWED', 'Odds before a point');
+  await err(chipsDown('p1', [{ kind: 'field', cents: 100 }, { kind: 'pass', cents: 100_000_100 }]), 'BET_TOO_LARGE');
   await err(chipsDown('p1', [{ kind: 'place', number: 6, cents: 100 }]), 'BET_NOT_ALLOWED');
   await err(chipsDown('p1', [{ kind: 'field', cents: 150 }]), 'BAD_BET');
   await err(chipsDown('p1', [{ kind: 'field', cents: -300 }]), 'NO_BET');
@@ -457,7 +467,7 @@ test('chips tapped together arrive as one request: all applied with one charge, 
   moneyAddsUp(300);
 });
 
-test('Odds behind Pass: up to 2× the Pass bet, past the $10 spot limit; Crapless the same', async () => {
+test('Odds behind Pass: up to 2× the Pass bet (a game rule, kept with no other maximum); Crapless the same', async () => {
   rng = scriptedRng;
   dice = [];
   for (const variant of ['craps', 'crapless']) {
@@ -473,7 +483,7 @@ test('Odds behind Pass: up to 2× the Pass bet, past the $10 spot limit; Craples
     await err(chipsDown('p1', [{ kind: 'odds', cents: 100 }]), 'SPOT_LIMIT');
     await chipsDown('p2', [{ kind: 'odds', cents: 500 }, { kind: 'odds', cents: 100 }]);
     await err(chipsDown('p2', [{ kind: 'odds', cents: 100 }]), 'SPOT_LIMIT', '$3 Pass allows $6 Odds');
-    await err(bet('p2', 'place', 11, { number: 6 }), 'BAD_BET');
+    await err(act('p2', 'bet', { kind: 'place', number: 6, amount: 11, requestId: `cr-chip-11-${variant}` }), 'BAD_CHIP', '$11 is not one chip');
     // Point made: $20 Odds on 6 pay 6:5.
     rollAs(4, 2);
     await roll('p1');

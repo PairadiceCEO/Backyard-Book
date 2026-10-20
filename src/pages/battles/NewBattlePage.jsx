@@ -12,10 +12,10 @@ import { friendlyError } from '../../components/StatusViews.jsx';
 import { battleAction } from '../../lib/battles.js';
 import { makeRequestId } from '../../lib/api.js';
 import { formatMoney } from '../../lib/format.js';
+import { BET_HELP_TEXT } from '../../../shared/casino/constants.js';
 import {
   BATTLE_DESCRIPTION_MAX,
   BATTLE_MAX_PLAYERS,
-  BATTLE_STAKE_MAX_DOLLARS,
   BATTLE_TITLE_MAX,
   TEAMS_MAX,
   TEAMS_MIN,
@@ -168,9 +168,10 @@ export default function NewBattlePage() {
 
         <label className="field">
           <span>Stake per player ($)</span>
-          <input inputMode="numeric" value={stakeText} onChange={(e) => setStakeText(e.target.value.replace(/[^\d]/g, '').slice(0, 5))} />
+          {/* 10 digits: enough to type past the $1,000,000 sanity ceiling and see why it's refused (was 5, a hidden $99,999 cap). */}
+          <input inputMode="numeric" value={stakeText} onChange={(e) => setStakeText(e.target.value.replace(/[^\d]/g, '').slice(0, 10))} />
           <span className="muted small">
-            Whole dollars, $1–${BATTLE_STAKE_MAX_DOLLARS.toLocaleString('en-US')}. Yours is taken when you create it; each player's when they accept. Your wallet:{' '}
+            {BET_HELP_TEXT} Yours is taken when you create it; each player's when they accept. Your wallet:{' '}
             {formatMoney(balanceCents)}.
           </span>
         </label>

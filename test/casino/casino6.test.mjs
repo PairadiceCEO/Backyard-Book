@@ -31,7 +31,15 @@ const rollAs = (...d) => { dice = [...d]; };
 let GAME = 'craps';
 const act = (uid, action, fields = {}, now = T0) => handleTableAction(callerOf(uid), { game: GAME, action, ...fields }, { now, randomInt: rng });
 let reqNo = 0;
-const bet = (uid, kind, amount, extra = {}, now = T0) => act(uid, 'bet', { kind, amount, requestId: `c6-req-${String(++reqNo).padStart(6, '0')}`, ...extra }, now);
+// Puts `amount` dollars on one spot. A chip amount goes through `bet` (one chip, 0.16.0 chip check); any other whole
+// amount (e.g. $6 on Place 6, built from $5 + $1 chips) goes through `bets` as one change, the way the phone sends it.
+const CHIPS = [1, 2, 5, 10, 25, 100];
+const bet = (uid, kind, amount, extra = {}, now = T0) => {
+  const requestId = `c6-req-${String(++reqNo).padStart(6, '0')}`;
+  if (CHIPS.includes(amount) || !Number.isInteger(amount) || amount <= 0) return act(uid, 'bet', { kind, amount, requestId, ...extra }, now);
+  const { number, ...rest } = extra;
+  return act(uid, 'bets', { changes: [{ kind, ...(number === undefined ? {} : { number }), cents: amount * 100 }], requestId, ...rest }, now);
+};
 const table = () => fake.get(`casinoTables/${GAME}`);
 const roll = (uid, now = T0, seq = table().rollSeq) => act(uid, 'roll', { rollSeq: seq }, now);
 

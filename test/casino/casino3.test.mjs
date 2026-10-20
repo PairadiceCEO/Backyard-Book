@@ -424,7 +424,7 @@ test('betting: chips stack into one bet, a change charges or refunds the differe
   assert.ok(ledger().some((e) => e.type === 'casino_refund' && e.amountCents === 200 && e.uid === 'p1'));
   assert.equal((await chips('p1', 6, T0 + 7, 'bj-req-replay-001')).betCents, 600);
   assert.equal((await chips('p1', 9, T0 + 8, 'bj-req-replay-001')).duplicate, true, 'a retried request is applied once');
-  await err(chips('p1', 11, T0 + 10), 'BAD_BET');
+  await err(chips('p1', 1_000_001, T0 + 10), 'BET_TOO_LARGE');
   await err(chips('p2', 1.5, T0 + 10), 'BAD_BET');
   await err(act('p2', 'confirm', {}, T0 + 10), 'NO_BET');
   await act('p1', 'confirm', {}, T0 + 10);

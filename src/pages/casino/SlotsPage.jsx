@@ -2,7 +2,8 @@
 // animation; the reels then stop one by one on the result. While they spin, the nav wallet is held at
 // "balance − bet" so the live balance can't give the result away early.
 //
-// The bet is built from chips ($1, $2, $5, $10; Undo, Clear; up to $10). Tap Spin again while the
+// The bet is built from chips ($1, $2, $5, $10, $25, $100; Undo, Clear). Minimum $1, no maximum: the wallet is the only
+// cap (and the server's $1,000,000 sanity ceiling). Tap Spin again while the
 // reels spin to stop them at once on the result (as soon as it has arrived) — that tap never starts or
 // charges another spin.
 
@@ -17,17 +18,22 @@ import { formatMoney } from '../../lib/format.js';
 import { friendlyError } from '../../components/StatusViews.jsx';
 import { PAYTABLE } from '../../../shared/casino/slotMachine.js';
 import { ChipRack, ChipStack, chipsFor } from '../../components/casino/Chips.jsx';
-import { CASINO_MAX_BET_DOLLARS, CASINO_MIN_BET_DOLLARS } from '../../../shared/casino/constants.js';
+import { BET_CEILING_CENTS, BET_CEILING_MESSAGE, BET_HELP_TEXT, CASINO_MIN_BET_DOLLARS, isValidBetAmount } from '../../../shared/casino/constants.js';
 
 const BET_STORAGE_KEY = 'backyardbook.slotBet';
 const MIN_SPIN_MS = 900; // reels spin at least this long, even if the server answers sooner
 const REEL_GAP_MS = 350; // then stop one after another
 const START_STOPS = [5, 13, 22];
 
+// "$1,250": whole dollars with thousands separators.
+function dollarsLabel(dollars) {
+  return `$${dollars.toLocaleString('en-US')}`;
+}
+
 function readSavedBet() {
   try {
     const saved = Number(window.sessionStorage.getItem(BET_STORAGE_KEY));
-    if (Number.isInteger(saved) && saved >= CASINO_MIN_BET_DOLLARS && saved <= CASINO_MAX_BET_DOLLARS) return saved;
+    if (isValidBetAmount(saved) && saved * 100 <= BET_CEILING_CENTS) return saved;
   } catch {
     // Storage can be blocked; fall back to $1.
   }
@@ -77,8 +83,8 @@ export default function SlotsPage() {
   const addChip = useCallback(
     (dollars) => {
       setError('');
-      if (bet + dollars > CASINO_MAX_BET_DOLLARS) {
-        setError(`The bet is up to $${CASINO_MAX_BET_DOLLARS}.`);
+      if ((bet + dollars) * 100 > BET_CEILING_CENTS) {
+        setError(BET_CEILING_MESSAGE);
         return;
       }
       if ((bet + dollars) * 100 > balanceCents) {
@@ -197,11 +203,11 @@ export default function SlotsPage() {
           )}
         </div>
 
-        <button type="button" className={bet ? 'slot-bet has-bet' : 'slot-bet'} onClick={() => addChip(chip)} disabled={busy} aria-label={`Bet $${bet}. Tap to add a $${chip} chip.`}>
+        <button type="button" className={bet ? 'slot-bet has-bet' : 'slot-bet'} onClick={() => addChip(chip)} disabled={busy} aria-label={`Bet ${dollarsLabel(bet)}. Tap to add a $${chip} chip.`}>
           <span className="slot-bet-label">Bet · tap to add ${chip}</span>
           <span className="spot-chips">
             <ChipStack cents={bet * 100} />
-            <span className="bet-amount">${bet}</span>
+            <span className="bet-amount">{dollarsLabel(bet)}</span>
           </span>
         </button>
         <ChipRack
@@ -220,8 +226,9 @@ export default function SlotsPage() {
         />
 
         <button type="button" className={busy ? 'btn btn-primary spin-btn spinning' : 'btn btn-primary spin-btn'} onClick={spin} disabled={!busy && bet < CASINO_MIN_BET_DOLLARS}>
-          {busy ? 'Stop' : bet ? `Spin · $${bet}` : 'Add a chip to spin'}
+          {busy ? 'Stop' : bet ? `Spin · ${dollarsLabel(bet)}` : 'Add a chip to spin'}
         </button>
+        <p className="muted small slot-help">{BET_HELP_TEXT}</p>
         {error ? (
           <p className="error-text small" role="alert">
             {error}
@@ -230,7 +237,7 @@ export default function SlotsPage() {
       </div>
 
       <div className="card paytable">
-        <h3 className="small-heading">Paytable · one payline · pays shown for your ${bet} bet</h3>
+        <h3 className="small-heading">Paytable · one payline · pays shown for your {dollarsLabel(bet)} bet</h3>
         <ul className="paytable-list">
           {PAYTABLE.map((line) => (
             <li key={line.id} className={result?.line?.id === line.id ? 'paytable-row hit' : 'paytable-row'}>

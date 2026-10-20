@@ -4,7 +4,7 @@
 // Layout (0.15.0), built so betting, taking down and rolling never need a scroll:
 //   1. one compact bar: the puck (ON 6 / OFF), the two dice and the last total, the countdown, and Roll when it's my
 //      turn (or "Sit down" / "Table full" for a player who isn't seated);
-//   2. the betting interface: chip rack + Take down, Undo / Clear + the $60 meter, and every spot (Pass, Odds,
+//   2. the betting interface: the six chips, then "On the felt $X" + Take down + Undo / Clear, and every spot (Pass, Odds,
 //      Don't Pass and its Odds, Come, Come bets on their numbers with their Odds, Place numbers, Field, Hard ways)
 //      in dense grids; two columns on a computer;
 //   3. below it: the seats, the last rolls, Leave seat, the help text and the rules.
@@ -15,7 +15,7 @@
 // as one request (Undo / Clear take back chips placed since the last roll). "Take down" + tap takes a
 // whole bet back. Roll carries the table's rollSeq, so a double tap can only roll once; the shooter's
 // dice start tumbling the moment Roll is tapped and land on the result from the reply.
-// Limits: line $20, other spots $30, Odds 2× their line bet, $60 on the felt in all (the meter shows it).
+// No maximum bets (0.16.0): any whole-dollar amount the wallet covers; Odds stay at most 2× their line bet (a game rule).
 // One seat per player here; leaving the page gives the seat up (useLeaveOnExit). No game rule lives in this file.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -33,6 +33,7 @@ import { newRequestId, tableAction } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
 import { DICE_ANIMATION_MS } from '../../../shared/casino/constants.js';
 import { DICE_VARIANTS } from '../../../shared/casino/diceVariants.js';
+import { BET_HELP_TEXT } from '../../../shared/casino/constants.js';
 import { cloneBets, emptyDiceBets, limitProblem, placeBlocker, removeBlocker, spotAmount, spotLimitCents, totalOnFelt } from '../../../shared/casino/dice.js';
 
 const NO_SEATS = [null, null, null, null, null];
@@ -92,30 +93,33 @@ function amountText(cents, empty = '') {
   return cents ? shortMoney(cents) : empty;
 }
 
-// Chip rack for the craps table: the four chips and Take down in one row (Undo / Clear sit with the meter).
-function CrapsRack({ chip, takeDown, onChip, onTakeDown, disabled }) {
+// Chip rack for the craps table: the six chips in one row (Take down sits with Undo / Clear, or in the dock).
+function CrapsRack({ chip, takeDown, onChip, disabled }) {
   return (
-    <div className="craps-rack">
-      <div className="craps-rack-chips" role="radiogroup" aria-label="Chip">
-        {CHIP_VALUES.map((d) => (
-          <button
-            key={d}
-            type="button"
-            role="radio"
-            aria-checked={!takeDown && chip === d}
-            aria-label={`$${d} chip`}
-            className={!takeDown && chip === d ? 'chip-pick active' : 'chip-pick'}
-            onClick={() => onChip(d)}
-            disabled={disabled}
-          >
-            <ChipToken dollars={d} />
-          </button>
-        ))}
-      </div>
-      <button type="button" aria-pressed={takeDown} className={takeDown ? 'btn take-down active' : 'btn take-down'} onClick={onTakeDown} disabled={disabled}>
-        Take down
-      </button>
+    <div className="craps-rack-chips" role="radiogroup" aria-label="Chip">
+      {CHIP_VALUES.map((d) => (
+        <button
+          key={d}
+          type="button"
+          role="radio"
+          aria-checked={!takeDown && chip === d}
+          aria-label={`$${d} chip`}
+          className={!takeDown && chip === d ? 'chip-pick active' : 'chip-pick'}
+          onClick={() => onChip(d)}
+          disabled={disabled}
+        >
+          <ChipToken dollars={d} />
+        </button>
+      ))}
     </div>
+  );
+}
+
+function TakeDownButton({ takeDown, onToggle, disabled }) {
+  return (
+    <button type="button" aria-pressed={takeDown} className={takeDown ? 'btn take-down active' : 'btn take-down'} onClick={onToggle} disabled={disabled}>
+      Take down
+    </button>
   );
 }
 
@@ -236,7 +240,6 @@ export default function CrapsPage({ game }) {
   const oddsMax = spotLimitCents(variant, myBets, 'odds');
   const dontOddsMax = spotLimitCents(variant, myBets, 'dontOdds');
   const onFelt = totalOnFelt(myBets);
-  const tableMax = variant.limits.total;
   const comeNumbers = placeNumbers.filter((n) => myBets.comeOn[n]);
 
   function tapSpot(kind, number) {
@@ -314,9 +317,9 @@ export default function CrapsPage({ game }) {
         setChip(d);
         setTakeDown(false);
       }}
-      onTakeDown={() => setTakeDown((v) => !v)}
     />
   ) : null;
+  const takeDownButton = mySeat ? <TakeDownButton takeDown={takeDown} onToggle={() => setTakeDown((v) => !v)} disabled={!canChip} /> : null;
 
   const lineSpots = [
     spot({ kind: 'pass', name: 'Pass', extra: 'line pass', aria: 'Pass Line, pays 1:1', cents: myBets.pass }),
@@ -325,7 +328,7 @@ export default function CrapsPage({ game }) {
       name: point ? `Odds ${point}` : 'Odds',
       sub: oddsRatio ? ratio(oddsRatio) : 'after point',
       extra: 'line odds',
-      aria: point ? `Odds on ${point}, pays ${oddsRatio ? ratio(oddsRatio) : ''}, up to ${formatMoney(oddsMax)}` : 'Odds behind Pass, once a Point is set',
+      aria: point ? `Odds on ${point}, pays ${oddsRatio ? ratio(oddsRatio) : ''}, at most ${formatMoney(oddsMax)} (2× Pass)` : 'Odds behind Pass, once a Point is set',
       cents: myBets.odds,
     }),
   ];
@@ -337,7 +340,7 @@ export default function CrapsPage({ game }) {
         name: "Don't Odds",
         sub: oddsRatio ? ratio([oddsRatio[1], oddsRatio[0]]) : 'after point',
         extra: 'line odds dont',
-        aria: point ? `Don't Pass Odds on ${point}, up to ${formatMoney(dontOddsMax)}` : "Don't Pass Odds, once a Point is set",
+        aria: point ? `Don't Pass Odds on ${point}, at most ${formatMoney(dontOddsMax)} (2× Don't Pass)` : "Don't Pass Odds, once a Point is set",
         cents: myBets.dontOdds,
       }),
     );
@@ -391,16 +394,11 @@ export default function CrapsPage({ game }) {
           ) : null}
           <div className="craps-col">
             {docked ? null : rack}
-            <div className="craps-tools">
+            <div className={docked ? 'craps-tools no-take-down' : 'craps-tools'}>
               <div className="craps-meter" aria-live="polite">
-                <span>
-                  <strong>{formatMoney(onFelt)}</strong> of {formatMoney(tableMax)}
-                </span>
-                <span className={onFelt >= tableMax ? 'craps-meter-room full' : 'craps-meter-room'}>Room {formatMoney(Math.max(0, tableMax - onFelt))}</span>
-                <span className="craps-meter-bar" aria-hidden="true">
-                  <span style={{ width: `${Math.min(100, (onFelt / tableMax) * 100)}%` }} />
-                </span>
+                On the felt <strong>{formatMoney(onFelt)}</strong>
               </div>
+              {docked ? null : takeDownButton}
               <button type="button" className="btn" onClick={chips.undo} disabled={!canChip || !chips.canUndo}>
                 Undo
               </button>
@@ -449,7 +447,7 @@ export default function CrapsPage({ game }) {
                     name: String(n),
                     sub: `Come ${shortMoney(myBets.comeOn[n].bet)}${point ? '' : ' off'}`,
                     extra: 'come-on',
-                    aria: `Come bet ${formatMoney(myBets.comeOn[n].bet)} on ${n}; tap for Odds (${ratio(variant.odds[n])}, up to ${formatMoney(spotLimitCents(variant, myBets, 'comeOdds', n))})`,
+                    aria: `Come bet ${formatMoney(myBets.comeOn[n].bet)} on ${n}; tap for Odds (${ratio(variant.odds[n])}, at most ${formatMoney(spotLimitCents(variant, myBets, 'comeOdds', n))})`,
                     cents: myBets.comeOn[n].odds,
                   }),
                 )}
@@ -506,7 +504,7 @@ export default function CrapsPage({ game }) {
           ? 'You are leaving: line, Come and Odds bets play out, then the seat frees and Place, Field and Hard ways come back.'
           : takeDown
             ? 'Take down: tap one of your bets to take all of it down (Pass and Don’t Pass stay up once a Point is set; a Come bet on its number stays, its Odds can come down).'
-            : `Pick a chip and tap a spot; each tap adds a chip. Line bets $1–$20, other spots $1–$30, Odds up to ${variant.oddsMultiple}× their line bet, ${formatMoney(tableMax)} on the felt in all.`}
+            : `Pick a chip and tap a spot; each tap adds a chip. ${BET_HELP_TEXT} Odds up to ${variant.oddsMultiple}× their line bet.`}
       </p>
 
       <p className="muted small table-rules">
@@ -529,7 +527,10 @@ export default function CrapsPage({ game }) {
       {docked && mySeat ? (
         <div className="craps-dock">
           {rack}
-          {rollButton}
+          <div className={rollButton ? 'craps-dock-row' : 'craps-dock-row solo'}>
+            {takeDownButton}
+            {rollButton}
+          </div>
         </div>
       ) : null}
     </section>
