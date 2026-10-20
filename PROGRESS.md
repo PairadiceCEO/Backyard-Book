@@ -5,6 +5,28 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.15.0 (Will, 2026-10-20 10:22 CT) — IN PROGRESS on wip
+Spec: Will's attachment of 2026-10-20 10:22. One phase on a fresh wip off main (d09682b); merge after every
+CLAUDE.md check; stop dev/harness servers at the end.
+
+### Checklist
+- [ ] 1 Same-game parlays with props allowed; new rule: at most one leg per player per stat in a parlay (player =
+      ticker player segment + series). Server (placeBets) + slip message "You already have a {player} {stat} pick in
+      this parlay." Old PROP_PARLAY_MESSAGE and its server check removed. ML + spread same game and crypto singles
+      stay. Tests (6 listed cases) + mutation check. CLAUDE.md "Deliberate decisions" line.
+- [ ] 2 Player props on the game page: section tabs "Game lines" / "Player props" (pre-game + tradable props only),
+      props fetched only when the tab opens (same /api/board props call, 30 s memory cache), section remembered in
+      sessionStorage (try/catch), tab disappears at game start (back to Game lines), /props redirects to the game
+      page with the tab selected, "Player props (N players) ›" button removed. Hooks checked. Phone screens: Game
+      lines, Player props, no-props game.
+- [ ] 3 Craps/Crapless layout: top bar (puck, dice + total, countdown, Roll), betting interface (chips, Take down,
+      Undo/Clear, $60 meter, every spot), then seats, history, Leave seat, help, rules. No scroll at 375×667,
+      390×844, 414×896, 1280×720, 1440×900; sticky bottom bar (chips, Take down, Roll) at 320×568. Tap targets
+      ≥ 44 px; two columns on a computer. "Sit down" in the top bar (first open seat / "Table full"). No game-logic
+      change. interact.mjs no-scroll check. Phone screens: point on, come-out, watching, full table (both variants).
+- [ ] 4 Checks: test:all, lint, build, interact.mjs (incl. no-scroll), dealcheck.mjs, phone check. Version 0.15.0.
+      Merge wip → main. Tonight's prop games for Will's test steps. Servers stopped.
+
 ## Phase 0.14.0 (Will, 2026-10-18 12:25 CT; re-sent 2026-10-20 09:33) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-18 12:25. One phase on a fresh wip off main; merge after every CLAUDE.md check;
 stop dev/harness servers at the end.
@@ -265,7 +287,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.14.0 is merged. Wait for Will's test results.
+0.15.0 item 1 (prop parlay rule), then 2 (props tab), then 3 (craps layout), then 4 (checks + merge).
 
 ## Open questions
 None open.
