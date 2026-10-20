@@ -123,7 +123,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 
 - **No maximum bets** on any game: Blackjack, Baccarat, Craps, Crapless, Slots, Battles and the sportsbook. Minimum $1, whole dollars; the wallet balance is the only cap. A single bet or stake over $1,000,000 is refused ("That bet is larger than the table allows."), a technical guard, not a game limit. Craps Odds stay at 2× the line bet.
 - **$25 and $100 chips** on every casino game and Slots.
-- The craps meter now reads "On the felt $X" (no $60 total, no "room left").
+- The craps meter now reads "On the felt $X" (no table total and no "room left" any more).
 
 ## 0.15.0
 

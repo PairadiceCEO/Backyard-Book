@@ -77,8 +77,12 @@ await check('three quick taps on Player: chips show at once, one request carries
 
 await check('a refused chip comes back off and the reason is shown', async () => {
   const table = { id: 'baccarat', game: 'baccarat', epoch: 'x', roundNo: 3, roundId: 'x-3', phase: 'betting', deadline: null, coup: null, shoeResults: '', shoe: { remaining: 400, total: 416 }, version: 5, updatedAt: now() - 5000, seats: [null, seat('u1', 'Mike', { bets: { player: 0, banker: 0, tie: 0 } }), null, null, null] };
+  let betRequests = 0;
   const { page, context } = await openPage('/casino/baccarat', [table], async (route, body) => {
-    if (body.action === 'bet') return json(route, 409, { error: { code: 'PHASE', message: 'Betting is closed for this hand.' } });
+    if (body.action === 'bet') {
+      betRequests += 1;
+      return json(route, 409, { error: { code: 'PHASE', message: 'Betting is closed for this hand.' } });
+    }
     return json(route, 200, { ok: true, serverNow: now() });
   });
   const banker = page.getByRole('button', { name: /Banker, pays/ });
@@ -89,12 +93,15 @@ await check('a refused chip comes back off and the reason is shown', async () =>
   assert.doesNotMatch(await banker.innerText(), /\$5\.00/, 'chip removed');
   assert.match(await page.locator('.bac-help').innerText(), /Betting is closed/);
   assert.match(await wallet(page), /\$96\.40/, 'wallet back');
-  // The limit is checked at the tap: $10 + $1 is refused without a request.
-  await page.getByRole('radio', { name: '$10 chip' }).click();
+  // No maximum (0.16.0): the wallet is checked at the tap. A $100 chip with $96.40 in the wallet is refused at once,
+  // with the reason and without a request.
+  const sent = betRequests;
+  await page.getByRole('radio', { name: '$100 chip' }).click();
   await banker.click();
-  await page.getByRole('radio', { name: '$1 chip' }).click();
-  await banker.click();
-  assert.match(await page.locator('.bac-help').innerText(), /up to \$10/);
+  assert.match(await page.locator('.bac-help').innerText(), /Not enough in your wallet \(\$96\.40\)/);
+  assert.doesNotMatch(await banker.innerText(), /\$100/, 'the chip never went down');
+  await page.waitForTimeout(500);
+  assert.equal(betRequests, sent, 'no request for a chip the wallet cannot cover');
   await context.close();
 });
 
