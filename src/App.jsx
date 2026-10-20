@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import { missingFirebaseConfig } from './firebase.js';
 import FullPageMessage from './components/FullPageMessage.jsx';
 import RequireAuth from './components/RequireAuth.jsx';
@@ -31,41 +32,44 @@ export default function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/setup" element={<SetupPage />} />
-      <Route
-        element={
-          <RequireAuth>
-            <AppLayout />
-          </RequireAuth>
-        }
-      >
-        <Route path="/sportsbook" element={<SportsbookPage />} />
-        <Route path="/sportsbook/battles/new" element={<NewBattlePage />} />
-        <Route path="/sportsbook/battles/:battleId" element={<BattleDetailPage />} />
-        <Route path="/sportsbook/challenges/new" element={<NewChallengePage />} />
-        <Route path="/sportsbook/challenges/:challengeId" element={<ChallengeDetailPage />} />
-        <Route path="/sportsbook/crypto/:coin" element={<CryptoCoinPage />} />
-        <Route path="/sportsbook/:league/:gameId" element={<GameDetailPage />} />
-        <Route path="/sportsbook/:league/:gameId/props" element={<PropsRedirect />} />
-        <Route path="/casino" element={<CasinoLobby />} />
-        <Route path="/casino/slots" element={<SlotsPage />} />
-        <Route path="/casino/:game" element={<CasinoTablePage />} />
-        <Route path="/my-bets" element={<MyBetsPage />} />
-        <Route path="/leaderboard" element={<LeaderboardPage />} />
-        <Route path="/shop" element={<ShopPage />} />
+    <>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/setup" element={<SetupPage />} />
         <Route
-          path="/admin"
           element={
-            <RequireAdmin>
-              <AdminPage />
-            </RequireAdmin>
+            <RequireAuth>
+              <AppLayout />
+            </RequireAuth>
           }
-        />
-      </Route>
-      <Route path="/" element={<Navigate to="/sportsbook" replace />} />
-      <Route path="*" element={<Navigate to="/sportsbook" replace />} />
-    </Routes>
+        >
+          <Route path="/sportsbook" element={<SportsbookPage />} />
+          <Route path="/sportsbook/battles/new" element={<NewBattlePage />} />
+          <Route path="/sportsbook/battles/:battleId" element={<BattleDetailPage />} />
+          <Route path="/sportsbook/challenges/new" element={<NewChallengePage />} />
+          <Route path="/sportsbook/challenges/:challengeId" element={<ChallengeDetailPage />} />
+          <Route path="/sportsbook/crypto/:coin" element={<CryptoCoinPage />} />
+          <Route path="/sportsbook/:league/:gameId" element={<GameDetailPage />} />
+          <Route path="/sportsbook/:league/:gameId/props" element={<PropsRedirect />} />
+          <Route path="/casino" element={<CasinoLobby />} />
+          <Route path="/casino/slots" element={<SlotsPage />} />
+          <Route path="/casino/:game" element={<CasinoTablePage />} />
+          <Route path="/my-bets" element={<MyBetsPage />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
+          <Route path="/shop" element={<ShopPage />} />
+          <Route
+            path="/admin"
+            element={
+              <RequireAdmin>
+                <AdminPage />
+              </RequireAdmin>
+            }
+          />
+        </Route>
+        <Route path="/" element={<Navigate to="/sportsbook" replace />} />
+        <Route path="*" element={<Navigate to="/sportsbook" replace />} />
+      </Routes>
+      <Analytics />
+    </>
   );
 }
