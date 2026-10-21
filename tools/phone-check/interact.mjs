@@ -188,7 +188,8 @@ await check('three quick taps on Player: chips show at once, one request carries
   await player.click();
   await player.click();
   const shownAt = Date.now();
-  assert.match(await player.innerText(), /\$6\.00/, 'all three chips on the spot at once');
+  assert.match(await player.getAttribute('aria-label'), /your bet \$6\.00/, 'all three chips on the spot at once');
+  assert.match(await player.innerText(), /\$6/, 'and drawn on it');
   assert.notEqual(await wallet(page), before);
   // The wallet re-renders a moment after the third tap (well before the 400 ms reply): give it up to 300 ms.
   let shown = await wallet(page);
@@ -198,7 +199,7 @@ await check('three quick taps on Player: chips show at once, one request carries
   await page.waitForTimeout(1200);
   assert.equal(bets.length, 1, `taps within 300 ms → one request (got ${bets.length})`);
   assert.equal(bets[0].player, 6);
-  assert.match(await player.innerText(), /\$6\.00/, 'still there after the reply');
+  assert.match(await player.getAttribute('aria-label'), /your bet \$6\.00/, 'still there after the reply');
   assert.match(await wallet(page), /\$90\.40/, 'wallet from the reply');
   await context.close();
 });
@@ -216,9 +217,9 @@ await check('a refused chip comes back off and the reason is shown', async () =>
   const banker = page.getByRole('button', { name: /Banker, pays/ });
   await page.getByRole('radio', { name: '$5 chip' }).click();
   await banker.click();
-  assert.match(await banker.innerText(), /\$5\.00/);
+  assert.match(await banker.getAttribute('aria-label'), /your bet \$5\.00/);
   await page.waitForTimeout(900);
-  assert.doesNotMatch(await banker.innerText(), /\$5\.00/, 'chip removed');
+  assert.doesNotMatch(await banker.getAttribute('aria-label'), /your bet \$5\.00/, 'chip removed');
   assert.match(await page.locator('.bac-help').innerText(), /Betting is closed/);
   assert.match(await wallet(page), /\$96\.40/, 'wallet back');
   // No maximum (0.16.0): the wallet is checked at the tap. A $100 chip with $96.40 in the wallet is refused at once,
@@ -617,7 +618,7 @@ await check('craps vs Crapless: 6 number boxes in the order 4 5 SIX 8 NINE 10 an
   await context.close();
 });
 
-await check('craps: the lettering font loads once from Google Fonts (preconnect + display=swap), only on a craps table; areas are real buttons with focus rings', async () => {
+await check('craps: the lettering font loads once from Google Fonts (preconnect + display=swap), only on casino tables; areas are real buttons with focus rings', async () => {
   const { page, context } = await openCraps('/casino/craps', [crapsWorst('craps')], { width: 375, height: 667 });
   const links = await page.evaluate(() => [...document.head.querySelectorAll('link[data-felt-font]')].map((l) => `${l.rel} ${l.href}`));
   assert.equal(links.length, 3);
@@ -634,9 +635,9 @@ await check('craps: the lettering font loads once from Google Fonts (preconnect 
   assert.notEqual(ringed.outline, 'none', 'focus ring drawn');
   assert.match(ringed.color, /rgb\(245, 196, 81\)/, `gold ring (${ringed.color})`);
   await context.close();
-  // The sportsbook never loads it.
-  const other = await openPage('/casino/baccarat', [], async (route) => json(route, 200, { ok: true, serverNow: now() }));
-  assert.equal(await other.page.evaluate(() => document.head.querySelectorAll('link[data-felt-font]').length), 0, 'only craps tables add the font');
+  // The sportsbook never loads it (0.19.0: Blackjack, Baccarat and Slots do, their chips and felt use it).
+  const other = await openPage('/', [], async (route) => json(route, 200, { ok: true, serverNow: now() }));
+  assert.equal(await other.page.evaluate(() => document.head.querySelectorAll('link[data-felt-font]').length), 0, 'the sportsbook does not load the font');
   await other.context.close();
 });
 
