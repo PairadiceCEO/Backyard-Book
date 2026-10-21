@@ -29,7 +29,7 @@ import {
   useTimedReveal,
 } from '../../hooks/useCasinoTable.js';
 import { useChipBetting } from '../../hooks/useChipBetting.js';
-import { newRequestId, tableAction } from '../../lib/casino.js';
+import { newRequestId } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
 import { BET_HELP_TEXT, betCeilingProblem } from '../../../shared/casino/constants.js';
 import { cardRank } from '../../../shared/casino/cards.js';
@@ -144,8 +144,13 @@ function SeatPanel({
     },
     [seat.betCents, balanceCents],
   );
+  // Sends the seat's new total; resolves with what the server holds now, so the next batch builds on it.
   const sendChips = useCallback(
-    (_changes, totals) => call('bet', { seat: index, amount: (totals.bet ?? 0) / 100, requestId: newRequestId() }),
+    async (_changes, totals) => {
+      const reply = await call('bet', { seat: index, amount: (totals.bet ?? 0) / 100, requestId: newRequestId() });
+      const held = reply?.table?.seats?.[index]?.betCents ?? reply?.betCents;
+      return Number.isInteger(held) ? { bet: held } : null;
+    },
     [call, index],
   );
   const chips = useChipBetting({ spots: serverSpots, roundKey: roundId, validate, send: sendChips, onPending, enabled: canBet });
@@ -317,7 +322,7 @@ export default function BlackjackPage() {
   const dealer = table?.dealer ?? { cards: [], holeDown: false };
 
   const seconds = useCountdown(deadline);
-  useDeadlineTick(GAME, deadline, Boolean(table));
+  useDeadlineTick(GAME, deadline, { enabled: Boolean(table), call, phase: table?.phase ?? null });
   useHeartbeat(GAME, seated);
   useLeaveOnExit(GAME, seated);
 
@@ -326,8 +331,8 @@ export default function BlackjackPage() {
   const [actionError, setActionError] = useState('');
 
   useEffect(() => {
-    tableAction(GAME, 'tick').catch(() => {});
-  }, []);
+    call('tick').catch(() => {}); // through call: the reply's table shows at once
+  }, [call]); // call is stable per game, so this still runs once per visit
 
   // ---- cards dealt in the latest write turn over at the server's times ----
   // (gaps from shared/casino/timing.js; t is each card's offset from lastDeal.at)

@@ -27,7 +27,7 @@ import {
   useTimedReveal,
 } from '../../hooks/useCasinoTable.js';
 import { useChipBetting } from '../../hooks/useChipBetting.js';
-import { newRequestId, tableAction } from '../../lib/casino.js';
+import { newRequestId } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
 import { BET_HELP_TEXT, betCeilingProblem } from '../../../shared/casino/constants.js';
 import { ChatButton, ChatDrawer } from '../../components/casino/CasinoChat.jsx';
@@ -88,15 +88,20 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, call, roundI
     },
     [serverBets, balanceCents],
   );
+  // Sends the seat's three totals; resolves with that seat's bets as the server now holds them (from the reply's table),
+  // so the next batch builds on them.
   const sendChips = useCallback(
-    (_changes, totals) =>
-      call('bet', {
+    async (_changes, totals) => {
+      const reply = await call('bet', {
         seat: index,
         player: (totals.player ?? 0) / 100,
         banker: (totals.banker ?? 0) / 100,
         tie: (totals.tie ?? 0) / 100,
         requestId: newRequestId(),
-      }),
+      });
+      const held = reply?.table?.seats?.[index]?.bets;
+      return held && typeof held === 'object' ? { player: held.player ?? 0, banker: held.banker ?? 0, tie: held.tie ?? 0 } : null;
+    },
     [call, index],
   );
   const chips = useChipBetting({ spots: serverBets, roundKey: roundId, validate, send: sendChips, onPending, enabled: canBet });
@@ -210,7 +215,7 @@ export default function BaccaratPage() {
   const roundId = table?.roundId ?? null;
 
   const seconds = useCountdown(deadline);
-  useDeadlineTick(GAME, deadline, Boolean(table));
+  useDeadlineTick(GAME, deadline, { enabled: Boolean(table), call, phase: table?.phase ?? null });
   useHeartbeat(GAME, seated);
   useLeaveOnExit(GAME, seated);
 
@@ -222,8 +227,8 @@ export default function BaccaratPage() {
   // Arriving at the table: one tick applies anything overdue (an abandoned table waits for the first
   // visitor) and gives this phone the server's clock. Runs once per visit.
   useEffect(() => {
-    tableAction(GAME, 'tick').catch(() => {});
-  }, []);
+    call('tick').catch(() => {}); // through call: the reply's table shows at once
+  }, [call]); // call is stable per game, so this still runs once per visit
 
   // ---- the deal: cards turn over at the server's times (gaps from shared/casino/timing.js) ----
   const coup = phase === 'results' ? table?.coup ?? null : null;

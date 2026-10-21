@@ -5,6 +5,65 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.17.2 (Will, 2026-10-20 19:30 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
+Spec: Will's attachment of 2026-10-20 19:30. 0.17.1 ("remove the Slots chat, clearer chat errors") was never started in
+this repo (main = wip = 0.17.0's merge a932011, no branch, commit or PROGRESS entry), and its full spec isn't here, so it
+was not invented; 0.17.2 goes straight on top of 0.17.0. Fresh wip off main.
+
+### Checklist
+- [x] 1 Stale totals. Reproduced first (interact.mjs, fake server with 500 ms bet replies that refuses negatives like
+      the real one, listener catching up 150 ms after the reply), on the old code: Clear in flight sent 10 then −10
+      (refused, chips bounced back); $5 × 4 in two batches sent 10 then 10 (server $10, screen $20); Undo in flight
+      misfired; and worse, in Baccarat a Banker batch sent while a Player batch was in flight sent 0/10/0, silently
+      wiping the Player bet with no error. Cause as reviewed: flush() re-runs synchronously after the await, while
+      spotsRef still holds the pre-reply amounts.
+      Fix (client only; server unchanged): src/hooks/useChipBetting.js — `send` may resolve with the server's spots;
+      they go into spotsRef before the next flush; spotsRef is overwritten from props only when the prop changes (so a
+      render with an older table copy can't undo it); the screen sums spotsRef + unconfirmed chips; a batch whose total
+      would go below $0 is never sent (history restored as on a refusal, "Your bet changed, try again").
+      BlackjackPage `sendChips` resolves { bet: reply.table.seats[i].betCents ?? reply.betCents }; BaccaratPage resolves
+      that seat's { player, banker, tie } from reply.table. Craps' send returns nothing → unchanged behaviour.
+      Checks (interact.mjs, Blackjack and Baccarat each): Clear in flight → amounts 10 then 0, never negative, server and
+      screen $0, no error; $5 × 4 across two batches → $20 both; Undo in flight → $5; Baccarat two spots (Player $10 in
+      flight + Banker $5 × 2 → $10 / $10; then $25 + Clear in flight → 0/0/0). All 7 fail on the old code, pass now.
+      Existing chip checks (batching, refusal rollback, Undo/Clear, craps no-scroll, no maximum bets) still pass.
+- [x] 2 Results pause 2.5 s: shared/casino/timing.js `RESULTS_MS = 2500` (was RESULTS_SECONDS = 5; re-exported from
+      constants.js); blackjackTable finishRound = now + revealPadMs + RESULTS_MS; baccaratTable = coupRevealMs +
+      RESULTS_MS. "Next hand in Xs" rounds up (3, 2, 1). casino2/casino3 deadline asserts → 2500; README timers line.
+      15 s betting/turn clocks and dealing gaps unchanged.
+- [x] 3 New hand not starting at the end of the results countdown. Reproduced with tools/phone-check/tablesim.mjs: the
+      REAL Blackjack/Baccarat engines (server/casino with the in-memory Firestore) behind two pages, Will seated and a
+      player only watching, real timers, table writes pushed to each page's listener after a delay. Under ideal
+      conditions it worked (~0.4 s). The actual cause is the client's tick, found by adding field conditions:
+      (a) Each phone tried 5 times, 2.5 s apart, then gave up for good. When those ticks failed (cold start, network) or
+          came early, nobody moved the table and it sat on its results indefinitely, with the old hand and bet on
+          screen; only a page reload (whose one-time arrival tick goes out) moved it on. Reproduced: ticks failing →
+          both phones stop after 5 each, table still on results 26 s after 0.
+      (b) The tick's reply was thrown away (tableAction, not the page's call), so a screen only learned about the next
+          hand from its Firestore listener; a slow or stalled listener left it on the old hand even though the server
+          had moved on. Reproduced: listener 2.5 s late → Will's own tick succeeded but his screen stayed on results 2.8 s.
+      (c) The countdown (and the tick) ran early: replies stamp serverNow after the server's work, and the phone took
+          that as the round trip's midpoint, so it thought the server was ahead by about half the work. Reproduced: 600 ms
+          of server work → "Next hand in 0s" 263 ms before the deadline; a tick in that window is refused as early.
+      Also fixed (fragile, not seen in the runs): newerTable compared updatedAt first, but updatedAt is the request's
+      start time, kept when Firestore retries a transaction, so a request that started earlier and committed later
+      carries an older updatedAt on a newer table → a reply copy could hide the newer listener copy. Now the write
+      counter decides within one epoch (version only goes up); time only across epochs.
+      Fixes: useDeadlineTick(game, deadline, { enabled, call, phase }) ticks at the deadline + 0–800 ms, then keeps
+      ticking every 2 s + 0–400 ms until the deadline or phase changes (stops only on page exit); a "not yet" reply that
+      carries the deadline schedules the next try just after it; ticks (and the one-time arrival tick) go through the
+      page's `call`, so the reply's table shows at once. router.js adds `serverStart`; lib/casino.js takes the midpoint
+      of serverStart/serverNow (and the network-only round trip) for the clock. Craps uses the same hook (same benefit).
+      After: ideal, 600 ms work, 2.5 s listener lag, 600 ms work + 2.5 s lag → both screens on the next hand (betting,
+      no cards, $0 spots) 0.02–0.97 s after 0, Blackjack and Baccarat; 12 failed ticks → moves on 8–9 s after 0 once
+      ticks get through (before: never); a forced 3 s wrong clock → moves at the real deadline. Beyond the spec: with an
+      8 s listener lag the watching phone's own screen is 8 s behind everything (it hasn't seen the results yet), so it
+      can trail by a few seconds.
+- [x] 4 Version 0.17.2; README, casino notes, phone-check README. Checks: test:all 330, lint, build, interact.mjs 29/29
+      (incl. the 7 in-flight chip checks), dealcheck 6/6, phone check 147 screens × 320/375/414 clean, tablesim (600 ms
+      server work) Blackjack 50 ms / Baccarat 167 ms on both screens. No firestore.rules change, no new index, no new
+      /api function. Merged wip → main. Harness server stopped.
+
 ## Phase 0.17.0 (Will, 2026-10-20 15:07 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 15:07 (items 1–2). One phase on a fresh wip off main (1576556, Analytics in);
 merge after every CLAUDE.md check; stop servers at the end.
@@ -518,7 +577,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.17.0 is merged. Wait for Will's test results (he must publish firestore.rules and create 3 ledger indexes).
+Nothing queued: 0.17.2 is merged. 0.17.1 (Slots chat removal, clearer chat errors) was never started here; it needs its spec re-sent.
 
 ## Open questions
 None open.

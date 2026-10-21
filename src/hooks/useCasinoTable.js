@@ -7,10 +7,19 @@ import { db } from '../firebase.js';
 import { lastCasinoCallAt, serverNow, tableAction } from '../lib/casino.js';
 import { HEARTBEAT_SECONDS, TICK_JITTER_MS } from '../../shared/casino/constants.js';
 
-// Which of two copies of the table doc is newer (server time, then version).
-function newerTable(a, b) {
+// Which of two copies of the table doc is newer. Within one table (same epoch) the write counter decides: every write
+// reads the doc and adds 1 to version inside its transaction, so version only ever goes up. updatedAt can't decide it:
+// it is the request's start time, kept when Firestore retries the transaction, so a request that started earlier but
+// committed later carries an older updatedAt on a newer table (0.17.2). A new epoch (the table doc was recreated)
+// falls back to time.
+export function newerTable(a, b) {
   if (!a) return b;
   if (!b) return a;
+  if (a.epoch && b.epoch && a.epoch === b.epoch) {
+    const av = Number(a.version) || 0;
+    const bv = Number(b.version) || 0;
+    if (av !== bv) return av > bv ? a : b;
+  }
   const at = Number(a.updatedAt) || 0;
   const bt = Number(b.updatedAt) || 0;
   if (at !== bt) return at > bt ? a : b;
@@ -79,25 +88,38 @@ export function useCountdown(deadline) {
   return seconds;
 }
 
-// When the deadline passes, wait a random 0–800 ms (so every phone doesn't fire at once) and send tick.
-// The server applies the default only once; if the table still shows the same deadline a little later
-// (another phone's tick hasn't landed, or the clocks disagree), tick again, up to 5 times.
-export function useDeadlineTick(game, deadline, enabled = true) {
+// When the deadline passes, wait a random 0–800 ms (so every phone doesn't fire at once) and send tick. The server
+// applies the default only once (and only once its own clock has passed the deadline). Until this table's deadline or
+// phase changes, keep ticking every 2 s (plus up to 0.4 s jitter): a tick that lands early, fails (cold start, network)
+// or loses to another phone's is simply sent again. 0.17.2: it used to give up after 5 tries, which could leave the
+// table on its results for good when every phone's tries failed or came early.
+// `call` (the page's useTableCall) shows the tick reply's table at once, so the next hand appears even when this
+// phone's Firestore listener is slow or stalled; without it the reply is only used for the clock.
+export const TICK_RETRY_MS = 2000;
+const TICK_RETRY_JITTER_MS = 400;
+
+export function useDeadlineTick(game, deadline, { enabled = true, call = null, phase = null } = {}) {
+  const callRef = useRef(call);
+  useEffect(() => {
+    callRef.current = call;
+  });
   useEffect(() => {
     if (!enabled || !game || !deadline) return undefined;
     let cancelled = false;
     let timer = null;
-    let attempts = 0;
 
     const fire = async () => {
       if (cancelled) return;
-      attempts += 1;
+      let next = TICK_RETRY_MS + Math.floor(Math.random() * TICK_RETRY_JITTER_MS);
       try {
-        await tableAction(game, 'tick');
+        const reply = callRef.current ? await callRef.current('tick') : await tableAction(game, 'tick');
+        // "Not yet": the server says when its deadline is; try again just after it rather than 2 s later.
+        const due = reply?.applied === false && Number(reply?.deadline) === deadline ? deadline - serverNow() : null;
+        if (due !== null && due > -TICK_RETRY_MS && due < TICK_RETRY_MS) next = Math.max(100, due + 100 + Math.floor(Math.random() * 300));
       } catch {
-        // A failed tick is harmless; the retry below or another phone covers it.
+        // A failed tick is harmless: the next one (or another phone's) covers it.
       }
-      if (!cancelled && attempts < 5) timer = setTimeout(fire, 2500);
+      if (!cancelled) timer = setTimeout(fire, next);
     };
 
     const wait = Math.max(0, deadline - serverNow()) + Math.floor(Math.random() * TICK_JITTER_MS);
@@ -106,7 +128,7 @@ export function useDeadlineTick(game, deadline, enabled = true) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [game, deadline, enabled]);
+  }, [game, deadline, phase, enabled]);
 }
 
 // Every 20 s while seated and the page is visible. Skipped when any casino call finished in the last

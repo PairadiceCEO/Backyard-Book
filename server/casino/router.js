@@ -21,6 +21,7 @@ const TABLE_ACTIONS = new Set([
 ]);
 
 export async function handleCasinoAction(caller, body, options = {}) {
+  const serverStart = Date.now(); // with serverNow, phones take the midpoint of the server's work as its clock
   const action = typeof body.action === 'string' ? body.action : '';
   let result;
 
@@ -34,5 +35,5 @@ export async function handleCasinoAction(caller, body, options = {}) {
     throw new HttpError(400, 'UNKNOWN_ACTION', action ? `Unknown casino action: ${action}` : 'Missing "action".');
   }
 
-  return { ...result, serverNow: Date.now() };
+  return { ...result, serverStart, serverNow: Date.now() };
 }

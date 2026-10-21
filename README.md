@@ -106,7 +106,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 
 - No console step (same rules as phase 1). Casino → **Blackjack**: 5 seats, sit / watch / leave like Baccarat.
 - **Rules:** 6 decks (312), reshuffled before a hand once 281 are dealt; if the shoe runs dry mid-hand, a fresh shoe is built from every card not on the table. Blackjack pays 3:2; the dealer hits soft 17 and peeks with an Ace or 10 up; insurance (Ace up, 15 s) is $0 to half your bet and pays 2:1. One split per seat (two cards of the same value; split Aces get one card each); double on any first two cards, also after a split. A bust is collected at once; naturals are paid right after the peek.
-- **Timers:** betting closes 15 s after the first bet (or at once when every seated player has bet); 15 s per hand, then it stands; results stay 5 s after the last card turns over.
+- **Timers:** betting closes 15 s after the first bet (or at once when every seated player has bet); 15 s per hand, then it stands; results stay 2.5 s after the last card turns over (Baccarat too), then the next hand opens by itself.
 - **Double taps:** Hit / Stand / Double / Split send the hand's index and its `actionSeq`; the server refuses a move only if that hand has already moved on, so another player's action in between never blocks you.
 - **Hole card:** dealt into `casinoTables/blackjack/private/shoe` (`holeCard`); the public doc only has `holeDown: true` until the dealer turns it over.
 
@@ -118,6 +118,11 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Shooter:** only the shooter can roll, and only with a line bet. Roll carries `rollSeq`, so a double tap rolls once and other players' bets never block it. The clock starts at the first bet after a come-out roll, or right after each roll while a Point is on; at zero the server rolls (or, on a come-out with no line bet, passes the dice). Seven-out: dice to the next seat clockwise.
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
+
+## 0.17.2
+
+- **Blackjack / Baccarat chips:** Clear, Undo and quick taps while a bet is on its way no longer bounce back or lower a bet.
+- **Results** stay up 2.5 s, then the next hand opens by itself on every screen (phones keep asking until it does).
 
 ## 0.17.0
 

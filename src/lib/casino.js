@@ -18,14 +18,20 @@ export function lastCasinoCallAt() {
   return lastSuccessAt;
 }
 
-function noteServerTime(serverTime, sentAt, receivedAt) {
+// serverStart / serverTime: when the server started and finished the request. Their midpoint matches the midpoint of
+// this phone's send and receive (0.17.2: using only the finish time, stamped after the server's work, made phones think
+// the server was ahead by about half that work, so countdowns hit 0 and ticks went out a few hundred ms early). The
+// network part of the round trip (minus the server's work) says how good the measurement is.
+function noteServerTime(serverTime, sentAt, receivedAt, serverStart) {
   if (!Number.isFinite(serverTime)) return;
-  const roundTrip = receivedAt - sentAt;
+  const work = Number.isFinite(serverStart) && serverStart <= serverTime ? serverTime - serverStart : 0;
+  const serverMid = serverTime - work / 2;
+  const roundTrip = Math.max(0, receivedAt - sentAt - work);
   // A fast reply measures the offset best; old measurements age out slowly so drift is picked up.
   bestRoundTripMs = Math.min(bestRoundTripMs * 1.05 + 5, 60_000);
   if (roundTrip <= bestRoundTripMs) {
     bestRoundTripMs = roundTrip;
-    offsetMs = serverTime - (sentAt + receivedAt) / 2;
+    offsetMs = serverMid - (sentAt + receivedAt) / 2;
   }
 }
 
@@ -34,7 +40,7 @@ export async function casinoAction(action, fields = {}) {
   const data = await apiRequest('/api/casino', { method: 'POST', body: { action, ...fields } });
   const receivedAt = Date.now();
   lastSuccessAt = receivedAt;
-  noteServerTime(data?.serverNow, sentAt, receivedAt);
+  noteServerTime(data?.serverNow, sentAt, receivedAt, data?.serverStart);
   return data;
 }
 

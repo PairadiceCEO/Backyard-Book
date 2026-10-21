@@ -20,7 +20,7 @@ import { formatDollars, requireBetAmount } from './money.js';
 import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
 import {
   CASINO_SEATS,
-  RESULTS_SECONDS,
+  RESULTS_MS,
   TURN_SECONDS,
 } from '../../shared/casino/constants.js';
 import {
@@ -211,7 +211,7 @@ async function closeBetting(ctx) {
   state.shoeResults = `${previous}${WINNER_LETTER[coup.winner]}`.slice(-BACCARAT_MAX_SHOE_RESULTS);
   delete state.history; // the old 20-hand strip (tables created before the scoreboard)
   state.phase = 'results';
-  state.deadline = ctx.now + coupRevealMs(coup.player, coup.banker) + RESULTS_SECONDS * 1000;
+  state.deadline = ctx.now + coupRevealMs(coup.player, coup.banker) + RESULTS_MS;
   ctx.changed = true;
 }
 

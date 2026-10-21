@@ -37,6 +37,132 @@ async function openPage(path, tables, onCasino) {
 }
 const wallet = (page) => page.locator('.wallet').innerText();
 
+// ---------- 0.17.2: absolute totals while a batch is in flight (Blackjack, Baccarat) ----------
+// A fake server that holds the real amounts, answers each bet after BET_REPLY_MS (so the next taps land while a batch is
+// in flight), refuses what the real one refuses (negative or fractional dollars), carries the table in its reply, and
+// pushes the new table to the page's listener a little later, like Firestore.
+const BET_REPLY_MS = 500;
+function chipRig(game) {
+  const seatData = game === 'blackjack'
+    ? { uid: 'u1', name: 'Mike', sitAt: now() - 60000, leaving: false, reqs: [], betCents: 0, stakeCents: 0, returnCents: 0, insurance: null, hands: [], result: null, ready: false }
+    : seat('u1', 'Mike', { bets: { player: 0, banker: 0, tie: 0 } });
+  const table = game === 'blackjack'
+    ? { id: 'blackjack', game: 'blackjack', epoch: 'q', roundNo: 4, roundId: 'q-4', phase: 'betting', deadline: null, turn: null, dealer: { cards: [], holeDown: false }, lastDeal: null, shoe: { remaining: 300, total: 312, shuffles: 0 }, version: 10, updatedAt: now() - 5000, seats: [null, seatData, null, null, null] }
+    : { id: 'baccarat', game: 'baccarat', epoch: 'q', roundNo: 4, roundId: 'q-4', phase: 'betting', deadline: null, coup: null, shoeResults: '', shoe: { remaining: 400, total: 416 }, version: 10, updatedAt: now() - 5000, seats: [null, seatData, null, null, null] };
+  const rig = { table, sent: [], refused: [], page: null };
+  rig.handler = async (route, body) => {
+    if (body.action !== 'bet') return json(route, 200, { ok: true, serverNow: now() });
+    rig.sent.push(body);
+    await new Promise((r) => setTimeout(r, BET_REPLY_MS));
+    const amounts = game === 'blackjack' ? [body.amount] : [body.player, body.banker, body.tie];
+    if (amounts.some((d) => !Number.isInteger(d) || d < 0)) {
+      rig.refused.push(body);
+      return json(route, 400, { error: { code: 'BAD_BET', message: 'Bets are whole dollars, at least $1.' } });
+    }
+    const t = structuredClone(rig.table);
+    if (game === 'blackjack') t.seats[1].betCents = body.amount * 100;
+    else t.seats[1].bets = { player: body.player * 100, banker: body.banker * 100, tie: body.tie * 100 };
+    t.version += 1;
+    t.updatedAt = now();
+    rig.table = t;
+    // The listener catches up a little after the reply.
+    setTimeout(() => rig.page?.evaluate((tt) => { window.__H.fs.casinoTables = [tt]; window.__H.emit?.(); }, t).catch(() => {}), 150);
+    const reply = { ok: true, table: t, balanceCents: 9640, serverNow: now() };
+    if (game === 'blackjack') reply.betCents = t.seats[1].betCents;
+    else reply.betCents = t.seats[1].bets.player + t.seats[1].bets.banker + t.seats[1].bets.tie;
+    return json(route, 200, reply);
+  };
+  return rig;
+}
+const serverCents = (rig, game, spot = 'player') => (game === 'blackjack' ? rig.table.seats[1].betCents : rig.table.seats[1].bets[spot]);
+const sentAmounts = (rig, game) => rig.sent.map((b) => (game === 'blackjack' ? b.amount : `${b.player}/${b.banker}/${b.tie}`));
+
+for (const game of ['blackjack', 'baccarat']) {
+  const spotBtn = (page, spot = 'player') => (game === 'blackjack' ? page.locator('.bj-bet-spot, [aria-label^="Seat 2 bet"]').first() : page.getByRole('button', { name: new RegExp(`${spot === 'player' ? 'Player' : 'Banker'}, pays`) }));
+  const shown = async (page, spot = 'player') => {
+    if (game === 'blackjack') return /bet \$(\d[\d,]*\.\d{2})/.exec(await page.locator('[aria-label^="Seat 2 bet"]').first().getAttribute('aria-label'))?.[1];
+    return /your bet \$(\d[\d,]*\.\d{2})/.exec(await page.getByRole('button', { name: new RegExp(`${spot === 'player' ? 'Player' : 'Banker'}, pays`) }).getAttribute('aria-label'))?.[1];
+  };
+  const open = async () => {
+    const rig = chipRig(game);
+    const { page, context } = await openPage(`/casino/${game}`, [rig.table], rig.handler);
+    rig.page = page;
+    await page.waitForTimeout(300);
+    return { rig, page, context };
+  };
+  const errorText = (page) => page.locator('.error-text').allInnerTexts();
+
+  await check(`${game}: Clear while a $10 bet is in flight sends 0 (never negative) and the spot ends at $0`, async () => {
+    const { rig, page, context } = await open();
+    await page.getByRole('radio', { name: '$10 chip' }).first().click();
+    await spotBtn(page).click();
+    await page.waitForTimeout(380); // the batch has gone; its reply is still 500 ms away
+    assert.equal(rig.sent.length, 1, 'the $10 batch is in flight');
+    await page.getByRole('button', { name: 'Clear' }).first().click();
+    await page.waitForTimeout(BET_REPLY_MS * 2 + 900);
+    assert.deepEqual(rig.refused, [], `nothing refused (sent ${JSON.stringify(sentAmounts(rig, game))})`);
+    assert.ok(rig.sent.every((b) => [b.amount, b.player, b.banker, b.tie].every((d) => d === undefined || d >= 0)), 'never a negative total');
+    assert.equal(serverCents(rig, game), 0, 'the server ends at $0');
+    assert.equal(await shown(page), '0.00', 'the screen shows $0');
+    assert.deepEqual((await errorText(page)).filter(Boolean), [], 'no error');
+    await context.close();
+  });
+
+  await check(`${game}: $5 four times across two batches ends at $20 on the server and the screen`, async () => {
+    const { rig, page, context } = await open();
+    await page.getByRole('radio', { name: '$5 chip' }).first().click();
+    await spotBtn(page).click();
+    await spotBtn(page).click();
+    await page.waitForTimeout(380);
+    assert.equal(rig.sent.length, 1);
+    await spotBtn(page).click();
+    await spotBtn(page).click();
+    await page.waitForTimeout(BET_REPLY_MS * 2 + 900);
+    assert.equal(serverCents(rig, game), 2000, `server holds $20 (sent ${JSON.stringify(sentAmounts(rig, game))})`);
+    assert.equal(await shown(page), '20.00');
+    await context.close();
+  });
+
+  await check(`${game}: Undo while $10 is in flight leaves $5`, async () => {
+    const { rig, page, context } = await open();
+    await page.getByRole('radio', { name: '$5 chip' }).first().click();
+    await spotBtn(page).click();
+    await spotBtn(page).click();
+    await page.waitForTimeout(380);
+    await page.getByRole('button', { name: 'Undo' }).first().click();
+    await page.waitForTimeout(BET_REPLY_MS * 2 + 900);
+    assert.deepEqual(rig.refused, []);
+    assert.equal(serverCents(rig, game), 500, `server holds $5 (sent ${JSON.stringify(sentAmounts(rig, game))})`);
+    assert.equal(await shown(page), '5.00');
+    await context.close();
+  });
+}
+
+await check('baccarat: two spots — Clear in flight sends 0/0/0, and chips on Banker during a Player batch keep both', async () => {
+  const rig = chipRig('baccarat');
+  const { page, context } = await openPage('/casino/baccarat', [rig.table], rig.handler);
+  rig.page = page;
+  await page.waitForTimeout(300);
+  const player = page.getByRole('button', { name: /Player, pays/ });
+  const banker = page.getByRole('button', { name: /Banker, pays/ });
+  await page.getByRole('radio', { name: '$10 chip' }).first().click();
+  await player.click();
+  await page.waitForTimeout(380);
+  await page.getByRole('radio', { name: '$5 chip' }).first().click();
+  await banker.click();
+  await banker.click();
+  await page.waitForTimeout(BET_REPLY_MS * 2 + 900);
+  assert.deepEqual([rig.table.seats[1].bets.player, rig.table.seats[1].bets.banker], [1000, 1000], `Player $10 and Banker $10 (sent ${JSON.stringify(sentAmounts(rig, 'baccarat'))})`);
+  await page.getByRole('radio', { name: '$25 chip' }).first().click();
+  await player.click();
+  await page.waitForTimeout(380);
+  await page.getByRole('button', { name: 'Clear' }).first().click();
+  await page.waitForTimeout(BET_REPLY_MS * 2 + 900);
+  assert.deepEqual(rig.refused, [], `nothing refused (sent ${JSON.stringify(sentAmounts(rig, 'baccarat'))})`);
+  assert.deepEqual(Object.values(rig.table.seats[1].bets), [0, 0, 0], 'Clear takes back every chip of the round');
+  await context.close();
+});
+
 // ---------- Baccarat: batching + instant chips + pending wallet ----------
 await check('three quick taps on Player: chips show at once, one request carries all three, wallet shows them as spent', async () => {
   const bets = [];
