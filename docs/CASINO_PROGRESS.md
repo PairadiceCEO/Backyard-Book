@@ -89,3 +89,11 @@ PROGRESS.md 0.16.0.
 One chat room per game (casinoChat/{game}/messages), written only by /api/casino action `chat`; a Chat button with an
 unread badge on every game page (craps: in the top bar, which is two rows on phones) and a drawer over the page.
 Craps no-scroll check now also requires the Chat button on screen. Details in PROGRESS.md 0.17.0 item 1.
+
+## 0.17.2 (2026-10-20): Blackjack/Baccarat fixes
+- Chips: Clear / Undo / more chips while a batch is in flight used to send a stale or negative total (and in Baccarat a
+  batch for another spot could wipe the first). Batches now build on the server's reply; a negative total is never sent.
+- Results pause 2.5 s (RESULTS_MS in shared/casino/timing.js).
+- Next hand: phones keep ticking until the table moves on (no 5-try limit), show the tick reply at once, and estimate
+  the server clock from the midpoint of the server's work; table copies compare by version. tools/phone-check/tablesim.mjs
+  runs the real engines end to end. Details in PROGRESS.md 0.17.2.

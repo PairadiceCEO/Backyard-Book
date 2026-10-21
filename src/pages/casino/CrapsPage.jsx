@@ -31,7 +31,7 @@ import { useChipBetting } from '../../hooks/useChipBetting.js';
 import { useMediaQuery } from '../../hooks/useMediaQuery.js';
 import { useCasinoChat } from '../../hooks/useCasinoChat.js';
 import { ChatButton, ChatDrawer } from '../../components/casino/CasinoChat.jsx';
-import { newRequestId, tableAction } from '../../lib/casino.js';
+import { newRequestId } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
 import { DICE_ANIMATION_MS } from '../../../shared/casino/constants.js';
 import { DICE_VARIANTS } from '../../../shared/casino/diceVariants.js';
@@ -141,7 +141,7 @@ export default function CrapsPage({ game }) {
   const lastRoll = table?.lastRoll ?? null;
 
   const seconds = useCountdown(deadline);
-  useDeadlineTick(game, deadline, Boolean(table));
+  useDeadlineTick(game, deadline, { enabled: Boolean(table), call, phase: table?.phase ?? null });
   useHeartbeat(game, Boolean(mySeat));
   useLeaveOnExit(game, Boolean(mySeat));
   const tumbling = useRollAnimation(lastRoll?.at ?? null, DICE_ANIMATION_MS);
@@ -156,8 +156,8 @@ export default function CrapsPage({ game }) {
   const chat = useCasinoChat(game); // Craps and Crapless each have their own room (0.17.0)
 
   useEffect(() => {
-    tableAction(game, 'tick').catch(() => {});
-  }, [game]);
+    call('tick').catch(() => {}); // through call: the reply's table shows at once
+  }, [call]); // call is stable per game, so this still runs once per visit
 
   // While the dice tumble, the nav wallet stays where it was before the roll.
   const preRollRef = useRef(null);

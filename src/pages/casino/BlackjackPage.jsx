@@ -29,7 +29,7 @@ import {
   useTimedReveal,
 } from '../../hooks/useCasinoTable.js';
 import { useChipBetting } from '../../hooks/useChipBetting.js';
-import { newRequestId, tableAction } from '../../lib/casino.js';
+import { newRequestId } from '../../lib/casino.js';
 import { formatMoney } from '../../lib/format.js';
 import { BET_HELP_TEXT, betCeilingProblem } from '../../../shared/casino/constants.js';
 import { cardRank } from '../../../shared/casino/cards.js';
@@ -322,7 +322,7 @@ export default function BlackjackPage() {
   const dealer = table?.dealer ?? { cards: [], holeDown: false };
 
   const seconds = useCountdown(deadline);
-  useDeadlineTick(GAME, deadline, Boolean(table));
+  useDeadlineTick(GAME, deadline, { enabled: Boolean(table), call, phase: table?.phase ?? null });
   useHeartbeat(GAME, seated);
   useLeaveOnExit(GAME, seated);
 
@@ -331,8 +331,8 @@ export default function BlackjackPage() {
   const [actionError, setActionError] = useState('');
 
   useEffect(() => {
-    tableAction(GAME, 'tick').catch(() => {});
-  }, []);
+    call('tick').catch(() => {}); // through call: the reply's table shows at once
+  }, [call]); // call is stable per game, so this still runs once per visit
 
   // ---- cards dealt in the latest write turn over at the server's times ----
   // (gaps from shared/casino/timing.js; t is each card's offset from lastDeal.at)
