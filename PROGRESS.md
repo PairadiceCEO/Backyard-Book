@@ -5,6 +5,25 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.17.2 (Will, 2026-10-20 19:30 CT) — IN PROGRESS on wip
+Spec: Will's attachment of 2026-10-20 19:30. 0.17.1 ("remove the Slots chat, clearer chat errors") was never started in
+this repo (main = wip = 0.17.0's merge a932011, no branch, commit or PROGRESS entry), and its full spec isn't here, so it
+was not invented; 0.17.2 goes straight on top of 0.17.0. Fresh wip off main.
+
+### Checklist
+- [ ] 1 Blackjack/Baccarat stale totals (Clear / Undo / fast taps while a batch is in flight): reproduce, then
+      useChipBetting's `send` resolves the server's spots and spotsRef takes them before the next flush; never send a
+      negative total ("Your bet changed, try again"); craps unchanged. interact.mjs (delayed replies): Clear in flight
+      → amount 0, spot $0; $5 × 4 in two batches → $20; Undo in flight → $5; Baccarat with two spots; (a) fails on
+      the old code.
+- [ ] 2 Results pause 2.5 s: RESULTS_MS = 2500 (timing.js) in blackjack finish and baccarat; countdown 3, 2, 1; tests
+      and notes; betting/turn clocks and dealing gaps unchanged.
+- [ ] 3 New hand doesn't start when the results countdown ends: reproduce in the harness with real timers and two
+      players (one only watching), name the actual cause; tick until the deadline/phase changes (2 s + jitter) and
+      through the page's `call`; fix any other cause found. Check: countdown 0 → within ~1 s both screens on betting,
+      empty dealer/hands, $0 spots (Blackjack and Baccarat).
+- [ ] 4 Version 0.17.2, notes, every CLAUDE.md check, merge.
+
 ## Phase 0.17.0 (Will, 2026-10-20 15:07 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 15:07 (items 1–2). One phase on a fresh wip off main (1576556, Analytics in);
 merge after every CLAUDE.md check; stop servers at the end.
@@ -518,7 +537,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.17.0 is merged. Wait for Will's test results (he must publish firestore.rules and create 3 ledger indexes).
+0.17.2 items 1–4 in order.
 
 ## Open questions
 None open.
