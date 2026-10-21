@@ -5,6 +5,30 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.19.0 (Will, 2026-10-20 23:01 CT) — IN PROGRESS
+Spec: Will's attachment of 23:01 ("Blackjack and Baccarat table look, Rebet, hand totals and win effects, Baccarat squeeze,
+one chip style everywhere"). 0.18.1 merged first (main = 9a15e6d). Fresh wip. Look and client only: server, betting rules,
+money code and useChipBetting's send/reply logic (0.17.2) are untouched. No firestore.rules change; nothing to publish.
+
+### Checklist
+- [ ] 1 One chip style: src/styles/chips.css + FeltChip.jsx are the only chip look; Chips.jsx (ChipRack, ChipStack) uses it;
+      old .chip-token CSS removed; Slots, Blackjack, Baccarat use ChipRack/ChipStack; Oswald loaded on all three pages.
+- [ ] 2 Blackjack felt (BlackjackFelt.jsx, src/styles/tablefelt.css): #0b5d3b in a 6 px #5a3519 rail, half-moon, dealer + shoe
+      top right, Oswald arcs, five betting circles (mine gold, others white, empty dashed "Sit"), name + chips in each.
+- [ ] 3 Cards slide from the shoe (PlayingCard `dealAt`, 250 ms, Web Animations; reveal times unchanged; reduced motion = none).
+- [ ] 4 Total pills (Blackjack, Baccarat) and ResultFx (+$ / −$ / Push float 1.2 s, chip slide dealer<->spot) for my seats/spots.
+- [ ] 5 Rebet / Rebet x2 (Blackjack per seat, Baccarat every spot) through chips.place; remembered per seat in memory when the
+      cards are dealt; hidden after any chip/confirm; wallet shortfall shows the usual message and places nothing.
+- [ ] 6 Baccarat printed table: PLAYER (blue) / BANKER (red, 5% commission) / TIE (green, white text) spots >= 44 px tall, printed
+      PLAYER / BANKER card boxes with total pills above, roads unchanged below.
+- [ ] 7 Baccarat squeeze: PeelCard from the start of the third card's gap, finishing on the coupRevealTimes time.
+- [ ] 8 Harness: phone-check screens (320/375/414 upright, 844x390, 1280x800), interact checks (Rebet, pills, float, squeeze),
+      dealcheck with slides on; unit tests for Rebet math.
+- [ ] 9 Version 0.19.0, README, casino notes, test:all, eslint, build, phone check, merge to main.
+Decisions: the hole-card reveal slides from the shoe too (a card only slides when it mounts within 0.7 s of its reveal time, so
+a phone opening mid-hand just shows the cards). The Baccarat spots are rendered by the focused seat's panel into the printed
+area (portal) so the buttons and their aria-labels keep their old meaning.
+
 ## Phase 0.18.1 (Will, 2026-10-20 22:38 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's message of 22:38. Fresh wip off main (0.18.0). No firestore.rules change; nothing to publish.
 

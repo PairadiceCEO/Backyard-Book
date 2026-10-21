@@ -3013,93 +3013,6 @@ body.no-scroll {
 
 /* ===================== Chips ===================== */
 
-.chip-token {
-  --chip: #f2f2ee;
-  --chip-ink: #1d2730;
-  --chip-edge: #2f6fd6;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at center, var(--chip) 0 55%, transparent 56%),
-    repeating-conic-gradient(var(--chip-edge) 0 15deg, var(--chip) 15deg 30deg);
-  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.45), inset 0 0 0 2px rgba(0, 0, 0, 0.18);
-  color: var(--chip-ink);
-  font-weight: 900;
-  flex: 0 0 auto;
-}
-
-.chip-token .chip-face {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 64%;
-  height: 64%;
-  border-radius: 999px;
-  border: 1.5px dashed rgba(0, 0, 0, 0.25);
-}
-
-.chip-md {
-  width: 42px;
-  height: 42px;
-  font-size: 0.95rem;
-}
-
-.chip-sm {
-  width: 22px;
-  height: 22px;
-  font-size: 0.55rem;
-}
-
-.chip-sm .chip-face {
-  border-width: 1px;
-}
-
-.chip-1 {
-  --chip: #f2f2ee;
-  --chip-edge: #3e76c9;
-  --chip-ink: #1d2730;
-}
-
-.chip-2 {
-  --chip: #f5c451;
-  --chip-edge: #7a4f00;
-  --chip-ink: #3b2600;
-}
-
-.chip-5 {
-  --chip: #d93838;
-  --chip-edge: #f7f2e8;
-  --chip-ink: #fff;
-}
-
-.chip-10 {
-  --chip: #2f6fd6;
-  --chip-edge: #f7f2e8;
-  --chip-ink: #fff;
-}
-
-/* 0.16.0: $25 green, $100 black (casino standard colors) */
-.chip-25 {
-  --chip: #1f8f4e;
-  --chip-edge: #f7f2e8;
-  --chip-ink: #fff;
-}
-
-.chip-100 {
-  --chip: #1b1b1f;
-  --chip-edge: #e9c46a;
-  --chip-ink: #f5d27a;
-}
-
-/* Three digits fit on the smaller faces */
-.chip-100 .chip-face {
-  font-size: 0.82em;
-  letter-spacing: -0.04em;
-}
-
 .chip-rack {
   display: flex;
   flex-direction: column;
@@ -3113,13 +3026,6 @@ body.no-scroll {
 }
 
 /* Six chips in one row: the token shrinks to fit the cell on narrow phones (the button stays ≥ 44 px tall). */
-.chip-choices .chip-md {
-  width: min(38px, 100%);
-  height: auto;
-  aspect-ratio: 1;
-  font-size: 0.85rem;
-}
-
 .chip-pick {
   min-height: 52px;
   border-radius: 12px;
@@ -3135,10 +3041,6 @@ body.no-scroll {
 .chip-pick.active {
   border-color: var(--gold);
   background: rgba(245, 196, 81, 0.12);
-}
-
-.chip-pick.active .chip-token {
-  transform: translateY(-2px);
 }
 
 .chip-pick:disabled {
@@ -3160,20 +3062,9 @@ body.no-scroll {
 
 .chip-stack {
   display: inline-flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  min-height: 22px;
-}
-
-.chip-stack-pile {
-  position: relative;
-  width: 22px;
-  display: inline-block;
-}
-
-.chip-stack-item {
-  position: absolute;
-  left: 0;
+  min-height: 34px;
 }
 
 .spot-chips {

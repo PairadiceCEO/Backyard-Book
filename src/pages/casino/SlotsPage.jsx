@@ -18,6 +18,7 @@ import { formatMoney } from '../../lib/format.js';
 import { friendlyError } from '../../components/StatusViews.jsx';
 import { PAYTABLE } from '../../../shared/casino/slotMachine.js';
 import { ChipRack, ChipStack, chipsFor } from '../../components/casino/Chips.jsx';
+import { ensureFeltFont } from '../../lib/feltFont.js';
 import { BET_CEILING_CENTS, BET_CEILING_MESSAGE, BET_HELP_TEXT, CASINO_MIN_BET_DOLLARS, isValidBetAmount } from '../../../shared/casino/constants.js';
 
 const BET_STORAGE_KEY = 'backyardbook.slotBet';
@@ -61,6 +62,10 @@ export default function SlotsPage() {
   const bet = chipList.reduce((sum, d) => sum + d, 0);
 
   // On leaving the page: stop pending reel timers and give the nav its real balance back.
+  useEffect(() => {
+    ensureFeltFont(); // the chips are lettered in Oswald
+  }, []);
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
