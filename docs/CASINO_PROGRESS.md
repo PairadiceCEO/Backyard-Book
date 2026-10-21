@@ -108,3 +108,8 @@ tall upright screens (one media-query listener decides). Replaces the 0.15.0 lay
 nav" no longer exists: the craps page covers the app's top bar and tabs. Hard-way payouts (6:1, 8:1) are deliberate. Details
 and decisions in PROGRESS.md 0.18.0.
 
+## 0.18.1 (2026-10-20): chat and tick fixes
+Slots has no chat (one player; its old room is only pruned). A failed chat load tells the admin when the Firestore rules aren't
+published, disables Send, and has Try again. The deadline tick backs off (2 s for 30 s, then 10 s; none while the page is
+hidden): src/lib/deadlineTicker.js. Craps shows the offline banner inside its page. Details in PROGRESS.md 0.18.1.
+

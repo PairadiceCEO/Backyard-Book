@@ -5,6 +5,34 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.18.1 (Will, 2026-10-20 22:38 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
+Spec: Will's message of 22:38. Fresh wip off main (0.18.0). No firestore.rules change; nothing to publish.
+
+### Checklist
+- [x] 1 Slots chat removed: CHAT_ROOMS = blackjack, baccarat, craps, crapless (shared/casino/chat.js); the server refuses
+      game 'slots' with 400 BAD_ROOM (test added in test/chat/chat.test.mjs). SlotsPage has no useCasinoChat / ChatButton /
+      ChatDrawer (fits at 320 / 375 / 414, checked). CHAT_LEGACY_ROOMS = ['slots']: pruneCasinoChat walks both lists, so the
+      old test messages go after 24 h (existing prune test still covers a slots message). Phone-check: chat-slots screens and
+      fixtures removed (a plain slots-no-chat screen stays), room-count checks updated.
+- [x] 2 Failed chat load: useCasinoChat keeps err.code and exposes `errorCode` and `retry` (a counter in the listener effect's
+      key; nothing set during render). The drawer (CasinoChat.jsx): permission-denied → admin sees "Chat can't load: the
+      Firestore rules aren't published. Firebase console → Firestore Database → Rules → Publish."; players see "Chat is
+      unavailable right now."; other codes: the player text, plus the code in small type for the admin only. While the load
+      has failed the text box and Send are disabled; a "Try again" button subscribes again; closing and reopening the drawer
+      does too. Checks in interact.mjs (mock Firestore now accepts a `code`).
+- [x] 3 Tick back-off: src/lib/deadlineTicker.js (no React, so it can be tested with fake timers); useDeadlineTick uses it. Every
+      2 s (+ up to 0.4 s) for the first 30 s after the deadline, then every 10 s (+ up to 2 s); nothing while
+      document.visibilityState is 'hidden', one tick as soon as it is visible again; "not yet" replies still aim just past the
+      deadline; a reply that moves the table restarts the effect (deadline / phase deps) as before. test/casino/ticker.test.mjs
+      (5 tests): the rate change, no ticks hidden, one on visible, the next hand within ~1 s when ticks succeed, stop().
+- [x] 4 Offline banner on craps: the app's own banner stays hidden there (the page covers it); the craps page draws its own
+      `.offline-banner` as the first row of the stage, above the top bar (a grid row sideways), one compact line; upright it
+      takes a few pixels back from the status row. Checked offline at 375×667, 844×390, 568×320 and 320×568: above the top
+      bar, nothing pushed off screen, felt buttons still 44×44, no new page scrolling.
+- [x] 5 Version 0.18.1, notes, test:all, eslint, build, phone check (shoot + interact + dealcheck), merge to main.
+Decision: the banner text on craps reads "You're offline. Bets and rolls will update when you're back online." (the spec gave
+no wording).
+
 ## Phase 0.18.0 (Will, 2026-10-20 21:10 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 21:10 ("real casino-style craps felt, upright and sideways layouts"). 0.17.2 was
 already merged (main = d5db0c8). Fresh wip off main. Look and layout only: server, betting rules, money code,

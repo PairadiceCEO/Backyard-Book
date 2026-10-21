@@ -13,6 +13,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { adminAction } from '../../lib/api.js';
 import { formatCentralShortClock } from '../../lib/format.js';
 import { friendlyError } from '../StatusViews.jsx';
+import { CHAT_RULES_MISSING } from '../../hooks/useCasinoChat.js';
 import { CHAT_MAX_CHARS, CHAT_REMOVED_TEXT, chatLength, chatRoomTitle, chatTextProblem, cleanChatText } from '../../../shared/casino/chat.js';
 
 const AT_BOTTOM_PX = 32;
@@ -121,6 +122,11 @@ export function ChatDrawer({ chat }) {
   const length = chatLength(text);
   const problem = chatTextProblem(cleaned);
   const tooLong = length > CHAT_MAX_CHARS;
+  // A failed load: the admin is told why (permission-denied = the rules aren't published); players get the plain text.
+  // Nobody can send blind while it's failing (a message would be saved but never shown).
+  const loadFailed = !chat.loading && Boolean(chat.error);
+  const permissionDenied = chat.errorCode === 'permission-denied';
+  const loadMessage = isAdmin && permissionDenied ? CHAT_RULES_MISSING : chat.error;
 
   async function submit(e) {
     e.preventDefault();
@@ -164,7 +170,15 @@ export function ChatDrawer({ chat }) {
           }}
         >
           {chat.loading ? <li className="muted small chat-empty">Loading…</li> : null}
-          {!chat.loading && chat.error ? <li className="error-text small chat-empty">{chat.error}</li> : null}
+          {loadFailed ? (
+            <li className="error-text small chat-empty" role="alert">
+              {loadMessage}
+              {isAdmin && !permissionDenied && chat.errorCode ? <small className="chat-code"> ({chat.errorCode})</small> : null}
+              <button type="button" className="btn small chat-retry" onClick={chat.retry}>
+                Try again
+              </button>
+            </li>
+          ) : null}
           {!chat.loading && !chat.error && messages.length === 0 ? <li className="muted small chat-empty">No messages in the last 24 hours. Say hi!</li> : null}
           {messages.map((m) => (
             <Message key={m.id} message={m} mine={m.uid === myUid} isAdmin={isAdmin} room={room} />
@@ -183,8 +197,9 @@ export function ChatDrawer({ chat }) {
             aria-label="Message"
             enterKeyHint="send"
             autoComplete="off"
+            disabled={loadFailed}
           />
-          <button type="submit" className="btn btn-primary" disabled={sending || Boolean(problem)}>
+          <button type="submit" className="btn btn-primary" disabled={sending || Boolean(problem) || loadFailed}>
             {sending ? 'Sending…' : 'Send'}
           </button>
           <span className={tooLong ? 'chat-count over' : 'chat-count'} aria-live="polite">
