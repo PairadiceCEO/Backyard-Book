@@ -106,7 +106,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 
 - No console step (same rules as phase 1). Casino → **Blackjack**: 5 seats, sit / watch / leave like Baccarat.
 - **Rules:** 6 decks (312), reshuffled before a hand once 281 are dealt; if the shoe runs dry mid-hand, a fresh shoe is built from every card not on the table. Blackjack pays 3:2; the dealer hits soft 17 and peeks with an Ace or 10 up; insurance (Ace up, 15 s) is $0 to half your bet and pays 2:1. One split per seat (two cards of the same value; split Aces get one card each); double on any first two cards, also after a split. A bust is collected at once; naturals are paid right after the peek.
-- **Timers:** betting closes 15 s after the first bet (or at once when every seated player has bet); 15 s per hand, then it stands; results stay 5 s after the last card turns over.
+- **Timers:** betting closes 15 s after the first bet (or at once when every seated player has bet); 15 s per hand, then it stands; results stay 2.5 s after the last card turns over (Baccarat too), then the next hand opens by itself.
 - **Double taps:** Hit / Stand / Double / Split send the hand's index and its `actionSeq`; the server refuses a move only if that hand has already moved on, so another player's action in between never blocks you.
 - **Hole card:** dealt into `casinoTables/blackjack/private/shoe` (`holeCard`); the public doc only has `holeDown: true` until the dealer turns it over.
 

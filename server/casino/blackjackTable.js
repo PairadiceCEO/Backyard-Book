@@ -25,7 +25,7 @@ import { freeGoneSeats } from './seats.js';
 import { formatDollars, requireBetAmount } from './money.js';
 import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
 import { buildShoe, cardRank } from '../../shared/casino/cards.js';
-import { CASINO_SEATS, RESULTS_SECONDS, TURN_SECONDS } from '../../shared/casino/constants.js';
+import { CASINO_SEATS, RESULTS_MS, TURN_SECONDS } from '../../shared/casino/constants.js';
 import {
   BLACKJACK_INITIAL_GAP_MS,
   BLACKJACK_LATER_GAP_MS,
@@ -363,7 +363,7 @@ function finishRound(ctx, how) {
   state.phase = 'results';
   state.turn = null;
   state.finish = how;
-  state.deadline = ctx.now + revealPadMs(ctx) + RESULTS_SECONDS * 1000;
+  state.deadline = ctx.now + revealPadMs(ctx) + RESULTS_MS;
 }
 
 async function openNextRound(ctx) {

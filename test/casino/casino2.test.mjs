@@ -229,7 +229,7 @@ test('a full round: bets start a 15 s clock, both confirm → dealt at once, pai
   const t = table();
   assert.equal(t.phase, 'results');
   assert.deepEqual([t.coup.player, t.coup.banker, t.coup.playerTotal, t.coup.bankerTotal, t.coup.winner], [['4S0', '3D0'], ['2H0', '3C0', '3S1'], 7, 8, 'banker']);
-  assert.equal(t.deadline, T0 + 6000 + 4500 + B.BACCARAT_SETTLE_MS + 5000, 'results stay 5 s after the last card turns (third card at 4.5 s)');
+  assert.equal(t.deadline, T0 + 6000 + 4500 + B.BACCARAT_SETTLE_MS + 2500, 'results stay 2.5 s after the last card turns (third card at 4.5 s)');
   assert.deepEqual(B.coupRevealTimes(t.coup.player, t.coup.banker), [0, 1000, 2000, 3000, 4500], 'opening cards 1 s apart, 1.5 s before the third card');
   assert.equal(t.coup.dealtAt, T0 + 6000, 'phones time the cards from the server deal time');
   assert.equal(wallet('p1'), 9500, 'Player lost');

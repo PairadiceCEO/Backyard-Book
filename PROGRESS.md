@@ -27,8 +27,10 @@ was not invented; 0.17.2 goes straight on top of 0.17.0. Fresh wip off main.
       screen $0, no error; $5 × 4 across two batches → $20 both; Undo in flight → $5; Baccarat two spots (Player $10 in
       flight + Banker $5 × 2 → $10 / $10; then $25 + Clear in flight → 0/0/0). All 7 fail on the old code, pass now.
       Existing chip checks (batching, refusal rollback, Undo/Clear, craps no-scroll, no maximum bets) still pass.
-- [ ] 2 Results pause 2.5 s: RESULTS_MS = 2500 (timing.js) in blackjack finish and baccarat; countdown 3, 2, 1; tests
-      and notes; betting/turn clocks and dealing gaps unchanged.
+- [x] 2 Results pause 2.5 s: shared/casino/timing.js `RESULTS_MS = 2500` (was RESULTS_SECONDS = 5; re-exported from
+      constants.js); blackjackTable finishRound = now + revealPadMs + RESULTS_MS; baccaratTable = coupRevealMs +
+      RESULTS_MS. "Next hand in Xs" rounds up (3, 2, 1). casino2/casino3 deadline asserts → 2500; README timers line.
+      15 s betting/turn clocks and dealing gaps unchanged.
 - [ ] 3 New hand doesn't start when the results countdown ends: reproduce in the harness with real timers and two
       players (one only watching), name the actual cause; tick until the deadline/phase changes (2 s + jitter) and
       through the page's `call`; fix any other cause found. Check: countdown 0 → within ~1 s both screens on betting,

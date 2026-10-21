@@ -25,7 +25,7 @@ export const BACCARAT_SETTLE_MS = 700;
 
 // ---------- Table timers ----------
 export const TURN_SECONDS = 15; // betting closes this long after the first bet; insurance and turn clocks
-export const RESULTS_SECONDS = 5; // results stay up this long (after the last card turns over)
+export const RESULTS_MS = 2500; // results stay up this long (after the last card turns over); 0.17.2: was 5 s
 export const TICK_JITTER_MS = 800; // phones wait 0–800 ms after a deadline before asking the server to move on
 
 // ---------- Dice ----------

@@ -644,7 +644,7 @@ test('deal timing: seat order then dealer, opening cards 1 s apart, later cards 
   assert.equal(t.phase, 'results');
   assert.ok(t.dealer.cards.length >= 3, 'dealer drew');
   assert.deepEqual(t.lastDeal.cards.map((c) => [c.to, c.t]), t.dealer.cards.slice(1).map((_, k) => ['d', k * 1500]), 'hole card, then each draw, 1.5 s apart');
-  assert.equal(t.deadline, standAt + t.lastDeal.cards.at(-1).t + BJ.CARD_SETTLE_MS + 5000);
+  assert.equal(t.deadline, standAt + t.lastDeal.cards.at(-1).t + BJ.CARD_SETTLE_MS + 2500);
 });
 
 test('five seats, one without a bet: one card at a time 1 → 5 then dealer, twice; insurance, double, split and dealer timing', async () => {
@@ -701,6 +701,6 @@ test('five seats, one without a bet: one card at a time 1 → 5 then dealer, twi
   assert.equal(t.phase, 'results');
   assert.deepEqual(t.dealer.cards.map((c) => c.slice(0, 2)), ['AH', '6D', '2D'], 'hole card, then one draw on soft 17');
   assert.deepEqual(t.lastDeal.cards.map((c) => [c.to, c.i, c.t]), [['d', 1, 0], ['d', 2, 1500]], 'hole card reveal, then the draw 1.5 s later');
-  assert.equal(t.deadline, lastAt + 1500 + BJ.CARD_SETTLE_MS + 5000, 'results stay 5 s after the last dealer card shows');
+  assert.equal(t.deadline, lastAt + 1500 + BJ.CARD_SETTLE_MS + 2500, 'results stay 2.5 s after the last dealer card shows');
   assertSecret('results');
 });
