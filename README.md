@@ -119,6 +119,13 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
 
+## 0.18.1
+
+- **Slots** has no chat any more (it's a one-player game); chat stays in Blackjack, Baccarat, Craps and Crapless.
+- **Chat that can't load** says why: the admin is told when the Firestore rules aren't published; nobody can send into a chat that isn't loading; **Try again** reloads it.
+- **Phones that keep failing to move a table on** ask less often after 30 s (every 10 s, not 2 s) and not at all while the page is hidden.
+- **Craps** shows the "You're offline" banner again. No console step.
+
 ## 0.18.0
 
 - **Real craps felt, upright and sideways (Craps and Crapless):** the table is drawn like a casino layout in green felt with a wood rail: number boxes (payout on top, the ON puck, your chips), Come, Field, Don't Pass Bar and Don't Odds (Craps only), Pass Line with Odds ("up to 2×"), and Hardways with red dice. Every printed area is a button. Hold the phone upright for a stacked table with the chips docked at the bottom, or turn it sideways for the long table with a Pass Line strip down the left and a chip rail on the right (computers use the sideways table). Seats, last rolls, help and the rules are under the felt on tall phones, or in the **Table** button's sheet. Rotating keeps your seat, chips and chat. No rule, payout or money change. No console step.

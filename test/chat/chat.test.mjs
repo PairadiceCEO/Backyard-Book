@@ -76,9 +76,17 @@ test('rooms never mix: each message lands in its own game room with name, text, 
   assert.deepEqual(roomDocs('crapless').map((m) => m.text), ['eleven!']);
   assert.equal(roomDocs('baccarat').length + roomDocs('slots').length, 0);
   // Through /api/casino's router too, seated or not (nobody here has a seat).
-  const r = await handleCasinoAction(caller('dan'), { action: 'chat', game: 'slots', text: 'spin to win', requestId: rid() }, { now: at(9000) });
+  const r = await handleCasinoAction(caller('dan'), { action: 'chat', game: 'baccarat', text: 'banker again', requestId: rid() }, { now: at(9000) });
   assert.equal(r.ok, true);
   assert.equal(typeof r.serverNow, 'number');
+  // Slots has no chat (0.18.1): refused with 400 BAD_ROOM, nothing written.
+  await assert.rejects(
+    handleCasinoAction(caller('dan'), { action: 'chat', game: 'slots', text: 'spin to win', requestId: rid() }, { now: at(9500) }),
+    (e) => e.status === 400 && e.code === 'BAD_ROOM',
+  );
+  assert.equal(roomDocs('slots').length, 0);
+  assert.deepEqual(chat.CHAT_ROOMS, ['blackjack', 'baccarat', 'craps', 'crapless']);
+  assert.equal(chat.CHAT_ROOM_NAMES.slots, undefined);
   // Unknown rooms are refused before anything is read or written.
   for (const game of ['poker', 'Craps', '', undefined, '../users', 'casinoTables']) {
     await rejects(send('mike', game, 'hi', 20000), 'BAD_ROOM', chat.CHAT_ROOM_MESSAGE);
@@ -118,7 +126,7 @@ test('rate limit: 1 message per 2 s and 20 a minute per player, across every roo
   await send('dan', 'craps', 'other players are not affected', 500);
   await send('mike', 'blackjack', 'two', 2000);
   // 20 in a minute: messages at 0, 2, 4 … 38 s fill it; the 21st (40 s) is refused; once the first is a minute old it frees.
-  for (let i = 2; i < 20; i += 1) await send('mike', ['craps', 'baccarat', 'slots'][i % 3], `m${i}`, i * 2000);
+  for (let i = 2; i < 20; i += 1) await send('mike', ['craps', 'baccarat', 'blackjack'][i % 3], `m${i}`, i * 2000);
   await rejects(send('mike', 'crapless', 'twenty-first', 40000), 'SLOW_DOWN', 'Slow down a little');
   await rejects(send('mike', 'crapless', 'still the minute', 59999), 'SLOW_DOWN');
   await send('mike', 'crapless', 'a minute after the first', 60000);

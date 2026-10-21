@@ -15,7 +15,21 @@ body.craps-stage-on {
 body.craps-stage-on .navbar,
 body.craps-stage-on .bottom-nav,
 body.craps-stage-on .offline-banner {
-  display: none;
+  display: none; /* the app's own banner (behind the page); the one inside the stage shows, below */
+}
+
+/* The offline banner, drawn inside the stage above the top bar: one short line, so it never makes the page scroll */
+body.craps-stage-on .craps-stage .offline-banner {
+  display: block;
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 1px 8px;
+  font-size: 0.7rem;
+  line-height: 1.15;
+  border-radius: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .craps-stage {
@@ -51,6 +65,14 @@ body.craps-stage-on .offline-banner {
 /* In a scrolling (tall upright) page nothing squeezes: the stage scrolls instead */
 .craps-stage > * {
   flex-shrink: 0;
+}
+
+/* Offline, upright: the status row gives back a few pixels so the banner never adds page scrolling */
+@media (orientation: portrait) {
+  .craps-stage.is-offline .cs-status {
+    min-height: 28px;
+    padding-bottom: 0;
+  }
 }
 
 /* ---------- Top bar ---------- */
@@ -1176,6 +1198,18 @@ body.craps-stage-on .offline-banner {
     gap: 4px 6px;
     overflow: hidden;
     padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+
+  .craps-stage.is-offline {
+    grid-template-rows: auto 44px minmax(0, 1fr);
+    grid-template-areas:
+      'banner banner'
+      'top top'
+      'felt rail';
+  }
+
+  body.craps-stage-on .craps-stage .offline-banner {
+    grid-area: banner;
   }
 
   /* top bar: one row of 44 px */

@@ -3,7 +3,7 @@
 // from server/casinoChat.js so settlement doesn't load the chat's sign-in code.
 
 import { Timestamp } from 'firebase-admin/firestore';
-import { CHAT_KEEP_MS, CHAT_ROOMS } from '../shared/casino/chat.js';
+import { CHAT_KEEP_MS, CHAT_LEGACY_ROOMS, CHAT_ROOMS } from '../shared/casino/chat.js';
 
 export const PRUNE_BATCH = 500;
 export const PRUNE_EVERY_MS = 60 * 60 * 1000;
@@ -39,7 +39,7 @@ export async function pruneCasinoChat({ db, now = new Date(), force = false }) {
   else if (!(await claimPrune(db, now))) return { ran: false, deleted: 0 };
   const cutoff = Timestamp.fromMillis(now.getTime() - CHAT_KEEP_MS);
   let deleted = 0;
-  for (const room of CHAT_ROOMS) {
+  for (const room of [...CHAT_ROOMS, ...CHAT_LEGACY_ROOMS]) {
     for (let i = 0; i < PRUNE_MAX_BATCHES; i += 1) {
       const snap = await messagesOf(db, room).where('createdAt', '<', cutoff).orderBy('createdAt').limit(PRUNE_BATCH).get();
       if (snap.empty) break;

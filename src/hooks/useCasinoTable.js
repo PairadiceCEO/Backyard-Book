@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase.js';
 import { lastCasinoCallAt, serverNow, tableAction } from '../lib/casino.js';
+import { startDeadlineTicker } from '../lib/deadlineTicker.js';
 import { HEARTBEAT_SECONDS, TICK_JITTER_MS } from '../../shared/casino/constants.js';
 
 // Which of two copies of the table doc is newer. Within one table (same epoch) the write counter decides: every write
@@ -90,14 +91,12 @@ export function useCountdown(deadline) {
 
 // When the deadline passes, wait a random 0–800 ms (so every phone doesn't fire at once) and send tick. The server
 // applies the default only once (and only once its own clock has passed the deadline). Until this table's deadline or
-// phase changes, keep ticking every 2 s (plus up to 0.4 s jitter): a tick that lands early, fails (cold start, network)
-// or loses to another phone's is simply sent again. 0.17.2: it used to give up after 5 tries, which could leave the
-// table on its results for good when every phone's tries failed or came early.
+// phase changes, keep ticking (src/lib/deadlineTicker.js): every 2 s for the first 30 s after the deadline, then every
+// 10 s, never while the page is hidden (one tick when it is visible again). A tick that lands early, fails (cold start,
+// network) or loses to another phone's is simply sent again. 0.17.2: it used to give up after 5 tries, which could leave
+// the table on its results for good; 0.18.1: the slower rate stops every phone hammering a server that keeps failing.
 // `call` (the page's useTableCall) shows the tick reply's table at once, so the next hand appears even when this
 // phone's Firestore listener is slow or stalled; without it the reply is only used for the clock.
-export const TICK_RETRY_MS = 2000;
-const TICK_RETRY_JITTER_MS = 400;
-
 export function useDeadlineTick(game, deadline, { enabled = true, call = null, phase = null } = {}) {
   const callRef = useRef(call);
   useEffect(() => {
@@ -105,29 +104,17 @@ export function useDeadlineTick(game, deadline, { enabled = true, call = null, p
   });
   useEffect(() => {
     if (!enabled || !game || !deadline) return undefined;
-    let cancelled = false;
-    let timer = null;
-
-    const fire = async () => {
-      if (cancelled) return;
-      let next = TICK_RETRY_MS + Math.floor(Math.random() * TICK_RETRY_JITTER_MS);
-      try {
-        const reply = callRef.current ? await callRef.current('tick') : await tableAction(game, 'tick');
-        // "Not yet": the server says when its deadline is; try again just after it rather than 2 s later.
-        const due = reply?.applied === false && Number(reply?.deadline) === deadline ? deadline - serverNow() : null;
-        if (due !== null && due > -TICK_RETRY_MS && due < TICK_RETRY_MS) next = Math.max(100, due + 100 + Math.floor(Math.random() * 300));
-      } catch {
-        // A failed tick is harmless: the next one (or another phone's) covers it.
-      }
-      if (!cancelled) timer = setTimeout(fire, next);
-    };
-
-    const wait = Math.max(0, deadline - serverNow()) + Math.floor(Math.random() * TICK_JITTER_MS);
-    timer = setTimeout(fire, wait);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
+    return startDeadlineTicker({
+      deadline,
+      jitterMs: TICK_JITTER_MS,
+      now: serverNow,
+      send: () => (callRef.current ? callRef.current('tick') : tableAction(game, 'tick')),
+      isVisible: () => document.visibilityState !== 'hidden',
+      onVisible: (fn) => {
+        document.addEventListener('visibilitychange', fn);
+        return () => document.removeEventListener('visibilitychange', fn);
+      },
+    });
   }, [game, deadline, phase, enabled]);
 }
 

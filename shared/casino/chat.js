@@ -5,8 +5,10 @@
 // Only the server writes (firestore.rules: signed-in players read, nobody writes). Messages are kept 24 hours; the
 // settlement run prunes older ones (server/casinoChat.js pruneCasinoChat).
 
-export const CHAT_ROOMS = ['slots', 'blackjack', 'baccarat', 'craps', 'crapless'];
-export const CHAT_ROOM_NAMES = { slots: '7s Slots', blackjack: 'Blackjack', baccarat: 'Baccarat', craps: 'Craps', crapless: 'Crapless Craps' };
+export const CHAT_ROOMS = ['blackjack', 'baccarat', 'craps', 'crapless']; // Slots is a one-player game: no chat (0.18.1)
+export const CHAT_ROOM_NAMES = { blackjack: 'Blackjack', baccarat: 'Baccarat', craps: 'Craps', crapless: 'Crapless Craps' };
+// Rooms that no longer exist but may still hold messages: pruned after 24 h like the others, never written to.
+export const CHAT_LEGACY_ROOMS = ['slots'];
 
 export const CHAT_MAX_CHARS = 200;
 export const CHAT_KEEP_MS = 24 * 60 * 60 * 1000; // messages older than this are hidden and pruned

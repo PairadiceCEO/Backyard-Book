@@ -388,7 +388,7 @@ export function chatMessages(room, { count = 7 } = {}) {
   list.push({ id: 'u2_old', uid: 'u2', name: 'Dan', text: 'from yesterday (must not show)', deleted: false, createdAt: new Date(t - 25 * 3600 * 1000).toISOString() });
   return list;
 }
-export const CHAT_ROOMS = ['slots', 'blackjack', 'baccarat', 'craps', 'crapless'];
+export const CHAT_ROOMS = ['blackjack', 'baccarat', 'craps', 'crapless'];
 export function chatFs() {
   return Object.fromEntries(CHAT_ROOMS.map((r) => [`casinoChat/${r}/messages`, chatMessages(r)]));
 }

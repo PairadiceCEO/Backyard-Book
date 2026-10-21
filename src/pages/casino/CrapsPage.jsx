@@ -28,7 +28,7 @@ import { CHIP_VALUES } from '../../components/casino/Chips.jsx';
 import { FeltChip } from '../../components/casino/FeltChip.jsx';
 import Die from '../../components/casino/Die.jsx';
 import TableSeats from '../../components/casino/TableSeats.jsx';
-import { ErrorState, LoadingState, friendlyError } from '../../components/StatusViews.jsx';
+import { ErrorState, LoadingState, friendlyError, useOnlineStatus } from '../../components/StatusViews.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useWalletDisplay } from '../../context/WalletDisplayContext.jsx';
 import { useCasinoTable, useCountdown, useDeadlineTick, useHeartbeat, useLeaveOnExit, useRollAnimation, useTableCall } from '../../hooks/useCasinoTable.js';
@@ -185,6 +185,7 @@ export default function CrapsPage({ game }) {
   const [actionError, setActionError] = useState('');
   const [sheetOpen, setSheetOpen] = useState(false);
   const inlineInfo = useMediaQuery(INLINE_INFO_QUERY);
+  const online = useOnlineStatus(); // the app's bars step aside on this page, so the offline banner is drawn here
   const chat = useCasinoChat(game); // Craps and Crapless each have their own room (0.17.0)
   const closeSheet = useCallback(() => setSheetOpen(false), []);
 
@@ -401,8 +402,13 @@ export default function CrapsPage({ game }) {
   );
 
   return (
-    <section className={['craps-stage', mySeat ? 'seated' : 'watching', rolling ? 'is-rolling' : ''].filter(Boolean).join(' ')} data-game={game}>
+    <section className={['craps-stage', mySeat ? 'seated' : 'watching', rolling ? 'is-rolling' : '', online ? '' : 'is-offline'].filter(Boolean).join(' ')} data-game={game}>
       <HideAppChrome />
+      {online ? null : (
+        <div className="offline-banner cs-offline" role="status">
+          You're offline. Bets and rolls will update when you're back online.
+        </div>
+      )}
 
       <header className="craps-bar cs-top">
         <Link to="/casino" className="cs-back" aria-label="Back to the casino">

@@ -59,7 +59,7 @@ const live = new Map();
 let nextId = 1;
 function deliver(entry) {
   const r = snapshotFor(entry.target);
-  if (r.error) entry.error?.(Object.assign(new Error(r.error), { code: 'permission-denied' }));
+  if (r.error) entry.error?.(Object.assign(new Error(r.error), { code: ((H().fs || {})[entry.target.name] || {}).code ?? 'permission-denied' }));
   else entry.next(r.snap);
 }
 if (typeof window !== 'undefined') {

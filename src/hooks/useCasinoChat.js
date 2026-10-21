@@ -6,7 +6,7 @@
 // try/catch); when the newest message is newer than that, one count query (an aggregation: 1 read) gives the number.
 // Sending goes through /api/casino action "chat" (the server writes; clients never write the chat).
 //
-// Hooks: the listener effect depends only on [room, open]; state is set only in Firestore callbacks and after the
+// Hooks: the listener effect depends only on [room, open, attempt]; state is set only in Firestore callbacks and after the
 // count query (guarded against a room or drawer change in between); nothing is set during render.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -58,11 +58,15 @@ function messagesRef(room) {
   return collection(db, 'casinoChat', room, 'messages');
 }
 
+export const CHAT_UNAVAILABLE = 'Chat is unavailable right now.';
+export const CHAT_RULES_MISSING = "Chat can't load: the Firestore rules aren't published. Firebase console → Firestore Database → Rules → Publish.";
+
 export function useCasinoChat(room) {
   const [open, setOpen] = useState(false);
-  const [feed, setFeed] = useState({ key: null, messages: [], error: '' });
+  const [feed, setFeed] = useState({ key: null, messages: [], error: '', errorCode: '' });
+  const [attempt, setAttempt] = useState(0); // "Try again" bumps it: the listener effect subscribes again
   const [unread, setUnread] = useState({ key: null, count: 0 });
-  const key = `${room}|${open ? 'open' : 'closed'}`;
+  const key = `${room}|${open ? 'open' : 'closed'}|${attempt}`;
 
   // The one live listener: newest 1 (closed) or newest 30 (open), last 24 hours only.
   useEffect(() => {
@@ -71,8 +75,8 @@ export function useCasinoChat(room) {
     const q = query(messagesRef(room), where('createdAt', '>=', since), orderBy('createdAt', 'desc'), limit(open ? CHAT_PAGE : 1));
     const unsubscribe = onSnapshot(
       q,
-      (snap) => setFeed({ key, messages: snap.docs.map(toMessage).reverse(), error: '' }),
-      () => setFeed({ key, messages: [], error: 'Chat is unavailable right now.' }),
+      (snap) => setFeed({ key, messages: snap.docs.map(toMessage).reverse(), error: '', errorCode: '' }),
+      (err) => setFeed({ key, messages: [], error: CHAT_UNAVAILABLE, errorCode: String(err?.code ?? '') }),
     );
     return unsubscribe;
   }, [room, open, key]);
@@ -111,6 +115,7 @@ export function useCasinoChat(room) {
   const send = useCallback((text, requestId) => casinoAction('chat', { game: room, text, requestId }), [room]);
   const toggle = useCallback(() => setOpen((v) => !v), []);
   const close = useCallback(() => setOpen(false), []);
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   return {
     room,
@@ -120,6 +125,8 @@ export function useCasinoChat(room) {
     messages,
     loading: !current,
     error: current ? feed.error : '',
+    errorCode: current ? feed.errorCode : '',
+    retry,
     unread: unread.key === room && !open ? unread.count : 0,
     send,
     newRequestId,

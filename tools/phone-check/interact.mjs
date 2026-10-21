@@ -8,7 +8,9 @@ const BASE = 'http://localhost:5199';
 const json = (route, status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' }).catch(() => chromium.launch());
 const results = [];
+const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null; // ONLY='chat: Send' node interact.mjs runs just those checks
 const check = async (name, fn) => {
+  if (ONLY && !ONLY.test(name)) return;
   try {
     await fn();
     results.push(`ok   ${name}`);
@@ -1245,7 +1247,7 @@ const chatButton = (page) => page.getByRole('button', { name: /^Chat/ }).first()
 const freshMessage = (id, uid, name, text, agoMs = 1000) => ({ id, uid, name, text, deleted: false, createdAt: new Date(Date.now() - agoMs).toISOString() });
 
 await check('chat: each game page listens to its own room only; closed = newest 1, open = newest 30, back to 1 on close, none after leaving', async () => {
-  for (const [path, room] of [['/casino/slots', 'slots'], ['/casino/blackjack', 'blackjack'], ['/casino/baccarat', 'baccarat'], ['/casino/craps', 'craps'], ['/casino/crapless', 'crapless']]) {
+  for (const [path, room] of [['/casino/blackjack', 'blackjack'], ['/casino/baccarat', 'baccarat'], ['/casino/craps', 'craps'], ['/casino/crapless', 'crapless']]) {
     const { page, context } = await openChatPage(path);
     let l = await chatListeners(page);
     assert.deepEqual(l, [{ path: `casinoChat/${room}/messages`, limit: 1 }], `${room}: closed`);
@@ -1253,7 +1255,7 @@ await check('chat: each game page listens to its own room only; closed = newest 
     await page.waitForSelector('.chat-drawer .chat-msg');
     l = await chatListeners(page);
     assert.deepEqual(l, [{ path: `casinoChat/${room}/messages`, limit: 30 }], `${room}: open`);
-    assert.equal(await page.locator('.chat-drawer h3').innerText(), `${{ slots: '7s Slots', blackjack: 'Blackjack', baccarat: 'Baccarat', craps: 'Craps', crapless: 'Crapless Craps' }[room]} chat`);
+    assert.equal(await page.locator('.chat-drawer h3').innerText(), `${{ blackjack: 'Blackjack', baccarat: 'Baccarat', craps: 'Craps', crapless: 'Crapless Craps' }[room]} chat`);
     await page.getByRole('button', { name: 'Close chat' }).click();
     await page.waitForTimeout(100);
     assert.deepEqual(await chatListeners(page), [{ path: `casinoChat/${room}/messages`, limit: 1 }], `${room}: closed again`);
@@ -1378,7 +1380,7 @@ await check('chat: Send and Enter post one request with the room; 200 counter; r
   await p2.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: [], customGames: [], casinoTables: [], ...F.chatFs() } });
   await p2.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
   await p2.route('**/api/**', (route) => json(route, 200, { ok: true, ran: false, serverNow: now() }));
-  await p2.goto(BASE + '/casino/slots', { waitUntil: 'domcontentloaded' });
+  await p2.goto(BASE + '/casino/blackjack', { waitUntil: 'domcontentloaded' });
   await p2.waitForSelector('.chat-badge');
   await p2.getByRole('button', { name: /^Chat/ }).click();
   await p2.waitForSelector('.chat-drawer .chat-msg');
@@ -1407,6 +1409,103 @@ await check('chat on craps: opening and closing it never sends a leave; the draw
   assert.equal(calls.filter((c) => c.action === 'leave').length, 0, 'no leave-all from chat');
   assert.equal(await page.evaluate(() => document.body.classList.contains('no-scroll')), false, 'scroll lock removed on close');
   await context.close();
+});
+
+// ---------- 0.18.1: a failed chat load is explained, nobody sends blind, Try again subscribes again ----------
+const RULES_TEXT = "Chat can't load: the Firestore rules aren't published. Firebase console → Firestore Database → Rules → Publish.";
+await check('chat load failure: the admin is told the rules are not published, a player gets the plain text; the text box and Send are disabled; Try again (and closing + reopening) subscribe again', async () => {
+  const broken = { 'casinoChat/craps/messages': { error: 'Missing or insufficient permissions.' } };
+  const good = () => F.chatMessages('craps');
+  // A player.
+  let { page, context, calls } = await openChatPage('/casino/craps', { fs: broken });
+  await chatButton(page).click();
+  await page.waitForSelector('.chat-drawer .chat-empty.error-text');
+  assert.equal((await page.locator('.chat-drawer .chat-empty').innerText()).split('\n')[0].trim(), 'Chat is unavailable right now.');
+  assert.ok(!(await page.locator('.chat-drawer').innerText()).includes('Firestore'), 'players never see the rules text');
+  assert.equal(await page.locator('.chat-form input').isDisabled(), true, 'text box disabled');
+  assert.equal(await page.getByRole('button', { name: 'Send' }).isDisabled(), true, 'Send disabled');
+  assert.equal(calls.filter((c) => c.action === 'chat').length, 0);
+  // Try again with the rules fixed: it subscribes again and the messages arrive (no other trigger).
+  await page.evaluate((m) => { window.__H.fs['casinoChat/craps/messages'] = m; }, good());
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await page.waitForSelector('.chat-drawer .chat-msg');
+  assert.equal(await page.locator('.chat-form input').isDisabled(), false, 'text box back');
+  await page.locator('.chat-form input').fill('hello');
+  assert.equal(await page.getByRole('button', { name: 'Send' }).isDisabled(), false, 'Send back');
+  assert.deepEqual(await chatListeners(page), [{ path: 'casinoChat/craps/messages', limit: 30 }], 'one listener, not two');
+  await context.close();
+
+  // Closing and reopening subscribes again.
+  ({ page, context } = await openChatPage('/casino/craps', { fs: broken }));
+  await chatButton(page).click();
+  await page.waitForSelector('.chat-drawer .chat-empty.error-text');
+  await page.evaluate((m) => { window.__H.fs['casinoChat/craps/messages'] = m; }, good());
+  await page.getByRole('button', { name: 'Close chat' }).click();
+  await chatButton(page).click();
+  await page.waitForSelector('.chat-drawer .chat-msg');
+  assert.equal(await page.locator('.chat-form input').isDisabled(), false);
+  await context.close();
+
+  // The admin: permission-denied says what to do; another code shows the player text plus the code in small type.
+  ({ page, context } = await openChatPage('/casino/craps', { uid: 'u0', admin: true, fs: broken }));
+  await chatButton(page).click();
+  await page.waitForSelector('.chat-drawer .chat-empty.error-text');
+  assert.ok((await page.locator('.chat-drawer .chat-empty').innerText()).includes(RULES_TEXT), 'admin: rules text');
+  assert.equal(await page.getByRole('button', { name: 'Send' }).isDisabled(), true);
+  await context.close();
+  ({ page, context } = await openChatPage('/casino/craps', { uid: 'u0', admin: true, fs: { 'casinoChat/craps/messages': { error: 'The service is unavailable.', code: 'unavailable' } } }));
+  await chatButton(page).click();
+  await page.waitForSelector('.chat-drawer .chat-empty.error-text');
+  const t = await page.locator('.chat-drawer .chat-empty').innerText();
+  assert.ok(t.includes('Chat is unavailable right now.') && t.includes('(unavailable)') && !t.includes('Firestore'), t);
+  assert.equal(await page.locator('.chat-drawer .chat-code').count(), 1);
+  await context.close();
+  ({ page, context } = await openChatPage('/casino/craps', { uid: 'u1', fs: { 'casinoChat/craps/messages': { error: 'The service is unavailable.', code: 'unavailable' } } }));
+  await chatButton(page).click();
+  await page.waitForSelector('.chat-drawer .chat-empty.error-text');
+  assert.equal(await page.locator('.chat-drawer .chat-code').count(), 0, 'the code is for the admin only');
+  await context.close();
+});
+
+await check('Slots has no Chat button and no chat listener; the page fits at 320 / 375 / 414', async () => {
+  for (const width of [320, 375, 414]) {
+    const { page, context } = await openChatPage('/casino/slots', { width, height: 800 });
+    await page.waitForTimeout(300);
+    assert.equal(await page.getByRole('button', { name: /^Chat/ }).count(), 0, `${width}: no Chat button`);
+    assert.deepEqual(await chatListeners(page), [], `${width}: no chat listener`);
+    assert.ok((await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 0, `${width}: no sideways overflow`);
+    await context.close();
+  }
+});
+
+// ---------- 0.18.1: the offline banner on craps (the app's own bars are hidden there) ----------
+await check('craps: offline shows the banner above the top bar without covering it or making the page scroll (375×667 upright, 844×390 sideways); it goes away online', async () => {
+  for (const [width, height] of [[375, 667], [844, 390], [568, 320], [320, 568]]) {
+    const { page, context } = await openCraps('/casino/craps', [crapsWorst('craps')], { width, height });
+    assert.equal(await page.locator('.offline-banner').count(), 0, 'online: no banner');
+    const before = await measureCraps(page);
+    await context.setOffline(true);
+    await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+    await page.waitForSelector('.craps-stage .offline-banner');
+    await page.waitForTimeout(250);
+    const b = await page.locator('.craps-stage .offline-banner').boundingBox();
+    const top = await page.locator('.cs-top').boundingBox();
+    assert.ok(b.y + b.height <= top.y + 1, `${width}×${height}: banner (${Math.round(b.y + b.height)}) above the top bar (${Math.round(top.y)})`);
+    assert.ok(b.y >= -0.5 && b.x >= -0.5 && b.x + b.width <= width + 0.5, 'inside the screen');
+    const m = await measureCraps(page);
+    if (height >= 600 || width > height) {
+      assert.equal(m.stageScroll, before.stageScroll, `${width}×${height}: no new scrolling (${before.stageScroll} → ${m.stageScroll})`);
+      assert.equal(m.docScroll, 0);
+    }
+    assert.deepEqual(m.outside, [], `${width}×${height}: nothing pushed off screen`);
+    if (width <= 667 || height >= 600) assert.deepEqual(m.small, [], `${width}×${height}: felt buttons still 44×44`);
+    assert.equal(await page.locator('.offline-banner:visible').count(), 1, 'one visible banner only (not the app one too)');
+    await context.setOffline(false);
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await page.waitForTimeout(200);
+    assert.equal(await page.locator('.offline-banner').count(), 0, 'back online: gone');
+    await context.close();
+  }
 });
 
 await check('chat admin: Delete asks to confirm, then sends chatDelete for that room and message; players see no Delete', async () => {

@@ -255,8 +255,7 @@ const scenarios = [
   S('admin-shop', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'Shop purchases' }).click(); await p.waitForTimeout(300); } }),
   S('admin-system', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'System' }).click(); await p.waitForTimeout(200); } }),
   // 0.17.0 casino chat: every game page with the drawer closed (unread badge) and open; the admin's Delete + confirm.
-  S('chat-slots', '/casino/slots', { admin: false, user: 'u1' }),
-  S('chat-slots-open', '/casino/slots', { admin: false, user: 'u1', act: openChat }),
+  S('slots-no-chat', '/casino/slots', { admin: false, user: 'u1' }),
   S('chat-blackjack', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting) }),
   S('chat-blackjack-open', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting), act: openChat }),
   S('chat-baccarat', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.betting) }),
