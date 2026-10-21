@@ -113,3 +113,15 @@ Slots has no chat (one player; its old room is only pruned). A failed chat load 
 published, disables Send, and has Try again. The deadline tick backs off (2 s for 30 s, then 10 s; none while the page is
 hidden): src/lib/deadlineTicker.js. Craps shows the offline banner inside its page. Details in PROGRESS.md 0.18.1.
 
+## 0.19.0 (2026-10-21): Blackjack and Baccarat table look, Rebet, totals and win effects, Baccarat squeeze
+Look and client only (server, shared/casino, useChipBetting and the bet actions untouched). One chip look: src/styles/chips.css
++ FeltChip.jsx (the 0.18.0 craps chip) used by ChipRack / ChipStack (Chips.jsx) in Blackjack, Baccarat and Slots; the old
+.chip-token CSS is gone. Blackjack: BlackjackFelt.jsx (half-moon, SVG textPath arcs, five circles at fixed positions in a 300 × 310
+drawing); Baccarat: BaccaratFelt.jsx (printed PLAYER / BANKER boxes; the focused seat's panel puts its three PrintedSpot buttons
+into the felt through a portal, so the aria-labels still read "Seat N: Player, pays 1:1, your bet $X"); both in src/styles/tablefelt.css.
+Cards slide out of Shoe.jsx ([data-shoe]) with a Web Animation in PlayingCard (`dealAt` = the server time the card turns face up;
+only when it mounts within 0.7 s of that, so a late phone just sees the cards). ResultFx.jsx: the "+$" float and the chip slide, once
+per round key (module-level set, so remounts and React's dev double-mount can't strand or replay it). Rebet: per seat, in memory
+(`lastBet` / `lastBets`), through chips.place. Squeeze: PeelCard (a CSS animation as long as the 1.5 s gap, with a negative delay worked
+out at mount, so it ends on coupRevealTimes' time on every phone). Details and decisions in PROGRESS.md 0.19.0.
+

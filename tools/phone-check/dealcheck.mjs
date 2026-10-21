@@ -73,12 +73,12 @@ await check('Blackjack: every seat gets its card in turn (seat totals: 1 → 2 �
     await page.waitForTimeout(Math.max(0, at + t - Date.now()));
     snaps.push(await seatText());
   }
-  const totals = snaps.map((line) => [...line.matchAll(/(Will|Mike|Dan|Bo) (\d+)/g)].map((m) => Number(m[2])));
+  const totals = snaps.map((line) => [...line.matchAll(/(Will|Mike|Dan|Bo) (\d+)/gi)].map((m) => Number(m[2])));
   assert.deepEqual(totals, [
     [5, 0, 0, 0], [5, 6, 0, 0], [5, 6, 7, 0], [5, 6, 7, 8],
     [14, 6, 7, 8], [14, 12, 7, 8], [14, 12, 17, 8], [14, 12, 17, 10],
   ], snaps.join(' || '));
-  assert.ok(snaps.every((line) => line.includes('Ann —')), 'seat 4 (no bet) gets no cards');
+  assert.ok(snaps.every((line) => /ann —/i.test(line)), 'seat 4 (no bet) gets no cards');
   await page.waitForTimeout(Math.max(0, at + 9500 - Date.now()));
   assert.equal(await page.locator('.bj-cards .pcard.back').count(), 1, 'the hole card is face down');
   await context.close();
@@ -133,6 +133,33 @@ await check('Baccarat: the first two cards are one Player card and one Banker ca
   assert.ok(/player/i.test(hands[0]) || /player/i.test(hands.join()), `first card in the Player hand (${hands.join(' | ')})`);
   assert.ok(hands.some((h) => /banker/i.test(h)), `second card in the Banker hand (${hands.join(' | ')})`);
   await context.close();
+});
+
+// 0.19.0: each card slides out of the shoe (about 250 ms) at the moment it turns face up; when it shows is unchanged.
+await check('Blackjack: a card that turns over slides from the shoe (an animation runs right after it shows), and is still on time', async () => {
+  const at = Date.now() + 2500;
+  const { page, context } = await openPage('/casino/blackjack', bjDeal(at));
+  await page.waitForTimeout(Math.max(0, at + 1000 + 40 - Date.now())); // my first card shows at +1 s
+  const info = await page.locator('.seat-panel .bj-cards .pcard').first().evaluate((el) => ({ n: el.getAnimations().length, timing: el.getAnimations().map((a) => a.effect.getComputedTiming().duration) }));
+  assert.ok(info.n >= 1, 'a slide animation is running');
+  assert.ok(info.timing.includes(250), `a 250 ms slide (${info.timing})`);
+  await page.waitForTimeout(400);
+  const cards = await page.locator('.bj-cards .pcard').count();
+  assert.equal(cards, 1, 'still exactly the cards that are due (the dealer\'s first card is at 4 s)');
+  await context.close();
+});
+
+await check('Baccarat: the first card slides from the shoe; a phone that opens later just shows the cards', async () => {
+  const at = Date.now() + 2500;
+  const { page, context } = await openPage('/casino/baccarat', bacCoup(at));
+  await page.waitForTimeout(Math.max(0, at + 40 - Date.now()));
+  assert.ok((await page.locator('.bact-box .pcard').first().evaluate((el) => el.getAnimations().length)) >= 1, 'sliding');
+  await context.close();
+  const late = await openPage('/casino/baccarat', bacCoup(Date.now() - 20000));
+  await late.page.waitForTimeout(300);
+  assert.equal(await late.page.locator('.bact-box .pcard').count(), 6);
+  assert.equal(await late.page.locator('.bact-box .pcard').first().evaluate((el) => el.getAnimations().filter((a) => a.effect.getComputedTiming().duration === 250).length), 0, 'no slide for cards already on the table');
+  await late.context.close();
 });
 
 await browser.close();
