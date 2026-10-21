@@ -172,7 +172,7 @@ const scenarios = [
   S('cr-comeout', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.comeout) }),
   S('cr-point', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point) }),
   S('cr-takedown', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point), act: async (p) => { await p.getByRole('button', { name: 'Take down' }).click(); await p.waitForTimeout(100); } }),
-  S('cr-chips', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point), act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.craps-place .craps-spot').nth(2).click(); await p.locator('.craps-place .craps-spot').nth(2).click(); await p.getByRole('radio', { name: '$2 chip' }).click(); await p.locator('.craps-spot.line.odds:not(.dont)').click(); await p.waitForTimeout(100); } }),
+  S('cr-chips', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point), act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.craps-felt [data-spot="place:8"]').click(); await p.locator('.craps-felt [data-spot="place:8"]').click(); await p.getByRole('radio', { name: '$2 chip' }).click(); await p.locator('.craps-felt .a-odds').click(); await p.waitForTimeout(100); } }),
   S('cr-full', '/casino/craps', { admin: false, user: 'u1', fs: withTable(() => cr.full('craps')) }),
   S('cr-my-roll', '/casino/craps', { admin: false, user: 'u1', fs: withTable(() => cr.myRoll('craps')) }),
   S('cx-point', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(cr.crapless) }),
@@ -342,13 +342,41 @@ async function measure(page) {
   });
 }
 
+// 0.18.0: the craps and Crapless screens are shot upright and sideways at every size the felt has to fit, plus a computer.
+// Everything else keeps the three phone widths (375 × 800 is the screenshot).
+const FELT_SCREEN = /^(cr-(?!lobby)|cx-|chat-craps|chat-crapless)/;
+const FELT_SIZES = [
+  { w: 320, h: 568, shot: false }, { w: 375, h: 667, shot: true }, { w: 414, h: 896, shot: false }, // upright
+  { w: 568, h: 320, shot: false }, { w: 667, h: 375, shot: false }, { w: 844, h: 390, shot: true }, { w: 932, h: 430, shot: false }, // sideways
+  { w: 1280, h: 800, shot: false }, // a computer
+];
+const PHONE_SIZES = [320, 375, 414].map((w) => ({ w, h: 800, shot: w === 375 }));
+// A felt button is at least 44 × 44. The one documented exception: the Come-odds chips inside a number box on the shortest
+// screens (a box 47–60 px tall keeps its top for Place), they keep 44 wide.
+const FELT_BUTTON_EXCEPTION = '^comeOdds:';
+
+async function feltMetrics(page) {
+  return page.evaluate((exception) => {
+    const st = document.querySelector('.craps-stage');
+    if (!st) return null;
+    const re = new RegExp(exception);
+    const feltButtons = [...document.querySelectorAll('.craps-felt button:not([data-part="strip"])')].filter((b) => b.getBoundingClientRect().width > 0);
+    const small = feltButtons.filter((b) => { const r = b.getBoundingClientRect(); return (r.width < 43.5 || r.height < 43.5) && !re.test(b.dataset.spot ?? ''); }).map((b) => `${b.dataset.spot} ${Math.round(b.getBoundingClientRect().width)}x${Math.round(b.getBoundingClientRect().height)}`);
+    const clipped = [...document.querySelectorAll('.craps-stage .cs-top button, .craps-stage .cs-rail button, .craps-felt button')].filter((b) => { const r = b.getBoundingClientRect(); return r.width > 0 && (r.right > innerWidth + 0.5 || r.left < -0.5 || r.top < -0.5); }).map((b) => b.dataset.spot ?? b.getAttribute('aria-label') ?? b.textContent.trim().slice(0, 12));
+    return { stageScroll: st.scrollHeight - st.clientHeight, docScroll: document.documentElement.scrollHeight - innerHeight, small, clipped, orient: innerWidth > innerHeight ? 'sideways' : 'upright' };
+  }, FELT_BUTTON_EXCEPTION);
+}
+
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' }).catch(() => chromium.launch());
 const report = {};
 for (const sc of scenarios) {
   if (only && !only.test(sc.name)) continue;
   report[sc.name] = {};
-  for (const width of [320, 375, 414]) {
-    const context = await browser.newContext({ viewport: { width, height: 800 }, deviceScaleFactor: width === 375 ? 2 : 1, isMobile: true, hasTouch: true });
+  for (const size of FELT_SCREEN.test(sc.name) ? FELT_SIZES : PHONE_SIZES) {
+    const width = size.w;
+    const key = FELT_SCREEN.test(sc.name) ? `${size.w}x${size.h}` : width;
+    const computer = size.w >= 1024;
+    const context = await browser.newContext({ viewport: { width, height: size.h }, deviceScaleFactor: size.shot ? 2 : 1, isMobile: !computer, hasTouch: !computer });
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
@@ -367,14 +395,35 @@ for (const sc of scenarios) {
     const m = await measure(page);
     const analyticsLoads = await page.evaluate(() => window.__analyticsLoads ?? 0);
     if (analyticsLoads !== 1) errors.push(`analytics script loaded ${analyticsLoads} times (expected 1)`);
-    report[sc.name][width] = { ...m, errors };
-    if (width === 375) await page.screenshot({ path: `${out}/${sc.name}.png`, fullPage: !/slip|confirm|preview|^chat-.*(open|typing|empty-room)/.test(sc.name) });
+    const felt = FELT_SCREEN.test(sc.name) ? await feltMetrics(page) : null;
+    report[sc.name][key] = { ...m, felt, errors };
+    if (FELT_SCREEN.test(sc.name)) await page.screenshot({ path: `${out}/${sc.name}-${key}.png` });
+    else if (size.shot) await page.screenshot({ path: `${out}/${sc.name}.png`, fullPage: !/slip|confirm|preview|^chat-.*(open|typing|empty-room)/.test(sc.name) });
     await context.close();
   }
 }
 await browser.close();
 writeFileSync(`${out}/report.json`, JSON.stringify(report, null, 2));
 for (const [name, byWidth] of Object.entries(report)) {
+  if (FELT_SCREEN.test(name)) {
+    // Felt screens: no page scroll where it isn't allowed (upright ≥ 600 px tall: the felt and dock fit; everything sideways),
+    // nothing clipped, every felt button ≥ 44 × 44.
+    const bad = [];
+    for (const [k, m] of Object.entries(byWidth)) {
+      const [w, h] = k.split('x').map(Number);
+      const f = m.felt;
+      if (!f) { bad.push(`${k}: no stage`); continue; }
+      const mustFit = f.orient === 'sideways' || h >= 600;
+      const dockOnly = f.orient === 'upright' && h >= 780; // tall phones: seats and help sit under the felt, so the page may scroll
+      if (m.overflowPx > 0) bad.push(`${k}: sideways overflow ${m.overflowPx}px`);
+      if (mustFit && !dockOnly && (f.stageScroll > 0 || f.docScroll > 0)) bad.push(`${k}: scrolls ${f.stageScroll}/${f.docScroll}`);
+      if (f.small.length) bad.push(`${k}: small ${f.small.slice(0, 3).join(', ')}`);
+      if (f.clipped.length) bad.push(`${k}: clipped ${f.clipped.slice(0, 3).join(', ')}`);
+      if (m.errors.length) bad.push(`${k}: ERR ${m.errors[0]}`);
+    }
+    console.log(`${name.padEnd(24)} ${bad.length ? bad.join('  |  ') : `ok at ${Object.keys(byWidth).length} sizes`}`);
+    continue;
+  }
   const worst = Object.entries(byWidth).map(([w, m]) => `${w}:${m.overflowPx > 0 ? `OVERFLOW ${m.overflowPx}px` : 'ok'}/${m.smallCount} small${m.errors.length ? `/ERR ${m.errors.length}` : ''}`).join('  ');
   console.log(`${name.padEnd(24)} ${worst}`);
 }

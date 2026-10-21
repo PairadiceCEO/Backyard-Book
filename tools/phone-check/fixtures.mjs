@@ -358,6 +358,8 @@ export function offlineRoute(route) {
   if (ANALYTICS_SCRIPT.test(route.request().url())) {
     return route.fulfill({ status: 200, contentType: 'application/javascript', body: 'window.__analyticsLoads = (window.__analyticsLoads || 0) + 1;' });
   }
+  // The felt's Oswald font (Google Fonts, 0.18.0): an empty stylesheet, so the lettering falls back and nothing fails.
+  if (/^https:\/\/fonts\.googleapis\.com\//.test(route.request().url())) return route.fulfill({ status: 200, contentType: 'text/css', body: '/* offline */' });
   return route.abort();
 }
 

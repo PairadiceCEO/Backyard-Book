@@ -5,31 +5,55 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.18.0 (Will, 2026-10-20 21:10 CT) — IN PROGRESS
+## Phase 0.18.0 (Will, 2026-10-20 21:10 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 21:10 ("real casino-style craps felt, upright and sideways layouts"). 0.17.2 was
 already merged (main = d5db0c8). Fresh wip off main. Look and layout only: server, betting rules, money code,
 useChipBetting and the bet actions are untouched; every felt area calls the same tapSpot (place / take down) the old spots
 used, and Undo / Clear / Roll / Sit down / Leave / Take down keep their handlers.
 
 ### Checklist
-- [ ] 1 Chip look (FeltChip: dashed edge, colour by the largest chip, "$12" / "$1.2k") for the felt and the craps rack
+- [x] 1 Chip look (FeltChip: dashed edge, colour by the largest chip, "$12" / "$1.2k") for the felt and the craps rack
       (44 px sideways, 48 px upright, selected lifts 2 px + gold ring); Oswald from Google Fonts (preconnect, display=swap).
-- [ ] 2 The felt (src/components/casino/CrapsFelt.jsx): every printed area is one <button> (aria-label, gold focus ring,
+- [x] 2 The felt (src/components/casino/CrapsFelt.jsx): every printed area is one <button> (aria-label, gold focus ring,
       white wash when pressed, existing `blocked` style + message): number boxes (SIX / NINE as words; payout top, ON puck
       bottom-left, my chips bottom-right, Come bet = C chip + odds chip, tap = Come Odds), COME, FIELD, DON'T PASS BAR +
       DON'T ODDS (craps only), PASS LINE + ODDS ("up to 2×"), HARDWAYS (two red dice, gold payout).
-- [ ] 3 Upright layout (@media (orientation: portrait)): top bar, status row, stacked felt, docked bottom (wallet / on
+- [x] 3 Upright layout (@media (orientation: portrait)): top bar, status row, stacked felt, docked bottom (wallet / on
       table, message line, 6 chips, Undo / Clear / Take down / ROLL). No page scrolling at 375×667 and up.
-- [ ] 4 Sideways layout (@media (orientation: landscape) and (max-height: 500px); computers use it sized up): one-row top
+- [x] 4 Sideways layout (@media (orientation: landscape) and (max-height: 500px); computers use it sized up): one-row top
       bar, felt + 138 px rail, Pass strip + Don't Pass strip as the L with the bottom rows; notch padding.
-- [ ] 5 "Table" sheet (seats, last rolls, Leave seat, help, rules) from a top-bar button: chat drawer's sheet styles,
+- [x] 5 "Table" sheet (seats, last rolls, Leave seat, help, rules) from a top-bar button: chat drawer's sheet styles,
       never moves the felt; inline below the felt on tall upright screens.
-- [ ] 6 Orientation change keeps seat, unsent chips, drawers (CSS switch; one media-query listener only for where the
+- [x] 6 Orientation change keeps seat, unsent chips, drawers (CSS switch; one media-query listener only for where the
       Table content shows; removed on unmount).
-- [ ] 7 Phone check: both games at 320×568, 375×667, 414×896, 568×320, 667×375, 844×390, 932×430, 1280×800; interact.mjs
+- [x] 7 Phone check: both games at 320×568, 375×667, 414×896, 568×320, 667×375, 844×390, 932×430, 1280×800; interact.mjs
       felt checks (each area places a chip, Pass strip = Pass row, Odds cap message, Undo / Clear, rotate mid-bet,
       Table sheet, Crapless 10 boxes and no Don't Pass); dice-tumble check unchanged.
-- [ ] 8 Version 0.18.0, PROGRESS / README / casino notes; test:all, lint, build, phone check; merge wip → main; stop servers.
+- [x] 8 Version 0.18.0, PROGRESS / README / casino notes; test:all, lint, build, phone check; merge wip → main; stop servers.
+
+### What was built
+- New: src/components/casino/CrapsFelt.jsx (the felt), FeltChip.jsx (chips), src/lib/feltFont.js (Oswald, loaded once when a
+  craps table opens), src/styles/craps.css (both layouts; the old craps CSS left index.css). Rewritten: CrapsPage.jsx (layout
+  and the Table sheet; betting code unchanged: betsToSpots / spotsToBets, validate, sendChips, useChipBetting, tapSpot, rollDice).
+  Die.jsx: `decorative` dice for the Hardways boxes. No server, shared/casino, useChipBetting, rules or firestore.rules change.
+- One DOM, two layouts by CSS (`@media (orientation: portrait)` / `(orientation: landscape)`; phones are short, so the sideways
+  look is the landscape one, computers get it sized up and capped at 660 px tall). The page is never rotated or locked. The only
+  JavaScript media query is `(orientation: portrait) and (min-height: 780px)`: it decides whether seats, last rolls, help and
+  rules sit under the felt (tall upright) or in the Table sheet; the listener is removed on unmount.
+- Pass Line / Don't Pass Bar exist twice (the vertical strips down the left edge sideways, the rows along the bottom); both
+  call tapSpot with the same kind, so it is one bet. The strips are hidden from screen readers and from the upright layout.
+
+### Verification (all green)
+- `npm run test:all` (31 + 106 + 21 + 104 + 16 + 11 + 11 + 12 + chat + activity), `npx eslint src` (clean), `npx vite build`
+  (dummy VITE_FIREBASE_* vars).
+- Phone check (tools/phone-check): shoot.mjs runs every craps / Crapless screen at 320×568, 375×667, 414×896 (upright),
+  568×320, 667×375, 844×390, 932×430 (sideways) and 1280×800 (computer): nothing clipped, no page scroll where required, every
+  felt button at least 44×44 (one documented exception below). interact.mjs: each area places a chip on its bet (both games,
+  come-out and with a Point), Pass strip = Pass row, Odds cap message, Undo / Clear, Come bet C chip + Come Odds, Take down,
+  6 vs 10 boxes and no Don't Pass in Crapless, labels / hard-way pays, font links, focus ring, rotating mid-bet keeps seat,
+  chips and chat drawer (and sends no leave / sit), the Table sheet (×, Escape, backdrop; felt never moves), Sit down / Table
+  full, the media-query listener cleanup, 6 chips. The dice-tumble check is unchanged and passes. dealcheck.mjs passes.
+
 
 ### Decisions (spec points that cannot all hold; safest option taken)
 - The spec's own sizes conflict with its "every felt button at least 44×44": the Pass strip (34 px) and Don't Pass strip
@@ -41,6 +65,21 @@ used, and Undo / Clear / Roll / Sit down / Leave / Take down keep their handlers
   button in the dock upright).
 - The page covers the app's top bar and bottom tabs (the spec's sizes don't fit with them); ‹ back replaces them, and the
   wallet is in the rail / dock.
+
+- Come Odds live inside the number boxes (the spec has no other place for them): the C chip + odds chip cluster is its own
+  44 px-wide button over the bottom of a number box that holds a Come bet, 44 px tall where the box is 69 px or more. The one
+  exception is Crapless at 568×320 (boxes only ~47 px tall): the cluster is 44 × 30 there, so the top of the box stays tappable
+  for Place. shoot.mjs / interact.mjs allow exactly that (`comeOdds:`) and nothing else under 44 px.
+- "No page scrolling at 375×667 and up": the felt and the dock always fit with no scrolling from 600 px tall (375×667, 390×844,
+  and so on); on tall upright screens (780 px and up) seats, last rolls, help and rules sit under the felt, as the spec says
+  ("below the dock"), so the page scrolls there to reach them while the felt and dock stay in view. Below 600 px tall
+  (320×568) scrolling is allowed by the spec and the felt scrolls under the dock.
+- Computers (landscape, taller than 500 px) use the sideways layout scaled up, with the felt and rail capped at 660 px tall so a
+  1280×800 window isn't a billboard.
+- The Oswald font request is a Google Fonts stylesheet added when a craps table opens (the app has no font loading elsewhere);
+  if it can't load, the lettering falls back to Arial Narrow / Roboto Condensed and nothing breaks. fixtures.mjs answers it
+  with an empty stylesheet in the phone check.
+- Hardways payouts (8 to 1 for Hard 6 / 8, 6 to 1 for Hard 4 / 10) are the deliberate ones from CLAUDE.md, printed as such.
 
 ## Phase 0.17.2 (Will, 2026-10-20 19:30 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 19:30. 0.17.1 ("remove the Slots chat, clearer chat errors") was never started in

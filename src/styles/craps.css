@@ -1,0 +1,1445 @@
+/* ===================== Craps / Crapless felt (0.18.0) =====================
+   One DOM (src/pages/casino/CrapsPage.jsx + src/components/casino/CrapsFelt.jsx), two layouts chosen by how the phone is
+   held. Nothing here rotates the page or locks the orientation.
+     Upright   @media (orientation: portrait)                          stacked felt, dock at the bottom
+     Sideways  @media (orientation: landscape)                         one-row top bar, felt + rail on the right
+               (phones are short, so (max-height: 500px); a computer is landscape and taller than 500 px: the same layout,
+               sized up by --scale)
+   Every felt area is a <button> of at least 44 × 44 px. */
+
+/* ---------- The page takes the whole screen ---------- */
+body.craps-stage-on {
+  overflow: hidden;
+}
+
+body.craps-stage-on .navbar,
+body.craps-stage-on .bottom-nav,
+body.craps-stage-on .offline-banner {
+  display: none;
+}
+
+.craps-stage {
+  --felt: #0b5d3b;
+  --wood: #5a3519;
+  --line: rgba(255, 255, 255, 0.88);
+  --gold: #f5c451;
+  --felt-font: 'Oswald', 'Arial Narrow', 'Roboto Condensed', 'Helvetica Neue', Arial, sans-serif;
+  --scale: 1;
+  --hw: 92px; /* Hardways column, sideways */
+  --sw: 44px; /* the Pass / Don't Pass strips */
+  --odds-w: 92px;
+  --num-min: 44px;
+  --come-h: 44px;
+  --field-h: 48px;
+  --dp-h: 44px;
+  --pass-h: 44px;
+  --rail-w: 138px;
+  --dock-h: 164px;
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--bg);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: env(safe-area-inset-top) max(8px, env(safe-area-inset-right)) calc(var(--dock-h) + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+}
+
+/* In a scrolling (tall upright) page nothing squeezes: the stage scrolls instead */
+.craps-stage > * {
+  flex-shrink: 0;
+}
+
+/* ---------- Top bar ---------- */
+.cs-top {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'back name meta'
+    'status status status';
+  align-items: center;
+  column-gap: 6px;
+  min-height: 44px;
+}
+
+.cs-back {
+  grid-area: back;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 2rem;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.cs-name {
+  grid-area: name;
+  margin: 0;
+  font-size: 1.05rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cs-meta {
+  grid-area: meta;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cs-status {
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 2px 2px;
+}
+
+.cs-point {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 9px 0 3px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cs-puck {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: #1b1b1b;
+  color: #ddd;
+  border: 2px solid #555;
+  font-size: 0.55rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.cs-point.on .cs-puck {
+  background: #fbfbf8;
+  color: #111;
+  border-color: var(--gold);
+}
+
+.craps-dice {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.cs-top .die {
+  width: 26px;
+  height: 26px;
+  padding: 3px;
+  border-radius: 6px;
+  gap: 0;
+}
+
+.cs-top .pip {
+  margin: 0.5px;
+}
+
+.cs-rolled {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
+
+.craps-roll-text {
+  display: inline-flex;
+  gap: 0.3em;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.craps-roll-text .roll-word {
+  order: -1; /* reads "Rolled 6" on screen; the number comes first in the document */
+}
+
+.cs-kind {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+
+.cs-shooter {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.cs-players {
+  min-width: 34px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.cs-count {
+  min-width: 34px;
+  height: 30px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--gold);
+  color: var(--gold);
+  font-weight: 800;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.cs-count.urgent {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.cs-table-btn {
+  min-height: 44px;
+  min-width: 52px;
+  padding: 0 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.craps-stage .chat-btn.compact {
+  background: var(--surface);
+}
+
+.craps-stage .chat-badge {
+  top: 1px;
+  right: 1px;
+}
+
+/* ---------- The felt (both layouts) ---------- */
+.cs-felt-wrap {
+  min-width: 0;
+  transition: opacity 0.2s;
+}
+
+.cs-felt-wrap.dim {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.craps-felt {
+  height: 100%;
+  padding: 6px;
+  border-radius: 18px;
+  background: var(--wood);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  font-family: var(--felt-font);
+}
+
+.felt-board {
+  height: 100%;
+  display: grid;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--felt);
+  box-shadow: inset 0 0 26px rgba(0, 0, 0, 0.5), inset 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.fa {
+  position: relative;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font-family: var(--felt-font);
+  font-size: calc(0.8rem * var(--scale));
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.fa:active,
+.fn-come:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.fa:focus-visible,
+.fn-come:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.fa:disabled {
+  color: #fff;
+  opacity: 0.8;
+  cursor: default;
+}
+
+.fa.has-bet {
+  box-shadow: inset 0 0 0 1px rgba(245, 196, 81, 0.7);
+}
+
+.fa.blocked,
+.fn-come.blocked {
+  opacity: 0.55;
+}
+
+.craps-felt.taking-down .fa.has-bet {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(245, 196, 81, 0.55);
+}
+
+.fl {
+  font-size: calc(1rem * var(--scale));
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.fl-sub {
+  font-size: calc(0.6rem * var(--scale));
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+}
+
+/* chips on the felt */
+.fchip {
+  --c: #f4f4ef;
+  --edge: #2f6fd6;
+  --ink: #1d2730;
+  --chip-size: 28px;
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--chip-size);
+  height: var(--chip-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--c);
+  color: var(--ink);
+  font-family: var(--felt-font);
+  font-weight: 700;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  text-transform: none;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.fchip::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  border: 2px dashed var(--edge);
+  pointer-events: none;
+}
+
+.fchip-face {
+  position: relative;
+  font-size: calc(var(--chip-size) * 0.36);
+}
+
+.fchip[data-len='4'] .fchip-face {
+  font-size: calc(var(--chip-size) * 0.3);
+}
+
+.fchip[data-len='5'] .fchip-face,
+.fchip[data-len='6'] .fchip-face,
+.fchip[data-len='7'] .fchip-face {
+  font-size: calc(var(--chip-size) * 0.24);
+}
+
+.fc-1 {
+  --c: #f4f4ef;
+  --edge: #2f6fd6;
+  --ink: #1d2730;
+}
+
+.fc-2 {
+  --c: #f5c451;
+  --edge: #fff;
+  --ink: #3b2600;
+}
+
+.fc-5 {
+  --c: #d93838;
+  --edge: #fff;
+  --ink: #fff;
+}
+
+.fc-10 {
+  --c: #2f6fd6;
+  --edge: #fff;
+  --ink: #fff;
+}
+
+.fc-25 {
+  --c: #1f8f4e;
+  --edge: #fff;
+  --ink: #fff;
+}
+
+.fc-100 {
+  --c: #1b1b1f;
+  --edge: #e9c46a;
+  --ink: #f5d27a;
+}
+
+.fa-chip {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  pointer-events: none;
+}
+
+/* ---------- Place numbers ---------- */
+.felt-nums {
+  grid-area: nums;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 3px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.felt-crapless .felt-nums {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.fn {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  container-type: size; /* the numeral is sized from the box (cqw / cqh) */
+}
+
+.fn-main {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  padding: 3px 1px;
+}
+
+.fn-pay {
+  color: var(--gold);
+  font-size: calc(0.64rem * var(--scale));
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.fn-num {
+  --max: calc(1.55rem * var(--scale));
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  font-size: min(var(--max), 7vw);
+  font-size: min(var(--max), calc((100cqw - 8px) / (var(--len, 1) * 0.6)), 34cqh);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.felt-crapless .fn-num {
+  --max: calc(1.4rem * var(--scale));
+}
+
+.fn-puck {
+  position: absolute;
+  left: 3px;
+  bottom: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #fbfbf8;
+  color: #111;
+  border: 2px solid var(--gold);
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.fn.is-point .fn-main {
+  border-color: #fff;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+
+.fn .fa-chip {
+  --chip-size: 24px;
+  right: 3px;
+  bottom: 3px;
+}
+
+/* A Come bet on this number: a chip marked C with its Odds chip beside it. Tapping the cluster adds Come Odds. */
+.fn-come {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 44px;
+  height: min(44px, 64%); /* a number box under 69 px tall (568×320) keeps its top for Place */
+  padding: 3px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.fn-come .fchip {
+  --chip-size: 22px;
+}
+
+.fn-come .odds-chip {
+  margin-left: -7px;
+  margin-bottom: 9px;
+}
+
+.fn.has-come .fn-main .fa-chip {
+  right: auto;
+  left: 3px;
+}
+
+.fn.has-come .fn-puck {
+  bottom: auto;
+  top: 3px;
+}
+
+/* ---------- Bands ---------- */
+.a-come {
+  grid-area: come;
+  flex-direction: row;
+}
+
+.a-field {
+  grid-area: field;
+  gap: 2px;
+}
+
+.ff-nums {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.18em;
+  font-size: calc(0.95rem * var(--scale));
+  font-weight: 700;
+}
+
+.ff-nums b {
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.ff-nums .ring {
+  min-width: 1.55em;
+  height: 1.55em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--gold);
+  border-radius: 50%;
+  color: var(--gold);
+  font-style: normal;
+}
+
+.ff-name {
+  font-size: calc(0.78rem * var(--scale));
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.ff-name small {
+  font-size: 0.82em;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.a-come .fa-chip,
+.a-field .fa-chip,
+.a-dont .fa-chip,
+.a-pass .fa-chip {
+  --chip-size: 30px;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+}
+
+.a-dodds .fa-chip,
+.a-odds .fa-chip {
+  --chip-size: 26px;
+  right: 3px;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+}
+
+/* ---------- Line bets ---------- */
+.fp {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--odds-w);
+  gap: 4px;
+  min-width: 0;
+}
+
+.fp-dont {
+  grid-area: dont;
+}
+
+.fp-pass {
+  grid-area: pass;
+}
+
+.a-dont .fl,
+.a-pass .fl {
+  font-size: calc(0.95rem * var(--scale));
+}
+
+.a-pass .fl {
+  font-size: calc(1.1rem * var(--scale));
+  letter-spacing: 0.1em;
+}
+
+.a-dodds,
+.a-odds {
+  align-items: flex-start;
+  padding-left: 7px;
+}
+
+.a-dodds .fl,
+.a-odds .fl {
+  margin-top: 3px;
+  font-size: calc(0.82rem * var(--scale));
+  line-height: 1;
+}
+
+.a-dodds .fl {
+  white-space: normal;
+  text-align: left;
+  font-size: calc(0.74rem * var(--scale));
+}
+
+.a-dodds,
+.a-odds {
+  text-align: left;
+}
+
+.a-pass-strip {
+  grid-area: pstrip;
+  display: none;
+}
+
+.a-dont-strip {
+  grid-area: dstrip;
+  display: none;
+}
+
+.a-pass-strip .fl,
+.a-dont-strip .fl {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: calc(1rem * var(--scale));
+  letter-spacing: 0.14em;
+}
+
+.a-dont-strip .fl {
+  font-size: calc(0.82rem * var(--scale));
+  letter-spacing: 0.1em;
+}
+
+.a-pass-strip .fa-chip,
+.a-dont-strip .fa-chip {
+  display: none;
+}
+
+/* ---------- Hardways ---------- */
+.felt-hard {
+  grid-area: hard;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fh-head {
+  margin: 0;
+  color: var(--gold);
+  font-family: var(--felt-font);
+  font-size: calc(0.78rem * var(--scale));
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-align: center;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.fh-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(44px, 1fr);
+  gap: 4px;
+}
+
+.fh-box {
+  gap: 3px;
+  padding: 2px;
+}
+
+.fh-dice {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.craps-stage .die.red {
+  --hd: calc(18px * var(--scale));
+  width: var(--hd);
+  height: var(--hd);
+  padding: 2px;
+  gap: 0;
+  border-radius: 4px;
+  background: #c4161c;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.5), inset 0 -2px 0 rgba(0, 0, 0, 0.2);
+}
+
+.craps-stage .die.red .pip {
+  margin: 0.5px;
+}
+
+.craps-stage .die.red .pip.on {
+  background: #fff;
+}
+
+.fh-pay {
+  color: var(--gold);
+  font-size: calc(0.68rem * var(--scale));
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.fh-box .fa-chip {
+  --chip-size: 22px;
+  right: 3px;
+  bottom: 3px;
+}
+
+.fh-note {
+  display: none;
+  margin: 0;
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* ---------- Betting controls (the rail sideways, the dock upright) ---------- */
+.cs-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cs-money {
+  display: flex;
+  flex-direction: column;
+  padding: 1px 4px;
+  font-size: 0.7rem;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.cs-money strong {
+  color: var(--text);
+}
+
+.cs-rack {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.rack-chip {
+  --chip-size: min(48px, 100%);
+  height: 48px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.rack-chip .fchip {
+  --chip-size: min(48px, 100%);
+  aspect-ratio: 1;
+  height: auto;
+  transition: transform 0.1s;
+}
+
+.rack-chip .fchip-face {
+  font-size: 17px;
+}
+
+.rack-chip .fchip[data-len='4'] .fchip-face {
+  font-size: 14px;
+}
+
+.rack-chip.active .fchip {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 3px var(--gold), 0 3px 5px rgba(0, 0, 0, 0.55);
+}
+
+.rack-chip:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 0;
+}
+
+.rack-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cs-tools {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: 4px;
+}
+
+.cs-tools .btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.btn.take-down.active {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(245, 196, 81, 0.12);
+}
+
+.cs-msg {
+  margin: 0;
+  min-height: 1.15em;
+  padding: 0 2px;
+  font-size: 0.72rem;
+  line-height: 1.15;
+  color: var(--text-muted);
+  overflow: hidden;
+}
+
+.cs-msg.error {
+  color: #ffd9d9;
+}
+
+.cs-roll {
+  display: flex;
+  min-width: 0;
+}
+
+.cs-roll .craps-roll-btn,
+.cs-roll .craps-sit-btn {
+  flex: 1 1 auto;
+  min-height: 44px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.craps-full {
+  align-self: center;
+  flex: 1 1 auto;
+  text-align: center;
+  font-weight: 800;
+  color: var(--gold);
+}
+
+.cs-wait {
+  align-self: center;
+  flex: 1 1 auto;
+  margin: 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* ---------- Dice, roll chips (shared with the Table sheet) ---------- */
+.die {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #fbfbf8;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), inset 0 -3px 0 rgba(0, 0, 0, 0.12);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  padding: 4px;
+  gap: 1px;
+}
+
+.pip {
+  border-radius: 999px;
+  margin: 1.5px;
+}
+
+.pip.on {
+  background: #b3121a;
+}
+
+.die.rolling {
+  animation: die-tumble 0.35s linear infinite;
+}
+
+@keyframes die-tumble {
+  0% {
+    transform: rotate(0deg) translateY(0);
+  }
+  50% {
+    transform: rotate(180deg) translateY(-6px);
+  }
+  100% {
+    transform: rotate(360deg) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .die.rolling {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
+.craps-rolls {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.roll-chip {
+  min-width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.roll-chip.seven {
+  background: rgba(255, 107, 107, 0.2);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.roll-chip.made {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* ---------- The Table sheet and the inline version ---------- */
+.table-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.5rem 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cs-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.5rem 0 0.5rem;
+}
+
+.cs-info .cs-info-status {
+  display: none;
+}
+
+.cs-info-status {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+/* ===================== Upright ===================== */
+@media (orientation: portrait) {
+  .felt-board {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'nums'
+      'come'
+      'field'
+      'dont'
+      'pass'
+      'hard';
+  }
+
+  .felt-crapless .felt-board {
+    grid-template-areas:
+      'nums'
+      'come'
+      'field'
+      'pass'
+      'hard';
+  }
+
+  .felt-nums {
+    height: 80px;
+  }
+
+  .felt-crapless .felt-nums {
+    height: 143px; /* two rows of 70 */
+  }
+
+  .a-come {
+    height: 50px;
+  }
+
+  .a-field {
+    height: 62px;
+  }
+
+  .fp-dont {
+    height: 44px;
+  }
+
+  .fp-pass {
+    height: 48px;
+  }
+
+  .felt-hard {
+    height: auto;
+  }
+
+  .fh-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: 64px;
+  }
+
+  .fh-box .fa-chip {
+    --chip-size: 20px;
+  }
+
+  /* The dock */
+  .cs-rail {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 25;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'money money'
+      'msg msg'
+      'rack rack'
+      'tools roll';
+    gap: 4px;
+    padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.35);
+  }
+
+  .cs-money {
+    grid-area: money;
+    flex-direction: row;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    padding: 0 2px;
+  }
+
+  .cs-msg {
+    grid-area: msg;
+    min-height: 1.15em;
+    font-size: 0.78rem;
+    text-align: center;
+  }
+
+  .cs-rack {
+    grid-area: rack;
+  }
+
+  .cs-tools {
+    grid-area: tools;
+    grid-template-columns: repeat(3, auto);
+  }
+
+  .cs-roll {
+    grid-area: roll;
+  }
+
+  /* when the seat isn't mine the rail is just the message and Sit down */
+  .craps-stage.watching .cs-rail {
+    grid-template-areas:
+      'money money'
+      'msg msg'
+      'roll roll';
+  }
+
+  /* Short phones (e.g. 320 × 568): a little tighter; scrolling is allowed below 600 px tall */
+  @media (max-height: 599px) {
+    .a-come {
+      height: 44px;
+    }
+
+    .a-field {
+      height: 52px;
+    }
+
+    .fh-grid {
+      grid-auto-rows: 56px;
+    }
+  }
+}
+
+/* ===================== Sideways (phones held sideways, and computers) ===================== */
+@media (orientation: landscape) {
+  .craps-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--rail-w);
+    grid-template-rows: 44px minmax(0, 1fr);
+    grid-template-areas:
+      'top top'
+      'felt rail';
+    gap: 4px 6px;
+    overflow: hidden;
+    padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+
+  /* top bar: one row of 44 px */
+  .cs-top {
+    grid-area: top;
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .cs-name {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .cs-status {
+    flex: 1 1 0;
+    min-height: 0;
+    padding: 0;
+  }
+
+  .cs-meta {
+    flex: 0 0 auto;
+  }
+
+  .cs-felt-wrap {
+    grid-area: felt;
+    min-height: 0;
+  }
+
+  .felt-board {
+    grid-template-columns: minmax(0, 1fr) var(--hw);
+    grid-template-rows: minmax(var(--num-min), 1fr) var(--come-h) var(--field-h) var(--dp-h) var(--pass-h);
+    grid-template-areas:
+      'nums hard'
+      'come hard'
+      'field hard'
+      'dont hard'
+      'pass pass';
+  }
+
+  .felt-crapless .felt-board {
+    grid-template-rows: minmax(calc(var(--num-min) * 2 + 3px), 1fr) var(--come-h) var(--field-h) var(--pass-h);
+    grid-template-areas:
+      'nums hard'
+      'come hard'
+      'field hard'
+      'pass pass';
+  }
+
+  .felt-nums {
+    height: auto;
+  }
+
+  .a-come,
+  .a-field,
+  .fp-dont,
+  .fp-pass {
+    height: auto;
+  }
+
+  .fp-pass {
+    min-width: 0;
+  }
+
+  .fh-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(44px, 1fr);
+  }
+
+  .fh-note {
+    display: block;
+  }
+
+  /* the rail */
+  .cs-rail {
+    grid-area: rail;
+    min-height: 0;
+    padding: 1px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .cs-rack {
+    grid-template-columns: repeat(3, 44px);
+    gap: 1px;
+    justify-content: center;
+  }
+
+  .rack-chip {
+    height: 44px;
+    width: 44px;
+  }
+
+  .rack-chip .fchip {
+    --chip-size: 44px;
+  }
+
+  .cs-tools {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+  }
+
+  .cs-tools .btn {
+    padding: 0 1px;
+    font-size: 0.68rem;
+    min-width: 0;
+  }
+
+  .cs-msg {
+    min-height: 2.3em;
+  }
+
+  .cs-roll {
+    flex: 1 1 44px;
+    min-height: 44px;
+  }
+
+  .cs-roll .craps-roll-btn,
+  .cs-roll .craps-sit-btn {
+    font-size: 1.3rem;
+  }
+
+  /* two layers of strips as the table gets wide enough */
+  @media (min-width: 640px) {
+    .craps-stage {
+      --hw: 100px;
+    }
+
+    .a-pass-strip {
+      display: flex;
+    }
+
+    .felt-board {
+      grid-template-columns: var(--sw) minmax(0, 1fr) var(--hw);
+      grid-template-areas:
+        'pstrip nums hard'
+        'pstrip come hard'
+        'pstrip field hard'
+        'pstrip dont hard'
+        'pstrip pass pass';
+    }
+
+    .felt-crapless .felt-board {
+      grid-template-areas:
+        'pstrip nums hard'
+        'pstrip come hard'
+        'pstrip field hard'
+        'pstrip pass pass';
+    }
+  }
+
+  @media (min-width: 760px) {
+    .craps-stage {
+      --hw: 116px;
+    }
+
+    .felt-craps .a-dont-strip {
+      display: flex;
+    }
+
+    .felt-craps .felt-board {
+      grid-template-columns: var(--sw) var(--sw) minmax(0, 1fr) var(--hw);
+      grid-template-areas:
+        'pstrip dstrip nums hard'
+        'pstrip dstrip come hard'
+        'pstrip dstrip field hard'
+        'pstrip dstrip dont hard'
+        'pstrip pass pass pass';
+    }
+  }
+
+  /* row heights follow the screen height */
+  @media (min-height: 360px) {
+    .craps-stage {
+      --come-h: 46px;
+      --field-h: 52px;
+    }
+  }
+
+  @media (min-height: 380px) {
+    .craps-stage {
+      --come-h: 48px;
+      --field-h: 56px;
+    }
+  }
+
+  /* the top bar is tight on the smallest phones: the game name makes room for the status */
+  @media (max-width: 719px) {
+    .cs-name {
+      display: none;
+    }
+  }
+
+  @media (max-width: 899px) {
+    .cs-kind {
+      display: none;
+    }
+  }
+
+  /* a computer (taller than a phone held sideways): the same table, sized up */
+  @media (min-height: 501px) {
+    .craps-stage {
+      --scale: 1.2;
+      --rail-w: 190px;
+      --hw: 150px;
+      --sw: 56px;
+      --odds-w: 130px;
+      --come-h: 58px;
+      --field-h: 66px;
+      --dp-h: 52px;
+      --pass-h: 58px;
+      padding-left: max(12px, env(safe-area-inset-left), calc((100vw - 1240px) / 2));
+      padding-right: max(12px, env(safe-area-inset-right), calc((100vw - 1240px) / 2));
+    }
+
+    .cs-top {
+      font-size: 1rem;
+    }
+
+    .cs-felt-wrap,
+    .cs-rail {
+      max-height: 660px;
+    }
+
+    .rack-chip,
+    .rack-chip .fchip {
+      --chip-size: 52px;
+    }
+
+    .rack-chip {
+      width: 52px;
+      height: 52px;
+    }
+
+    .cs-rack {
+      grid-template-columns: repeat(3, 52px);
+      gap: 4px;
+    }
+
+    .fn .fa-chip {
+      --chip-size: 30px;
+    }
+
+    .cs-money {
+      font-size: 0.82rem;
+    }
+
+    .cs-msg {
+      font-size: 0.8rem;
+    }
+
+    .cs-tools .btn {
+      font-size: 0.8rem;
+    }
+
+    .fh-grid .fh-box .fa-chip {
+      --chip-size: 26px;
+    }
+
+    .craps-stage .die.red {
+      --hd: 24px;
+    }
+  }
+}

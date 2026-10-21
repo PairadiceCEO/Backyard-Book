@@ -119,6 +119,10 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
 
+## 0.18.0
+
+- **Real craps felt, upright and sideways (Craps and Crapless):** the table is drawn like a casino layout in green felt with a wood rail: number boxes (payout on top, the ON puck, your chips), Come, Field, Don't Pass Bar and Don't Odds (Craps only), Pass Line with Odds ("up to 2×"), and Hardways with red dice. Every printed area is a button. Hold the phone upright for a stacked table with the chips docked at the bottom, or turn it sideways for the long table with a Pass Line strip down the left and a chip rail on the right (computers use the sideways table). Seats, last rolls, help and the rules are under the felt on tall phones, or in the **Table** button's sheet. Rotating keeps your seat, chips and chat. No rule, payout or money change. No console step.
+
 ## 0.17.2
 
 - **Blackjack / Baccarat chips:** Clear, Undo and quick taps while a bet is on its way no longer bounce back or lower a bet.
@@ -140,7 +144,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 
 - **Same-game parlays with props:** a prop can go in a parlay with other props and the moneyline, spread or total of the same game, and with other games. A parlay holds at most one pick per player per stat (the player is read from the Kalshi ticker, not the name); a second one is refused with "You already have a Derrick Henry Rush Yds pick in this parlay." Moneyline + spread from one game and crypto singles-only are unchanged.
 - **Player props on the game page:** a **Player props** tab next to **Game lines**, under the score, before the game when Kalshi has props. Props load only when the tab is opened and the choice is remembered for the session; the tab disappears when the game starts. Old `/props` links open the game page on that tab.
-- **Craps and Crapless without scrolling:** a compact top bar (puck, dice, total, countdown, Roll or Sit down), then the chips, Take down, Undo / Clear and every betting spot on one screen (two columns on a computer); seats, last rolls and the rules sit below. On very short phones the chips, Take down and Roll stay in a bar at the bottom.
+- **Craps and Crapless without scrolling (replaced by the 0.18.0 felt):** a compact top bar (puck, dice, total, countdown, Roll or Sit down), then the chips, Take down, Undo / Clear and every betting spot on one screen (two columns on a computer); seats, last rolls and the rules sit below. On very short phones the chips, Take down and Roll stay in a bar at the bottom.
 
 ## 0.14.0
 
