@@ -6,7 +6,7 @@
 // phone opening mid-hand, a tab coming back) just appears. prefers-reduced-motion: no slide, it just appears. Only the
 // arrival is animated; when a card shows is still the server's reveal time (useTimedReveal).
 
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { cardFace, cardName, isRedCard } from '../../../shared/casino/cards.js';
 import { serverNow } from '../../lib/casino.js';
 import { prefersReducedMotion } from '../../lib/reducedMotion.js';
@@ -62,13 +62,15 @@ export default function PlayingCard({ card, fresh = false, small = false, dealAt
 }
 
 // Baccarat's squeeze (0.19.0): the third card sits face down while its 1.5 s gap runs, lifts a corner, then turns, and
-// finishes face up exactly when the server's reveal time arrives (the real card replaces it at that moment). `gapMs` is
-// the gap (reveal time − the previous card's reveal time), `elapsedMs` how far into it we already are (a phone that opens
-// mid-gap joins the animation where it is). Reduced motion: stays face down, the real card then flips at the reveal time.
-export function PeelCard({ card, gapMs, elapsedMs = 0 }) {
+// finishes face up exactly when the server's reveal time arrives (the real card replaces it at that moment). `startAt` is the
+// server time the gap began (the previous card's reveal time), `gapMs` its length. The animation is a CSS animation with a
+// negative delay worked out once at mount, so a phone that opens mid-gap joins it where it is, and every phone ends together.
+// Reduced motion: it stays face down (CSS), and the real card then simply shows at the reveal time.
+export function PeelCard({ card, startAt, gapMs }) {
+  const [elapsed] = useState(() => Math.max(0, Math.min(serverNow() - startAt, gapMs)));
   const face = cardFace(card);
   const red = isRedCard(card);
-  const style = { '--peel-ms': `${gapMs}ms`, '--peel-delay': `${-Math.max(0, Math.min(elapsedMs, gapMs))}ms` };
+  const style = { '--peel-ms': `${gapMs}ms`, '--peel-delay': `${-elapsed}ms` };
   return (
     <span className="peel-card" style={style} data-peel="" aria-hidden="true">
       <span className="peel-inner">

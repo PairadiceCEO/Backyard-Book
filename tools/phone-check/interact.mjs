@@ -1580,6 +1580,255 @@ await check('wallet activity: pick a player, summary + checks; Load more sends t
   await context.close();
 });
 
+// ---------- 0.19.0: Rebet, Rebet ×2 ----------
+// The page remembers a seat's bet when the cards are dealt; when the next betting round opens the seat shows Rebet buttons
+// that put the same chips back through chips.place (one batch).
+const nextRound = (rig, game, bets) => {
+  // A finished hand (results), then the next betting round.
+  const done = structuredClone(rig.table);
+  done.phase = 'results'; done.version += 1; done.updatedAt = now();
+  if (game === 'blackjack') {
+    done.seats[1] = { ...done.seats[1], betCents: bets, ready: true, hands: [{ cards: ['TS0', '9H0'], betCents: bets, status: 'stood', seq: 0, fromSplit: false, splitAces: false, doubled: false, outcome: 'win' }], result: { stakeCents: bets, returnCents: bets * 2, netCents: bets } };
+    done.dealer = { cards: ['TH0', '7D0'], holeDown: false };
+  } else {
+    done.seats[1] = { ...done.seats[1], bets, ready: true, result: { stakeCents: 900, returnCents: 1000, netCents: 100 } };
+    done.coup = { player: ['KS0', '4H2'], banker: ['2C0', '3H1'], playerTotal: 4, bankerTotal: 5, winner: 'banker', natural: false, dealtAt: now() - 60000 };
+  }
+  const next = structuredClone(done);
+  next.phase = 'betting'; next.roundId = `${done.roundId}n`; next.roundNo += 1; next.version += 1; next.updatedAt = now(); next.coup = null; next.dealer = { cards: [], holeDown: false };
+  next.seats[1] = game === 'blackjack'
+    ? { ...done.seats[1], betCents: 0, ready: false, hands: [], result: null }
+    : { ...done.seats[1], bets: { player: 0, banker: 0, tie: 0 }, ready: false, result: null };
+  return { done, next };
+};
+const push = (page, t) => page.evaluate((tt) => { window.__H.fs.casinoTables = [tt]; window.__H.emit?.(); }, t);
+
+for (const game of ['blackjack', 'baccarat']) {
+  const LAST = game === 'blackjack' ? 1000 : { player: 500, banker: 300, tie: 100 };
+  const lastTotal = game === 'blackjack' ? 1000 : 900;
+  const rebetOpen = async (bets = LAST) => {
+    const rig = chipRig(game);
+    const { page, context } = await openPage(`/casino/${game}`, [rig.table], rig.handler);
+    rig.page = page;
+    const { done, next } = nextRound(rig, game, bets);
+    await push(page, done);
+    await page.waitForTimeout(900);
+    rig.table = next;
+    await push(page, next);
+    await page.waitForTimeout(400);
+    return { rig, page, context };
+  };
+  const money = (c) => `$${(c / 100).toFixed(2)}`;
+  const rebetBtn = (page, x2) => page.getByRole('button', { name: x2 ? /^Rebet ×2 / : /^Rebet \$/ });
+  const spotsNow = (rig) => (game === 'blackjack' ? [rig.table.seats[1].betCents] : [rig.table.seats[1].bets.player, rig.table.seats[1].bets.banker, rig.table.seats[1].bets.tie]);
+
+  await check(`${game}: Rebet and Rebet ×2 show last hand's totals, Rebet sends them as one bet`, async () => {
+    const { rig, page, context } = await rebetOpen();
+    assert.equal(await rebetBtn(page, false).innerText(), `Rebet ${money(lastTotal)}`);
+    assert.equal(await rebetBtn(page, true).innerText(), `Rebet ×2 ${money(lastTotal * 2)}`);
+    for (const b of [rebetBtn(page, false), rebetBtn(page, true)]) { const r = await b.boundingBox(); assert.ok(r.width >= 43.5 && r.height >= 43.5, `Rebet button ${r.width}x${r.height}`); }
+    await rebetBtn(page, false).click();
+    await page.waitForTimeout(BET_REPLY_MS + 900);
+    assert.equal(rig.sent.length, 1, `one request (${JSON.stringify(sentAmounts(rig, game))})`);
+    assert.deepEqual(spotsNow(rig), game === 'blackjack' ? [1000] : [500, 300, 100]);
+    assert.equal(await rebetBtn(page, false).count(), 0, 'buttons hide once chips are down');
+    assert.equal(await rebetBtn(page, true).count(), 0);
+    await context.close();
+  });
+
+  await check(`${game}: Rebet ×2 puts twice the last bet on every spot, in one request`, async () => {
+    const { rig, page, context } = await rebetOpen();
+    await rebetBtn(page, true).click();
+    await page.waitForTimeout(BET_REPLY_MS + 900);
+    assert.equal(rig.sent.length, 1, `one request (${JSON.stringify(sentAmounts(rig, game))})`);
+    assert.deepEqual(spotsNow(rig), game === 'blackjack' ? [2000] : [1000, 600, 200]);
+    await context.close();
+  });
+
+  await check(`${game}: a double tap on Rebet places the bet once`, async () => {
+    const { rig, page, context } = await rebetOpen();
+    const b = rebetBtn(page, false);
+    await b.dispatchEvent('click');
+    await b.dispatchEvent('click').catch(() => {});
+    await page.waitForTimeout(BET_REPLY_MS * 2 + 900);
+    assert.deepEqual(spotsNow(rig), game === 'blackjack' ? [1000] : [500, 300, 100], JSON.stringify(sentAmounts(rig, game)));
+    await context.close();
+  });
+
+  await check(`${game}: the Rebet buttons hide after one chip, and a Rebet tap while a batch is in flight ends at the right total`, async () => {
+    const { rig, page, context } = await rebetOpen();
+    await page.getByRole('radio', { name: '$5 chip' }).first().click();
+    await (game === 'blackjack' ? page.locator('[aria-label^="Seat 2 bet"]').first() : page.getByRole('button', { name: /Player, pays/ })).click();
+    await page.waitForTimeout(60);
+    assert.equal(await rebetBtn(page, false).count(), 0, 'hidden after a chip');
+    await page.waitForTimeout(320); // the $5 batch has gone, its reply is 500 ms away
+    assert.equal(rig.sent.length, 1);
+    await page.getByRole('button', { name: 'Undo' }).first().click(); // back to nothing on screen, $5 still in flight
+    assert.equal(await rebetBtn(page, false).count(), 1, 'back again at $0');
+    await rebetBtn(page, false).click();
+    await page.waitForTimeout(BET_REPLY_MS * 3 + 900);
+    assert.deepEqual(rig.refused, []);
+    assert.deepEqual(spotsNow(rig), game === 'blackjack' ? [1000] : [500, 300, 100], `server totals (sent ${JSON.stringify(sentAmounts(rig, game))})`);
+    await context.close();
+  });
+
+  await check(`${game}: Rebet ×2 with a wallet that can't cover it shows the usual message and places nothing`, async () => {
+    const { rig, page, context } = await rebetOpen(game === 'blackjack' ? 10000 : { player: 5000, banker: 3000, tie: 1000 });
+    await rebetBtn(page, true).click();
+    await page.waitForTimeout(BET_REPLY_MS + 700);
+    assert.match((await page.locator('.error-text').allInnerTexts()).join(' '), /Not enough in your wallet/);
+    assert.equal(rig.sent.length, 0, 'nothing sent');
+    await context.close();
+  });
+}
+
+// ---------- 0.19.0: total pills, results float, squeeze ----------
+const bjSeatFull = (extra) => ({ uid: 'u1', name: 'Mike', sitAt: now() - 60000, leaving: false, reqs: [], betCents: 1000, stakeCents: 1000, returnCents: 0, insurance: null, hands: [], result: null, ready: true, ...extra });
+const bjHand = (cards, extra = {}) => ({ cards, betCents: 1000, status: 'stood', seq: 1, fromSplit: false, splitAces: false, doubled: false, outcome: null, ...extra });
+const bjTbl = (over, seatExtra) => ({ id: 'blackjack', game: 'blackjack', epoch: 'p', roundNo: 9, roundId: 'p-9', phase: 'playing', deadline: now() + 9000, turn: { seat: 3, hand: 0 }, dealer: { cards: ['KH0', '7D0'], holeDown: false }, lastDeal: { at: now() - 60000, cards: [] }, shoe: { remaining: 240, total: 312, shuffles: 0 }, version: 20, updatedAt: now() - 5000, seats: [null, bjSeatFull(seatExtra), null, bjSeatFull({ uid: 'u3', name: 'Dan', hands: [bjHand(['5S0', '2C0'], { status: 'playing' })] }), null], ...over });
+const noCasino = async (route) => json(route, 200, { ok: true, serverNow: now() });
+
+await check('blackjack: a total pill beside every hand and the dealer (17, soft 17, BJ, bust)', async () => {
+  const { page, context } = await openPage('/casino/blackjack', [bjTbl({}, { hands: [bjHand(['AH0', '6C0'])] })], noCasino);
+  const pills = async () => (await page.locator('.bj-total').allInnerTexts()).map((t) => t.trim());
+  const first = await pills();
+  assert.ok(first.includes('17') && first.includes('soft 17'), `dealer 17 and my soft 17 (${first})`);
+  const where = await page.locator('.bj-total').first().evaluate((el) => !!el.closest('.bj-cards-row')?.querySelector('.bj-cards'));
+  assert.ok(where, 'the pill sits in the same row as the cards');
+  await push(page, bjTbl({ version: 21 }, { hands: [bjHand(['AH0', 'KD0'], { outcome: 'blackjack' })] }));
+  await page.waitForTimeout(300);
+  assert.ok((await pills()).includes('BJ'), `BJ (${await pills()})`);
+  await push(page, bjTbl({ version: 22 }, { hands: [bjHand(['KH0', 'QD0', '4S0'])] }));
+  await page.waitForTimeout(300);
+  assert.ok((await pills()).includes('24'));
+  assert.equal(await page.locator('.bj-total.bust').getAttribute('aria-label'), 'bust 24');
+  await context.close();
+});
+
+await check('blackjack: a total pill follows each card as it turns', async () => {
+  const at = now() + 2300;
+  const t = bjTbl({ dealer: { cards: [], holeDown: false }, lastDeal: { at, cards: [{ to: '1-0', i: 0, t: 0 }, { to: '1-0', i: 1, t: 1000 }] } }, { hands: [bjHand(['5S0', '9C0'])] });
+  const { page, context } = await openPage('/casino/blackjack', [t], noCasino);
+  const mine = () => page.locator('.seat-panel .bj-total').first().innerText();
+  await page.waitForTimeout(Math.max(0, at - now() - 300));
+  assert.ok(now() < at, 'sampled before the deal');
+  assert.equal((await mine()).trim(), '', 'nothing face up yet');
+  await page.waitForTimeout(Math.max(0, at + 400 - now()));
+  assert.equal((await mine()).trim(), '5', 'first card');
+  await page.waitForTimeout(Math.max(0, at + 1400 - now()));
+  assert.equal((await mine()).trim(), '14', 'second card');
+  await context.close();
+});
+
+const floatCases = [
+  ['win', 500, 1500, /^\+\$15\.00$/, 'win'],
+  ['lose', 1000, -1000, /^−\$10\.00$/, 'lose'],
+  ['push', 1000, 0, /^Push$/, 'push'],
+];
+for (const [name, bet, net, re, cls] of floatCases) {
+  await check(`blackjack: results float "${name}" from my seat (text and a chip slide)`, async () => {
+    const outcome = net > 0 ? 'win' : net < 0 ? 'lose' : 'push';
+    const t = bjTbl({ phase: 'results', turn: null }, { betCents: bet, hands: [bjHand(['TS0', '9H0'], { betCents: bet, outcome })], result: { stakeCents: bet, returnCents: bet + net, netCents: net } });
+    t.seats[3] = null;
+    const { page, context } = await openPage('/casino/blackjack', [t], noCasino);
+    await page.waitForTimeout(150);
+    const fx = page.locator('.fx-float');
+    assert.equal(await fx.count(), 1, 'one float');
+    assert.match((await fx.innerText()).trim(), re);
+    assert.ok((await fx.getAttribute('class')).includes(cls));
+    assert.equal(await page.locator('.fx-chip').count(), net === 0 ? 0 : 1, 'chip slide');
+    if (net !== 0) assert.ok((await page.locator('.fx-chip').evaluate((el) => el.getAnimations().length)) >= 1, 'the chip is animating');
+    await page.waitForTimeout(1500);
+    assert.equal(await page.locator('.fx-float').count(), 0, 'gone after about 1.2 s');
+    await context.close();
+  });
+}
+
+await check('blackjack: reduced motion: the float is text only (no chip slide)', async () => {
+  const t = bjTbl({ phase: 'results', turn: null }, { betCents: 500, hands: [bjHand(['TS0', '9H0'], { betCents: 500, outcome: 'win' })], result: { stakeCents: 500, returnCents: 1000, netCents: 500 } });
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+  const page = await context.newPage();
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: [t] } });
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
+  await page.route('**/api/**', (route) => json(route, 200, { ok: true, serverNow: now() }));
+  await page.goto(BASE + '/casino/blackjack', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(700);
+  assert.match((await page.locator('.fx-float').innerText()).trim(), /^\+\$5\.00$/);
+  assert.equal(await page.locator('.fx-chip').evaluate((el) => getComputedStyle(el).display), 'none');
+  await context.close();
+});
+
+await check('baccarat: results float on each of my spots (Banker wins: Player −, Banker +, Tie −)', async () => {
+  const t = { id: 'baccarat', game: 'baccarat', epoch: 'p', roundNo: 9, roundId: 'p-9', phase: 'results', deadline: now() + 9000, coup: { player: ['KS0', '4H2'], banker: ['2C0', '3H1'], playerTotal: 4, bankerTotal: 5, winner: 'banker', natural: false, dealtAt: now() - 60000 }, shoeResults: 'B', shoe: { remaining: 300, total: 416, shuffles: 1 }, version: 10, updatedAt: now() - 5000, seats: [null, seat('u1', 'Mike', { ready: true, bets: { player: 500, banker: 400, tie: 100 }, result: { stakeCents: 1000, returnCents: 1000, netCents: 0 } }), null, null, null] };
+  const { page, context } = await openPage('/casino/baccarat', [t], noCasino);
+  await page.waitForTimeout(150);
+  const texts = async () => ({
+    player: (await page.locator('.bac-spot.player .fx-float').innerText()).trim(),
+    banker: (await page.locator('.bac-spot.banker .fx-float').innerText()).trim(),
+    tie: (await page.locator('.bac-spot.tie .fx-float').innerText()).trim(),
+  });
+  assert.deepEqual(await texts(), { player: '−$5.00', banker: '+$3.80', tie: '−$1.00' });
+  assert.ok((await page.locator('.bac-spot .fx-chip').count()) >= 3, 'chips slide on each spot');
+  const pills = (await page.locator('.bac-total').allInnerTexts()).map((x) => x.trim());
+  assert.deepEqual(pills, ['4', '5'], 'Player and Banker total pills');
+  await context.close();
+});
+
+await check('baccarat: a tie shows Push on Player and Banker', async () => {
+  const t = { id: 'baccarat', game: 'baccarat', epoch: 'p', roundNo: 9, roundId: 'p-9', phase: 'results', deadline: now() + 9000, coup: { player: ['KS0', '5H2'], banker: ['2C0', '3H1'], playerTotal: 5, bankerTotal: 5, winner: 'tie', natural: false, dealtAt: now() - 60000 }, shoeResults: 'T', shoe: { remaining: 300, total: 416, shuffles: 1 }, version: 10, updatedAt: now() - 5000, seats: [null, seat('u1', 'Mike', { ready: true, bets: { player: 500, banker: 400, tie: 0 }, result: { stakeCents: 900, returnCents: 900, netCents: 0 } }), null, null, null] };
+  const { page, context } = await openPage('/casino/baccarat', [t], noCasino);
+  await page.waitForTimeout(150);
+  assert.equal((await page.locator('.bac-spot.player .fx-float').innerText()).trim(), 'Push');
+  assert.equal((await page.locator('.bac-spot.banker .fx-float').innerText()).trim(), 'Push');
+  await context.close();
+});
+
+const bacSqueeze = (dealtAt) => ({ id: 'baccarat', game: 'baccarat', epoch: 'p', roundNo: 9, roundId: 'p-9', phase: 'results', deadline: dealtAt + 12000, coup: { player: ['KS0', '4H2', '3D1'], banker: ['2C0', '3H1', '4S2'], playerTotal: 7, bankerTotal: 9, winner: 'banker', natural: false, dealtAt }, shoeResults: 'B', shoe: { remaining: 300, total: 416, shuffles: 1 }, version: 10, updatedAt: now() - 5000, seats: [null, seat('u1', 'Mike', { ready: true, bets: { player: 0, banker: 300, tie: 0 }, result: { stakeCents: 300, returnCents: 585, netCents: 285 } }), null, null, null] });
+
+await check('baccarat squeeze: the third card is face down from the start of its gap and finishes turning on its reveal time', async () => {
+  const at = now() + 800;
+  const { page, context } = await openPage('/casino/baccarat', [bacSqueeze(at)], noCasino);
+  // Reveal times 0, 1000, 2000, 3000 (Banker's 2nd), Player's 3rd at 4500 (gap starts at 3000), Banker's 3rd at 6000.
+  const peel = (box) => page.locator(`.bact-box.${box} .peel-card`);
+  await page.waitForTimeout(Math.max(0, at + 2700 - now()));
+  assert.equal(await peel('player').count(), 0, 'no peel before the gap starts');
+  await page.waitForTimeout(Math.max(0, at + 3350 - now()));
+  assert.equal(await peel('player').count(), 1, 'Player third card face down');
+  assert.equal(await page.locator('.bact-box.player .pcard').count(), 2, 'not yet a face-up third card');
+  const info = await page.locator('.bact-box.player .peel-inner').evaluate((el) => {
+    const a = el.getAnimations()[0];
+    const timing = a.effect.getComputedTiming();
+    return { current: a.currentTime, duration: timing.duration, delay: timing.delay, nowMs: Date.now() };
+  });
+  assert.equal(info.duration, 1500, 'the animation spans the 1.5 s gap');
+  const finishesAt = info.nowMs + (info.duration - info.current);
+  assert.ok(Math.abs(finishesAt - (at + 4500)) < 220, `finishes ${Math.round(finishesAt - (at + 4500))} ms from the reveal time`);
+  await page.waitForTimeout(Math.max(0, at + 4650 - now()));
+  assert.equal(await peel('player').count(), 0, 'the peel card is replaced at the reveal time');
+  assert.equal(await page.locator('.bact-box.player .pcard').count(), 3, 'the real third card is face up');
+  assert.equal(await peel('banker').count(), 1, 'now the Banker third card is face down');
+  await page.waitForTimeout(Math.max(0, at + 6150 - now()));
+  assert.equal(await peel('banker').count(), 0);
+  assert.equal(await page.locator('.bact-box.banker .pcard').count(), 3);
+  await context.close();
+});
+
+await check('baccarat squeeze: reduced motion: the card stays face down (no animation) then shows at the reveal time', async () => {
+  const at = now() + 800;
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+  const page = await context.newPage();
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: [bacSqueeze(at)] } });
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
+  await page.route('**/api/**', (route) => json(route, 200, { ok: true, serverNow: now() }));
+  await page.goto(BASE + '/casino/baccarat', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(Math.max(0, at + 3600 - now()));
+  assert.equal(await page.locator('.bact-box.player .peel-card').count(), 1);
+  assert.equal(await page.locator('.bact-box.player .peel-inner').evaluate((el) => el.getAnimations().length), 0, 'no animation');
+  await page.waitForTimeout(Math.max(0, at + 4700 - now()));
+  assert.equal(await page.locator('.bact-box.player .pcard').count(), 3);
+  await context.close();
+});
+
 await browser.close();
 console.log(results.join('\n'));
 if (results.some((r) => r.startsWith('FAIL'))) process.exit(1);

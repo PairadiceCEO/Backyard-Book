@@ -67,13 +67,13 @@ await check('Blackjack: 10 opening cards turn over one at a time, 1 s apart (sea
 await check('Blackjack: every seat gets its card in turn (seat totals: 1 → 2 → 3 → 5, seat 4 has no bet)', async () => {
   const at = Date.now() + 1500;
   const { page, context } = await openPage('/casino/blackjack', bjDeal(at));
-  const seatText = async () => (await page.locator('.seat-row').innerText()).replace(/\s+/g, ' ').trim();
+  const seatText = async () => (await page.locator('.bjt-seats').innerText()).replace(/\s+/g, ' ').trim();
   const snaps = [];
   for (const t of [500, 1500, 2500, 3500, 5500, 6500, 7500, 8500]) {
     await page.waitForTimeout(Math.max(0, at + t - Date.now()));
     snaps.push(await seatText());
   }
-  const totals = snaps.map((line) => [...line.matchAll(/(Will|you|Dan|Bo) (\d+)/g)].map((m) => Number(m[2])));
+  const totals = snaps.map((line) => [...line.matchAll(/(Will|Mike|Dan|Bo) (\d+)/g)].map((m) => Number(m[2])));
   assert.deepEqual(totals, [
     [5, 0, 0, 0], [5, 6, 0, 0], [5, 6, 7, 0], [5, 6, 7, 8],
     [14, 6, 7, 8], [14, 12, 7, 8], [14, 12, 17, 8], [14, 12, 17, 10],

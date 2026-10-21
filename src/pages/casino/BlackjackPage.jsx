@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChipRack, ChipStack } from '../../components/casino/Chips.jsx';
 import { Link } from 'react-router-dom';
 import PlayingCard from '../../components/casino/PlayingCard.jsx';
-import TableSeats from '../../components/casino/TableSeats.jsx';
+import BlackjackFelt from '../../components/casino/BlackjackFelt.jsx';
 import { ErrorState, LoadingState, friendlyError } from '../../components/StatusViews.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useWalletDisplay } from '../../context/WalletDisplayContext.jsx';
@@ -30,6 +30,7 @@ import {
 } from '../../hooks/useCasinoTable.js';
 import { useChipBetting } from '../../hooks/useChipBetting.js';
 import { newRequestId } from '../../lib/casino.js';
+import { ensureFeltFont } from '../../lib/feltFont.js';
 import { formatMoney } from '../../lib/format.js';
 import { BET_HELP_TEXT, betCeilingProblem } from '../../../shared/casino/constants.js';
 import { cardRank } from '../../../shared/casino/cards.js';
@@ -68,7 +69,10 @@ function handNet(hand) {
   }
 }
 
-function HandView({ label, cards, fromSplit, hiddenFrom, active, outcome, betCents, showOutcome, holeDown }) {
+// `handKey` ('d' for the dealer, 'seat-hand' for a player) and `dealAtFor(handKey, cardIndex)` tell each card when the
+// server turns it face up, so it can slide out of the shoe at that moment (PlayingCard `dealAt`). The total pill sits beside
+// the cards and follows the cards that are face up.
+function HandView({ label, cards, fromSplit, hiddenFrom, active, outcome, betCents, showOutcome, holeDown, handKey, dealAtFor }) {
   const visible = cards.slice(0, hiddenFrom);
   const showBack = holeDown && hiddenFrom > cards.length; // the face-down card, until it's turned over
   const value = handValue(visible);
@@ -84,16 +88,18 @@ function HandView({ label, cards, fromSplit, hiddenFrom, active, outcome, betCen
     <div className={['bj-hand', active ? 'active' : '', finished ? `outcome-${outcome}` : ''].filter(Boolean).join(' ')}>
       <div className="bj-hand-head">
         <span className="bj-hand-label">{label}</span>
+      </div>
+      <div className="bj-cards-row">
+        <div className="bj-cards">
+          {visible.map((card, k) => (
+            <PlayingCard key={card} card={card} fresh dealAt={dealAtFor ? dealAtFor(handKey, k) : null} />
+          ))}
+          {showBack ? <PlayingCard card={null} /> : null}
+          {!visible.length && !showBack ? <span className="bj-cards-empty" aria-hidden="true" /> : null}
+        </div>
         <span className={bust ? 'bj-total bust' : 'bj-total'} aria-live="polite" aria-label={bust ? `bust ${value.total}` : undefined}>
           {total}
         </span>
-      </div>
-      <div className="bj-cards">
-        {visible.map((card) => (
-          <PlayingCard key={card} card={card} fresh />
-        ))}
-        {showBack ? <PlayingCard card={null} /> : null}
-        {!visible.length && !showBack ? <span className="bj-cards-empty" aria-hidden="true" /> : null}
       </div>
       {finished ? (
         <div className={`bj-outcome ${outcome}`}>
@@ -118,6 +124,7 @@ function SeatPanel({
   revealing,
   results,
   hiddenFrom,
+  dealAtFor,
   call,
   roundId,
   balanceCents,
@@ -128,6 +135,9 @@ function SeatPanel({
   onError,
 }) {
   const [busy, setBusy] = useState('');
+  // Rebet (0.19.0): the bet this seat had the last time cards were dealt to it, kept in memory only (a reload forgets it).
+  const [lastBet, setLastBet] = useState(0);
+  const rebetBusy = useRef(false);
   const hands = seat.hands ?? [];
   const myTurn = phase === 'playing' && turn?.seat === index;
   const activeHand = myTurn ? hands[turn.hand] : null;
@@ -155,6 +165,24 @@ function SeatPanel({
   );
   const chips = useChipBetting({ spots: serverSpots, roundKey: roundId, validate, send: sendChips, onPending, enabled: canBet });
   const myBetCents = chips.spots.bet ?? 0;
+
+  // Cards are dealt to this seat: remember its bet (the server's seat bet, not a doubled or split hand's).
+  const dealtBet = hands.length ? seat.betCents || 0 : 0;
+  useEffect(() => {
+    if (phase !== 'betting' && dealtBet > 0) setLastBet(dealtBet);
+  }, [phase, dealtBet]);
+
+  // Rebet / Rebet x2: the same chips as tapping them: one chips.place, so batching, validation (wallet) and Undo all apply.
+  // The ref stops a double tap from placing twice before the chips show.
+  const showRebet = canBet && lastBet > 0 && myBetCents === 0;
+  useEffect(() => {
+    rebetBusy.current = false;
+  }, [myBetCents, roundId]);
+  function rebet(times) {
+    if (rebetBusy.current || myBetCents > 0) return;
+    rebetBusy.current = true;
+    if (!chips.place('bet', lastBet * times)) rebetBusy.current = false; // refused (wallet): nothing placed, the message shows
+  }
 
   // The seat tile shows chips the moment they go down, before the server answers.
   useEffect(() => {
@@ -198,6 +226,8 @@ function SeatPanel({
               cards={h.cards}
               fromSplit={h.fromSplit}
               hiddenFrom={hiddenFrom(`${index}-${j}`, h.cards.length)}
+              handKey={`${index}-${j}`}
+              dealAtFor={dealAtFor}
               active={myTurn && turn.hand === j}
               outcome={h.outcome}
               showOutcome={!revealing && (results || h.outcome === 'bust' || h.outcome === 'blackjack')}
@@ -229,6 +259,18 @@ function SeatPanel({
             onClear={chips.clear}
             canUndo={chips.canUndo}
             disabled={!canBet}
+            rebet={
+              showRebet ? (
+                <div className="rebet-row">
+                  <button type="button" className="rebet-btn" onClick={() => rebet(1)}>
+                    Rebet {formatMoney(lastBet)}
+                  </button>
+                  <button type="button" className="rebet-btn" onClick={() => rebet(2)}>
+                    Rebet ×2 {formatMoney(lastBet * 2)}
+                  </button>
+                </div>
+              ) : null
+            }
             extra={
               <button type="button" className="btn btn-primary" onClick={confirmBet} disabled={!canBet || !myBetCents || busy === 'confirm'}>
                 {seat.ready ? 'Confirmed ✓' : busy === 'confirm' ? 'Confirming…' : `Deal me in ${myBetCents ? formatMoney(myBetCents) : ''}`.trim()}
@@ -331,6 +373,10 @@ export default function BlackjackPage() {
   const [actionError, setActionError] = useState('');
 
   useEffect(() => {
+    ensureFeltFont(); // the felt and the chips are lettered in Oswald
+  }, []);
+
+  useEffect(() => {
     call('tick').catch(() => {}); // through call: the reply's table shows at once
   }, [call]); // call is stable per game, so this still runs once per visit
 
@@ -350,6 +396,19 @@ export default function BlackjackPage() {
       return first;
     },
     [dealList, shown],
+  );
+
+  // When the server turns a given card face up (server ms), so it can slide out of the shoe then; null for cards that aren't
+  // part of the latest deal.
+  const dealAtFor = useCallback(
+    (to, cardIndex) => {
+      if (!lastDeal?.at) return null;
+      const pos = dealList.findIndex((d) => d.to === to && d.i === cardIndex);
+      if (pos === -1) return null;
+      const t = dealList[pos].t;
+      return lastDeal.at + (Number.isFinite(t) ? t : pos * BLACKJACK_INITIAL_GAP_MS);
+    },
+    [dealList, lastDeal],
   );
 
   // ---- the nav wallet stays put until the cards that decide it are face up ----
@@ -446,7 +505,14 @@ export default function BlackjackPage() {
     return { text: labels.join(' · '), tone: turn?.seat === i && phase === 'playing' ? 'active' : '' };
   }
 
-  // Someone else's turn: show their hand on the felt so everyone can follow.
+  // The chips drawn in a seat's circle: the bet (mine: the chips as I put them down, before the server answers), or the
+  // hands' bets once cards are out (a double or split is more than the first bet).
+  function circleBet(seat, i) {
+    if (seat.hands?.length) return seat.hands.reduce((sum, h) => sum + (h.betCents || 0), 0);
+    return seat.uid === myUid ? localBets[i] ?? seat.betCents ?? 0 : seat.betCents ?? 0;
+  }
+
+  // Someone else's turn: show their hand below the felt so everyone can follow.
   const spotlight = phase === 'playing' && activeSeat && !mySeats.includes(turn.seat) ? { seat: activeSeat, index: turn.seat } : null;
 
   // What each of my seat tabs flags.
@@ -484,10 +550,23 @@ export default function BlackjackPage() {
         ) : null}
       </div>
 
-      <div className="card bj-felt">
-        <HandView label="Dealer" cards={dealer.cards} hiddenFrom={dealerHidden} holeDown={dealer.holeDown} fromSplit={false} />
-        {!dealerShown.length && phase === 'betting' ? <p className="muted small bac-felt-hint">Cards are dealt when betting closes. Dealer hits soft 17.</p> : null}
-        {spotlight ? (
+      <BlackjackFelt
+        seats={seats}
+        myUid={myUid}
+        mySeats={mySeats}
+        focus={focus}
+        onFocus={setFocus}
+        sitting={busy === 'sit'}
+        onSit={sit}
+        detail={seatDetail}
+        betFor={circleBet}
+        results={results}
+        roundKey={table?.roundId ?? 'r'}
+        dealer={<HandView label="Dealer" cards={dealer.cards} hiddenFrom={dealerHidden} holeDown={dealer.holeDown} fromSplit={false} handKey="d" dealAtFor={dealAtFor} />}
+      />
+      {!dealerShown.length && phase === 'betting' ? <p className="muted small bac-felt-hint bjt-hint">Cards are dealt when betting closes. Dealer hits soft 17.</p> : null}
+      {spotlight ? (
+        <div className="card bj-felt bj-spotlight-card">
           <div className="bj-spotlight">
             {spotlight.seat.hands.map((h, j) => (
               <HandView
@@ -496,15 +575,15 @@ export default function BlackjackPage() {
                 cards={h.cards}
                 fromSplit={h.fromSplit}
                 hiddenFrom={hiddenFrom(`${spotlight.index}-${j}`, h.cards.length)}
+                handKey={`${spotlight.index}-${j}`}
+                dealAtFor={dealAtFor}
                 active={turn.hand === j}
                 betCents={h.betCents}
               />
             ))}
           </div>
-        ) : null}
-      </div>
-
-      <TableSeats seats={seats} myUid={myUid} canSit sitting={busy === 'sit'} onSit={sit} detail={seatDetail} />
+        </div>
+      ) : null}
 
       {seated ? (
         <>
@@ -540,6 +619,7 @@ export default function BlackjackPage() {
               revealing={revealing}
               results={results}
               hiddenFrom={hiddenFrom}
+              dealAtFor={dealAtFor}
               call={call}
               roundId={table?.roundId ?? null}
               balanceCents={balanceCents}

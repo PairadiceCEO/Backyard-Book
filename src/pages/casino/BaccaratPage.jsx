@@ -7,10 +7,12 @@
 // page gives up every seat (useLeaveOnExit).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChipRack, ChipStack } from '../../components/casino/Chips.jsx';
+import { createPortal } from 'react-dom';
+import { ChipRack } from '../../components/casino/Chips.jsx';
+import BaccaratFelt, { PrintedSpot, SPOT_ORDER, watcherLabel } from '../../components/casino/BaccaratFelt.jsx';
 import { Link } from 'react-router-dom';
 import BaccaratScoreboard from '../../components/casino/BaccaratScoreboard.jsx';
-import PlayingCard from '../../components/casino/PlayingCard.jsx';
+import PlayingCard, { PeelCard } from '../../components/casino/PlayingCard.jsx';
 import TableSeats from '../../components/casino/TableSeats.jsx';
 import { ErrorState, LoadingState, friendlyError } from '../../components/StatusViews.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -28,6 +30,7 @@ import {
 } from '../../hooks/useCasinoTable.js';
 import { useChipBetting } from '../../hooks/useChipBetting.js';
 import { newRequestId } from '../../lib/casino.js';
+import { ensureFeltFont } from '../../lib/feltFont.js';
 import { formatMoney } from '../../lib/format.js';
 import { BET_HELP_TEXT, betCeilingProblem } from '../../../shared/casino/constants.js';
 import { ChatButton, ChatDrawer } from '../../components/casino/CasinoChat.jsx';
@@ -38,11 +41,11 @@ import {
   handTotal,
   coupRevealTimes,
   revealOrder,
+  spotReturnCents,
   totalBetCents,
 } from '../../../shared/casino/baccarat.js';
 
 const GAME = 'baccarat';
-const SPOT_ORDER = ['player', 'tie', 'banker'];
 const NO_SEATS = [null, null, null, null, null];
 const NO_BETS = { player: 0, banker: 0, tie: 0 };
 const WINNER_TEXT = { player: 'Player wins', banker: 'Banker wins', tie: 'Tie' };
@@ -53,10 +56,13 @@ function signedMoney(cents) {
   return formatMoney(0);
 }
 
-function Hand({ label, cards, visibleCount, total, winner, freshFrom }) {
+// One printed card box. `peel` = { card, startAt, gapMs } while this hand's third card is face down and turning (the squeeze);
+// `dealAtFor(name, i)` is the server time card i turns face up (it slides out of the shoe then).
+function Hand({ label, cards, visibleCount, total, winner, freshFrom, peel, dealAtFor }) {
+  const name = label.toLowerCase();
   return (
-    <div className={winner ? `bac-hand ${label.toLowerCase()} won` : `bac-hand ${label.toLowerCase()}`}>
-      <div className="bac-hand-head">
+    <div className={winner ? `bact-box ${name} won` : `bact-box ${name}`}>
+      <div className="bact-box-head">
         <span>{label}</span>
         <span className="bac-total" aria-live="polite">
           {visibleCount > 0 ? total : ''}
@@ -64,8 +70,9 @@ function Hand({ label, cards, visibleCount, total, winner, freshFrom }) {
       </div>
       <div className="bac-cards">
         {cards.slice(0, visibleCount).map((card, i) => (
-          <PlayingCard key={card} card={card} fresh={i >= freshFrom} />
+          <PlayingCard key={card} card={card} fresh={i >= freshFrom} dealAt={dealAtFor ? dealAtFor(name, i) : null} />
         ))}
+        {peel ? <PeelCard key={`peel-${peel.card}`} card={peel.card} startAt={peel.startAt} gapMs={peel.gapMs} /> : null}
         {visibleCount === 0 ? <span className="bac-cards-empty" aria-hidden="true" /> : null}
       </div>
     </div>
@@ -74,8 +81,10 @@ function Hand({ label, cards, visibleCount, total, winner, freshFrom }) {
 
 // One of my seats: its three spots, chips, Confirm and Leave. Kept mounted while another seat's tab is
 // showing, so chips waiting to be sent keep going.
-function SeatPanel({ index, seat, hidden, phase, winner, revealing, call, roundId, balanceCents, chip, setChip, onPending, onLocalTotal, onError }) {
+function SeatPanel({ index, seat, hidden, phase, winner, revealing, slot, call, roundId, balanceCents, chip, setChip, onPending, onLocalTotal, onError }) {
   const [busy, setBusy] = useState('');
+  // Rebet (0.19.0): this seat's three bets the last time cards were dealt, kept in memory only (a reload forgets them).
+  const [lastBets, setLastBets] = useState(NO_BETS);
   const serverBets = seat.bets ?? NO_BETS;
   const canBet = phase === 'betting' && !seat.ready && !seat.leaving;
   const validate = useCallback(
@@ -107,6 +116,39 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, call, roundI
   const chips = useChipBetting({ spots: serverBets, roundKey: roundId, validate, send: sendChips, onPending, enabled: canBet });
   const myBets = { ...NO_BETS, ...chips.spots };
   const myTotal = totalBetCents(myBets);
+
+  const dealtKey = `${serverBets.player || 0},${serverBets.banker || 0},${serverBets.tie || 0}`;
+  useEffect(() => {
+    if (phase === 'betting') return;
+    const [player, banker, tie] = dealtKey.split(',').map(Number);
+    if (player + banker + tie > 0) setLastBets({ player, banker, tie });
+  }, [phase, dealtKey]);
+  const lastTotal = totalBetCents(lastBets);
+  const showRebet = canBet && lastTotal > 0 && myTotal === 0;
+  const rebetBusy = useRef(false);
+  useEffect(() => {
+    rebetBusy.current = false;
+  }, [myTotal, roundId]);
+  // Rebet / Rebet x2: every spot that had a bet, through chips.place (one batch: the taps all land in the same 300 ms).
+  // A wallet that can't cover the whole thing places nothing.
+  function rebet(times) {
+    if (rebetBusy.current || myTotal > 0) return;
+    if (lastTotal * times > balanceCents) {
+      chips.setError(`Not enough in your wallet (${formatMoney(balanceCents)}).`);
+      return;
+    }
+    rebetBusy.current = true;
+    let placed = 0;
+    for (const spot of SPOT_ORDER) {
+      if (!lastBets[spot]) continue;
+      if (chips.place(spot, lastBets[spot] * times)) placed += 1;
+      else {
+        if (placed) chips.clear(); // a spot was refused (the $1,000,000 ceiling): all or nothing
+        rebetBusy.current = false;
+        return;
+      }
+    }
+  }
 
   // The seat tile shows chips the moment they go down, before the server answers.
   useEffect(() => {
@@ -142,25 +184,27 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, call, roundI
         </strong>
         {result ? <span className={result.netCents > 0 ? 'bj-net win' : result.netCents < 0 ? 'bj-net lose' : 'bj-net'}>{result.netCents === 0 ? 'push' : signedMoney(result.netCents)}</span> : null}
       </div>
-      <div className="bac-spots">
-        {SPOT_ORDER.map((spot) => (
-          <button
-            key={spot}
-            type="button"
-            className={['bac-spot', spot, winner === spot ? 'won' : '', myBets[spot] ? 'has-bet' : ''].filter(Boolean).join(' ')}
-            onClick={() => chips.place(spot, chip * 100)}
-            disabled={!canBet}
-            aria-label={`Seat ${index + 1}: ${SPOT_LABELS[spot]}, pays ${BACCARAT_ODDS[spot].label}, your bet ${formatMoney(myBets[spot])}. Tap to add a $${chip} chip.`}
-          >
-            <span className="bac-spot-name">{SPOT_LABELS[spot]}</span>
-            <span className="bac-spot-odds">{BACCARAT_ODDS[spot].label}</span>
-            <span className="spot-chips">
-              <ChipStack cents={myBets[spot]} />
-              <span className="bac-spot-bet">{myBets[spot] ? formatMoney(myBets[spot]) : '—'}</span>
-            </span>
-          </button>
-        ))}
-      </div>
+      {!hidden && slot
+        ? createPortal(
+            SPOT_ORDER.map((spot) => {
+              const stake = myBets[spot];
+              const resultKnown = phase === 'results' && !revealing && winner && seat.result && stake > 0;
+              return (
+                <PrintedSpot
+                  key={spot}
+                  spot={spot}
+                  cents={stake}
+                  won={winner === spot}
+                  disabled={!canBet}
+                  onClick={() => chips.place(spot, chip * 100)}
+                  label={`Seat ${index + 1}: ${SPOT_LABELS[spot]}, pays ${BACCARAT_ODDS[spot].label}, your bet ${formatMoney(stake)}. Tap to add a $${chip} chip.`}
+                  fx={resultKnown ? { show: true, netCents: spotReturnCents(spot, stake, winner) - stake, stakeCents: stake, roundKey: `${roundId}-${index}-${spot}` } : null}
+                />
+              );
+            }),
+            slot,
+          )
+        : null}
 
       <ChipRack
         chip={chip}
@@ -169,6 +213,18 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, call, roundI
         onClear={chips.clear}
         canUndo={chips.canUndo}
         disabled={!canBet}
+        rebet={
+          showRebet ? (
+            <div className="rebet-row">
+              <button type="button" className="rebet-btn" onClick={() => rebet(1)}>
+                Rebet {formatMoney(lastTotal)}
+              </button>
+              <button type="button" className="rebet-btn" onClick={() => rebet(2)}>
+                Rebet ×2 {formatMoney(lastTotal * 2)}
+              </button>
+            </div>
+          ) : null
+        }
         extra={
           <button type="button" className="btn btn-primary" onClick={confirmBets} disabled={!canBet || myTotal === 0 || busy === 'confirm'}>
             {seat.ready ? 'Confirmed ✓' : busy === 'confirm' ? 'Confirming…' : `Confirm ${myTotal ? formatMoney(myTotal) : ''}`.trim()}
@@ -184,7 +240,7 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, call, roundI
         ) : seat.ready && phase === 'betting' ? (
           'Confirmed. The cards come out when every seat confirms or the clock runs out.'
         ) : phase === 'betting' ? (
-          `Pick a chip and tap Player, Banker or Tie; each tap adds a chip. ${BET_HELP_TEXT}`
+          `Pick a chip and tap Player, Banker or Tie on the table; each tap adds a chip. ${BET_HELP_TEXT}`
         ) : (
           'Bet again when the next hand opens.'
         )}
@@ -223,6 +279,11 @@ export default function BaccaratPage() {
   const [busy, setBusy] = useState(''); // 'sit' | 'leaveAll' while that call is in flight
   const [chip, setChip] = useState(1);
   const [focus, setFocus] = useSeatFocus(mySeats, null);
+  const [spotsSlot, setSpotsSlot] = useState(null); // the printed bet areas' box on the felt: my seat panel draws its spots there
+
+  useEffect(() => {
+    ensureFeltFont(); // the felt and the chips are lettered in Oswald
+  }, []);
 
   // Arriving at the table: one tick applies anything overdue (an abandoned table waits for the first
   // visitor) and gives this phone the server's clock. Runs once per visit.
@@ -233,7 +294,8 @@ export default function BaccaratPage() {
   // ---- the deal: cards turn over at the server's times (gaps from shared/casino/timing.js) ----
   const coup = phase === 'results' ? table?.coup ?? null : null;
   const order = coup ? revealOrder(coup.player, coup.banker) : [];
-  const shown = useTimedReveal(coup?.dealtAt ?? null, coup ? coupRevealTimes(coup.player, coup.banker) : []);
+  const revealTimes = coup ? coupRevealTimes(coup.player, coup.banker) : [];
+  const shown = useTimedReveal(coup?.dealtAt ?? null, revealTimes);
   const revealing = Boolean(coup) && shown < order.length;
   const visible = { player: 0, banker: 0 };
   order.slice(0, shown).forEach((o) => {
@@ -242,6 +304,19 @@ export default function BaccaratPage() {
   const playerCards = coup?.player ?? [];
   const bankerCards = coup?.banker ?? [];
   const winner = coup && !revealing ? coup.winner : null;
+
+  // When the server turns each card face up (server ms), so it slides out of the shoe then.
+  const dealAtFor = (name, i) => {
+    const k = order.findIndex((o) => o.hand === name && o.index === i);
+    return k === -1 || !coup?.dealtAt ? null : coup.dealtAt + revealTimes[k];
+  };
+  // The squeeze: the next card is a third card, so it shows face down from the moment the previous card turned (its 1.5 s
+  // gap starts) and peels open to finish on its own reveal time.
+  const nextCard = revealing && shown > 0 ? order[shown] : null;
+  const peelFor = (name) =>
+    nextCard && nextCard.index === 2 && nextCard.hand === name
+      ? { card: coup[name][2], startAt: coup.dealtAt + revealTimes[shown - 1], gapMs: revealTimes[shown] - revealTimes[shown - 1] }
+      : null;
 
   // ---- while the cards turn, the nav wallet shows the pre-deal balance (no spoilers) ----
   const preDealRef = useRef(null);
@@ -345,18 +420,28 @@ export default function BaccaratPage() {
         ) : null}
       </div>
 
-      <div className="card bac-felt">
-        <Hand label="Player" cards={playerCards} visibleCount={visible.player} total={handTotal(playerCards.slice(0, visible.player))} winner={winner === 'player'} freshFrom={0} />
-        <Hand label="Banker" cards={bankerCards} visibleCount={visible.banker} total={handTotal(bankerCards.slice(0, visible.banker))} winner={winner === 'banker'} freshFrom={0} />
-        {winner ? (
-          <div className={`bac-banner banner-${winner}`}>
-            {WINNER_TEXT[winner]}
-            {coup.natural ? ' · natural' : ''}
-            {myResult ? <span className="bac-banner-me">You {myResult.netCents === 0 ? 'push' : signedMoney(myResult.netCents)}</span> : null}
-          </div>
-        ) : null}
-        {!coup ? <p className="muted small bac-felt-hint">{phase === 'betting' ? 'Cards are dealt when betting closes.' : ''}</p> : null}
-      </div>
+      <BaccaratFelt
+        spotsRef={setSpotsSlot}
+        player={<Hand label="Player" cards={playerCards} visibleCount={visible.player} total={handTotal(playerCards.slice(0, visible.player))} winner={winner === 'player'} freshFrom={0} peel={peelFor('player')} dealAtFor={dealAtFor} />}
+        banker={<Hand label="Banker" cards={bankerCards} visibleCount={visible.banker} total={handTotal(bankerCards.slice(0, visible.banker))} winner={winner === 'banker'} freshFrom={0} peel={peelFor('banker')} dealAtFor={dealAtFor} />}
+        banner={
+          winner ? (
+            <div className={`bac-banner banner-${winner}`}>
+              {WINNER_TEXT[winner]}
+              {coup.natural ? ' · natural' : ''}
+              {myResult ? <span className="bac-banner-me">You {myResult.netCents === 0 ? 'push' : signedMoney(myResult.netCents)}</span> : null}
+            </div>
+          ) : null
+        }
+        hint={!coup && phase === 'betting' ? <p className="bact-hint">Cards are dealt when betting closes.</p> : null}
+        watcherSpots={
+          seated
+            ? null
+            : SPOT_ORDER.map((spot) => (
+                <PrintedSpot key={spot} spot={spot} won={winner === spot} disabled label={watcherLabel(spot)} />
+              ))
+        }
+      />
 
       <TableSeats seats={seats} myUid={myUid} canSit sitting={busy === 'sit'} onSit={sit} detail={seatDetail} />
 
@@ -395,6 +480,7 @@ export default function BaccaratPage() {
               phase={phase}
               winner={winner}
               revealing={revealing}
+              slot={spotsSlot}
               call={call}
               roundId={roundId}
               balanceCents={balanceCents}

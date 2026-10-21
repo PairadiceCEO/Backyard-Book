@@ -349,6 +349,13 @@ const FELT_SIZES = [
   { w: 568, h: 320, shot: false }, { w: 667, h: 375, shot: false }, { w: 844, h: 390, shot: true }, { w: 932, h: 430, shot: false }, // sideways
   { w: 1280, h: 800, shot: false }, // a computer
 ];
+// 0.19.0: the Blackjack and Baccarat table screens are shot upright (320 / 375 / 414), sideways (844 × 390) and on a computer
+// (1280 × 800; scrolling is allowed everywhere).
+const TABLE_SCREEN = /^(bj-|bac-)/;
+const TABLE_SIZES = [
+  { w: 320, h: 640, shot: false }, { w: 375, h: 800, shot: true }, { w: 414, h: 896, shot: false },
+  { w: 844, h: 390, shot: true }, { w: 1280, h: 800, shot: true },
+];
 const PHONE_SIZES = [320, 375, 414].map((w) => ({ w, h: 800, shot: w === 375 }));
 // A felt button is at least 44 × 44. The one documented exception: the Come-odds chips inside a number box on the shortest
 // screens (a box 47–60 px tall keeps its top for Place), they keep 44 wide.
@@ -371,9 +378,9 @@ const report = {};
 for (const sc of scenarios) {
   if (only && !only.test(sc.name)) continue;
   report[sc.name] = {};
-  for (const size of FELT_SCREEN.test(sc.name) ? FELT_SIZES : PHONE_SIZES) {
+  for (const size of FELT_SCREEN.test(sc.name) ? FELT_SIZES : TABLE_SCREEN.test(sc.name) ? TABLE_SIZES : PHONE_SIZES) {
     const width = size.w;
-    const key = FELT_SCREEN.test(sc.name) ? `${size.w}x${size.h}` : width;
+    const key = FELT_SCREEN.test(sc.name) || TABLE_SCREEN.test(sc.name) ? `${size.w}x${size.h}` : width;
     const computer = size.w >= 1024;
     const context = await browser.newContext({ viewport: { width, height: size.h }, deviceScaleFactor: size.shot ? 2 : 1, isMobile: !computer, hasTouch: !computer });
     const page = await context.newPage();
@@ -397,6 +404,7 @@ for (const sc of scenarios) {
     const felt = FELT_SCREEN.test(sc.name) ? await feltMetrics(page) : null;
     report[sc.name][key] = { ...m, felt, errors };
     if (FELT_SCREEN.test(sc.name)) await page.screenshot({ path: `${out}/${sc.name}-${key}.png` });
+    else if (TABLE_SCREEN.test(sc.name)) { if (size.shot) await page.screenshot({ path: `${out}/${sc.name}-${key}.png`, fullPage: true }); }
     else if (size.shot) await page.screenshot({ path: `${out}/${sc.name}.png`, fullPage: !/slip|confirm|preview|^chat-.*(open|typing|empty-room)/.test(sc.name) });
     await context.close();
   }

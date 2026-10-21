@@ -19,19 +19,25 @@ export function fxText(netCents) {
   return 'Push';
 }
 
+// Which spots have already played their effect (module level, so a seat panel that mounts again, a tab switch, or React's
+// development double-mount doesn't play it twice or strand it on screen).
+const played = new Set();
+
 export default function ResultFx({ show, netCents, stakeCents = 0, roundKey, dealerSelector = '[data-dealer-spot]' }) {
-  const [active, setActive] = useState(false);
-  const playedFor = useRef(null);
+  const [, setTick] = useState(0);
   const chipRef = useRef(null);
   const hostRef = useRef(null);
 
   useEffect(() => {
-    if (!show || playedFor.current === roundKey) return undefined;
-    playedFor.current = roundKey;
-    setActive(true);
-    const timer = setTimeout(() => setActive(false), FX_MS + 100);
+    if (!show || played.has(roundKey)) return undefined;
+    const timer = setTimeout(() => {
+      if (played.size > 300) played.clear();
+      played.add(roundKey);
+      setTick((n) => n + 1);
+    }, FX_MS + 100);
     return () => clearTimeout(timer);
   }, [show, roundKey]);
+  const active = show && !played.has(roundKey);
 
   // The chip: from the dealer to here (win) or from here to the dealer (loss).
   useEffect(() => {
