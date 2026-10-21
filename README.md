@@ -119,6 +119,11 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
 
+## 0.17.2
+
+- **Blackjack / Baccarat chips:** Clear, Undo and quick taps while a bet is on its way no longer bounce back or lower a bet.
+- **Results** stay up 2.5 s, then the next hand opens by itself on every screen (phones keep asking until it does).
+
 ## 0.17.0
 
 - **Casino chat:** every game (Slots, Blackjack, Baccarat, Craps, Crapless) has its own chat room behind a **Chat** button with an unread badge. Messages are plain text, up to 200 characters, kept 24 hours; at most one every 2 seconds and 20 a minute per player. The admin can delete any message ("Message removed"). New Firestore rules: publish `firestore.rules`.

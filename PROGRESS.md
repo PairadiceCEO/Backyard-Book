@@ -5,7 +5,7 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.17.2 (Will, 2026-10-20 19:30 CT) — IN PROGRESS on wip
+## Phase 0.17.2 (Will, 2026-10-20 19:30 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 19:30. 0.17.1 ("remove the Slots chat, clearer chat errors") was never started in
 this repo (main = wip = 0.17.0's merge a932011, no branch, commit or PROGRESS entry), and its full spec isn't here, so it
 was not invented; 0.17.2 goes straight on top of 0.17.0. Fresh wip off main.
@@ -59,7 +59,10 @@ was not invented; 0.17.2 goes straight on top of 0.17.0. Fresh wip off main.
       ticks get through (before: never); a forced 3 s wrong clock → moves at the real deadline. Beyond the spec: with an
       8 s listener lag the watching phone's own screen is 8 s behind everything (it hasn't seen the results yet), so it
       can trail by a few seconds.
-- [ ] 4 Version 0.17.2, notes, every CLAUDE.md check, merge.
+- [x] 4 Version 0.17.2; README, casino notes, phone-check README. Checks: test:all 330, lint, build, interact.mjs 29/29
+      (incl. the 7 in-flight chip checks), dealcheck 6/6, phone check 147 screens × 320/375/414 clean, tablesim (600 ms
+      server work) Blackjack 50 ms / Baccarat 167 ms on both screens. No firestore.rules change, no new index, no new
+      /api function. Merged wip → main. Harness server stopped.
 
 ## Phase 0.17.0 (Will, 2026-10-20 15:07 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's attachment of 2026-10-20 15:07 (items 1–2). One phase on a fresh wip off main (1576556, Analytics in);
@@ -574,7 +577,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.17.2 items 1–4 in order.
+Nothing queued: 0.17.2 is merged. 0.17.1 (Slots chat removal, clearer chat errors) was never started here; it needs its spec re-sent.
 
 ## Open questions
 None open.
