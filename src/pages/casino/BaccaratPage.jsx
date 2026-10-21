@@ -88,15 +88,20 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, call, roundI
     },
     [serverBets, balanceCents],
   );
+  // Sends the seat's three totals; resolves with that seat's bets as the server now holds them (from the reply's table),
+  // so the next batch builds on them.
   const sendChips = useCallback(
-    (_changes, totals) =>
-      call('bet', {
+    async (_changes, totals) => {
+      const reply = await call('bet', {
         seat: index,
         player: (totals.player ?? 0) / 100,
         banker: (totals.banker ?? 0) / 100,
         tie: (totals.tie ?? 0) / 100,
         requestId: newRequestId(),
-      }),
+      });
+      const held = reply?.table?.seats?.[index]?.bets;
+      return held && typeof held === 'object' ? { player: held.player ?? 0, banker: held.banker ?? 0, tie: held.tie ?? 0 } : null;
+    },
     [call, index],
   );
   const chips = useChipBetting({ spots: serverBets, roundKey: roundId, validate, send: sendChips, onPending, enabled: canBet });

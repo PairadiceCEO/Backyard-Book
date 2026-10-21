@@ -144,8 +144,13 @@ function SeatPanel({
     },
     [seat.betCents, balanceCents],
   );
+  // Sends the seat's new total; resolves with what the server holds now, so the next batch builds on it.
   const sendChips = useCallback(
-    (_changes, totals) => call('bet', { seat: index, amount: (totals.bet ?? 0) / 100, requestId: newRequestId() }),
+    async (_changes, totals) => {
+      const reply = await call('bet', { seat: index, amount: (totals.bet ?? 0) / 100, requestId: newRequestId() });
+      const held = reply?.table?.seats?.[index]?.betCents ?? reply?.betCents;
+      return Number.isInteger(held) ? { bet: held } : null;
+    },
     [call, index],
   );
   const chips = useChipBetting({ spots: serverSpots, roundKey: roundId, validate, send: sendChips, onPending, enabled: canBet });

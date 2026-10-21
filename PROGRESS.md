@@ -11,11 +11,22 @@ this repo (main = wip = 0.17.0's merge a932011, no branch, commit or PROGRESS en
 was not invented; 0.17.2 goes straight on top of 0.17.0. Fresh wip off main.
 
 ### Checklist
-- [ ] 1 Blackjack/Baccarat stale totals (Clear / Undo / fast taps while a batch is in flight): reproduce, then
-      useChipBetting's `send` resolves the server's spots and spotsRef takes them before the next flush; never send a
-      negative total ("Your bet changed, try again"); craps unchanged. interact.mjs (delayed replies): Clear in flight
-      → amount 0, spot $0; $5 × 4 in two batches → $20; Undo in flight → $5; Baccarat with two spots; (a) fails on
-      the old code.
+- [x] 1 Stale totals. Reproduced first (interact.mjs, fake server with 500 ms bet replies that refuses negatives like
+      the real one, listener catching up 150 ms after the reply), on the old code: Clear in flight sent 10 then −10
+      (refused, chips bounced back); $5 × 4 in two batches sent 10 then 10 (server $10, screen $20); Undo in flight
+      misfired; and worse, in Baccarat a Banker batch sent while a Player batch was in flight sent 0/10/0, silently
+      wiping the Player bet with no error. Cause as reviewed: flush() re-runs synchronously after the await, while
+      spotsRef still holds the pre-reply amounts.
+      Fix (client only; server unchanged): src/hooks/useChipBetting.js — `send` may resolve with the server's spots;
+      they go into spotsRef before the next flush; spotsRef is overwritten from props only when the prop changes (so a
+      render with an older table copy can't undo it); the screen sums spotsRef + unconfirmed chips; a batch whose total
+      would go below $0 is never sent (history restored as on a refusal, "Your bet changed, try again").
+      BlackjackPage `sendChips` resolves { bet: reply.table.seats[i].betCents ?? reply.betCents }; BaccaratPage resolves
+      that seat's { player, banker, tie } from reply.table. Craps' send returns nothing → unchanged behaviour.
+      Checks (interact.mjs, Blackjack and Baccarat each): Clear in flight → amounts 10 then 0, never negative, server and
+      screen $0, no error; $5 × 4 across two batches → $20 both; Undo in flight → $5; Baccarat two spots (Player $10 in
+      flight + Banker $5 × 2 → $10 / $10; then $25 + Clear in flight → 0/0/0). All 7 fail on the old code, pass now.
+      Existing chip checks (batching, refusal rollback, Undo/Clear, craps no-scroll, no maximum bets) still pass.
 - [ ] 2 Results pause 2.5 s: RESULTS_MS = 2500 (timing.js) in blackjack finish and baccarat; countdown 3, 2, 1; tests
       and notes; betting/turn clocks and dealing gaps unchanged.
 - [ ] 3 New hand doesn't start when the results countdown ends: reproduce in the harness with real timers and two

@@ -6,12 +6,17 @@
 //   spots      { [spotKey]: cents } as the server has them (from the table doc)
 //   roundKey   changes when a new round starts: the Undo history starts over
 //   validate   (spotKey, newCents, spotsAfter) → reason string, or '' if the chip may go down
-//   send       async (changes, totalsAfter) → sends one batch: changes = [{ spot, cents (±) }]
+//   send       async (changes, totalsAfter) → sends one batch: changes = [{ spot, cents (±) }]. Games that send absolute
+//              totals (Blackjack, Baccarat) resolve with the server's spots after the change ({ [spotKey]: cents });
+//              the next batch is then built on those, not on the table doc this page may not have re-rendered yet
+//              (0.17.2: Clear / Undo / more chips while a batch was in flight used to send a stale or negative
+//              total). Craps sends deltas and resolves with nothing: its spots come from the table doc as before.
 //   onPending  (cents) → chips not confirmed yet, so the wallet can show them as spent
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export const BATCH_MS = 300;
+export const BET_CHANGED_MESSAGE = 'Your bet changed, try again';
 
 function sumBy(ops) {
   const out = {};
@@ -32,8 +37,14 @@ export function useChipBetting({ spots, roundKey, validate, send, onPending, ena
   const sendRef = useRef(send);
   const spotsRef = useRef(spots);
   const waitersRef = useRef([]);
+  // spotsRef = what the server holds: the table doc's spots whenever they change, or what the last reply said (which
+  // can be newer than the props of this render). Only a change of the prop overwrites it.
+  const lastPropSpotsRef = useRef(spots);
   sendRef.current = send;
-  spotsRef.current = spots;
+  if (spots !== lastPropSpotsRef.current) {
+    lastPropSpotsRef.current = spots;
+    spotsRef.current = spots;
+  }
 
   const setQ = (next) => {
     queuedRef.current = next;
@@ -76,15 +87,8 @@ export function useChipBetting({ spots, roundKey, validate, send, onPending, ena
     const deltas = sumBy(batch);
     const totals = { ...spotsRef.current };
     for (const [spot, cents] of Object.entries(deltas)) totals[spot] = (totals[spot] ?? 0) + cents;
-    try {
-      await sendRef.current(
-        Object.entries(deltas)
-          .filter(([, cents]) => cents !== 0)
-          .map(([spot, cents]) => ({ spot, cents })),
-        totals,
-      );
-    } catch (err) {
-      // Refused: these chips come back off; an Undo that failed puts its chip back in the history.
+    // Refused (or never sent): these chips come back off; an Undo that failed puts its chip back in the history.
+    const giveBack = () => {
       let next = [...historyRef.current];
       for (const op of batch) {
         if (op.cents > 0) {
@@ -95,6 +99,27 @@ export function useChipBetting({ spots, roundKey, validate, send, onPending, ena
         }
       }
       setH(next);
+    };
+    try {
+      // A total below $0 means the bet changed under us (e.g. a new round, another phone): never send it.
+      if (Object.values(totals).some((cents) => cents < 0)) {
+        giveBack();
+        setError(BET_CHANGED_MESSAGE);
+      } else {
+        const confirmed = await sendRef.current(
+          Object.entries(deltas)
+            .filter(([, cents]) => cents !== 0)
+            .map(([spot, cents]) => ({ spot, cents })),
+          totals,
+        );
+        // The server's spots after this batch: the next batch builds on them.
+        if (confirmed && typeof confirmed === 'object') {
+          const clean = Object.fromEntries(Object.entries(confirmed).filter(([, cents]) => Number.isInteger(cents) && cents >= 0));
+          spotsRef.current = { ...spotsRef.current, ...clean };
+        }
+      }
+    } catch (err) {
+      giveBack();
       if (err?.code !== 'STALE') setError(err?.message || 'That bet was refused.');
     } finally {
       setF([]);
@@ -108,7 +133,8 @@ export function useChipBetting({ spots, roundKey, validate, send, onPending, ena
     timerRef.current = setTimeout(flush, BATCH_MS);
   }, [flush]);
 
-  const current = { ...spots };
+  // On screen: the server's amounts (the newest we know) plus chips not confirmed yet.
+  const current = { ...spotsRef.current };
   for (const op of [...inFlight, ...queued]) current[op.spot] = (current[op.spot] ?? 0) + op.cents;
   const pendingCents = [...inFlight, ...queued].reduce((s, op) => s + op.cents, 0);
 
