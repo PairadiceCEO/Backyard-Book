@@ -97,3 +97,14 @@ Craps no-scroll check now also requires the Chat button on screen. Details in PR
 - Next hand: phones keep ticking until the table moves on (no 5-try limit), show the tick reply at once, and estimate
   the server clock from the midpoint of the server's work; table copies compare by version. tools/phone-check/tablesim.mjs
   runs the real engines end to end. Details in PROGRESS.md 0.17.2.
+
+## 0.18.0 (2026-10-20): real casino-style craps felt (Craps and Crapless)
+Look and layout only (src/components/casino/CrapsFelt.jsx + FeltChip.jsx, src/styles/craps.css, CrapsPage.jsx rewritten for
+layout; server, shared/casino, useChipBetting and the bet actions untouched). One DOM, two layouts by CSS: upright
+(`orientation: portrait`: stacked felt, docked chips / Undo / Clear / Take down / Roll) and sideways (`orientation: landscape`:
+Pass and Don't Pass strips down the left edge, number boxes, Come, Field, Hardways column, rail on the right; computers
+use it sized up). Seats, last rolls, Leave seat, help and rules: the Table sheet (chat drawer styles), or under the felt on
+tall upright screens (one media-query listener decides). Replaces the 0.15.0 layout. The 0.15.0 "dock above the bottom
+nav" no longer exists: the craps page covers the app's top bar and tabs. Hard-way payouts (6:1, 8:1) are deliberate. Details
+and decisions in PROGRESS.md 0.18.0.
+

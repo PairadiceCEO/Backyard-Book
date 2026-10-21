@@ -350,12 +350,9 @@ await check('craps: the shooter\'s dice tumble from the tap and land on the repl
   await context.close();
 });
 
-// ---------- 0.15.0: Craps / Crapless without scrolling ----------
-// At scrollY 0, with the app's nav showing, the Roll button, the chip rack, Take down, Undo / Clear and every betting
-// spot must be fully inside the visible area (below the sticky top bar, above the phone's bottom nav). At 320×568 only
-// the docked bar (chips, Take down, Roll) is checked: it must sit fully on screen above the bottom nav.
-const SIZES = [[375, 667], [390, 844], [414, 896], [1280, 720], [1440, 900], [320, 568]];
-// Worst cases: my turn to shoot (Roll shows), a Point on with the countdown, Come bets on numbers, every spot in use.
+// ---------- 0.18.0: the real casino-style felt, upright and sideways (Craps and Crapless) ----------
+// Same DOM, two layouts picked by CSS. Worst cases: my turn to shoot (Roll shows), a Point on with the countdown, Come bets
+// on numbers, every spot in use.
 const crapsWorst = (game) => {
   const crapless = game === 'crapless';
   const bets = crapless
@@ -367,12 +364,22 @@ const crapsWorst = (game) => {
     lastRoll: { dice: crapless ? [5, 6] : [5, 1], total: point, at: now() - 60000, kind: 'point', pointBefore: null, seq: 9, shooter: 1 },
     seats: [seat('u0', 'Will', { bets: { pass: 500, dontPass: 0, odds: 0, field: 0, place: {} }, lastRoll: null }), seat('u1', 'Mike the Bookie Slayer', { bets, lastRoll: null }), null, seat('u2', 'Dan', { bets: { pass: 0, dontPass: 0, odds: 0, field: 300, place: {} }, lastRoll: null }), null] };
 };
+const emptyBets = { pass: 0, dontPass: 0, odds: 0, dontOdds: 0, come: 0, field: 0, place: {}, hard: {}, comeOn: {} };
+// My seat is empty-handed: the table's point is `point` (null = come-out).
+const crapsBlank = (game, { point = null, bets = {}, shooter = 1, players = 2 } = {}) => ({
+  ...crapsWorst(game), point, shooter, deadline: players > 1 ? now() + 25000 : null,
+  lastRoll: { dice: [3, 2], total: 5, at: now() - 60000, kind: 'roll', pointBefore: point, seq: 9, shooter },
+  seats: [null, seat('u1', 'Mike', { bets: { ...emptyBets, ...bets }, lastRoll: null }), players > 1 ? seat('u2', 'Dan', { bets: { ...emptyBets }, lastRoll: null }) : null, null, null],
+});
 async function openCraps(path, tables, { width = 375, height = 800, uid = 'u1', onCasino = null, trackMedia = false } = {}) {
-  const phone = width <= 640;
+  const phone = width <= 640 || height <= 500;
   const context = await browser.newContext({ viewport: { width, height }, isMobile: phone, hasTouch: phone });
   const page = await context.newPage();
+  const calls = [];
+  const pageErrors = [];
+  page.on('pageerror', (e) => pageErrors.push(e.message));
   if (trackMedia) {
-    // Count media-query listeners added and removed (the dock's subscription).
+    // Count media-query listeners added and removed (the inline-info subscription).
     await page.addInitScript(() => {
       const orig = window.matchMedia;
       window.__mq = { added: 0, removed: 0 };
@@ -390,87 +397,337 @@ async function openCraps(path, tables, { width = 375, height = 800, uid = 'u1', 
   await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
   await page.route('**/api/**', async (route) => {
     const u = new URL(route.request().url());
-    if (u.pathname === '/api/casino' && onCasino) return onCasino(route, route.request().postDataJSON());
+    if (u.pathname === '/api/casino') {
+      const body = route.request().postDataJSON();
+      calls.push(body);
+      if (onCasino) return onCasino(route, body);
+      if (body.action === 'bets') await new Promise((r) => setTimeout(r, 2500)); // chips stay pending on screen
+      return json(route, 200, { ok: true, serverNow: now() });
+    }
     if (u.pathname === '/api/settle') return json(route, 200, { ran: false });
     return json(route, 200, { ok: true, serverNow: now() });
   });
   await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.craps-bar');
+  await page.waitForSelector('.craps-felt');
   await page.waitForTimeout(500);
-  return { page, context };
-}
-// Boxes of the must-see controls and whether each is fully inside the visible area at scrollY 0.
-function measureCraps(page, dockedOnly) {
-  return page.evaluate((dockedOnly) => {
-    window.scrollTo(0, 0);
-    const nav = document.querySelector('.navbar')?.getBoundingClientRect();
-    const bottomNav = document.querySelector('.bottom-nav');
-    const bn = bottomNav && getComputedStyle(bottomNav).display !== 'none' ? bottomNav.getBoundingClientRect() : null;
-    const top = nav ? nav.bottom : 0;
-    const bottom = bn ? bn.top : window.innerHeight;
-    const scope = dockedOnly ? '.craps-dock ' : '';
-    const pick = (sel, label) => [...document.querySelectorAll(scope + sel)].map((el, i) => ({ el, label: `${label}${i ? ` #${i + 1}` : ''}` }));
-    const items = [
-      ...pick('.craps-roll-btn', 'Roll'),
-      ...pick('[role=radio][aria-label$="chip"]', 'chip'),
-      ...pick('.take-down', 'Take down'),
-      // 0.17.0: the Chat button lives in the top bar (it must be on screen too, at every size, docked or not).
-      ...[...document.querySelectorAll('.craps-bar .chat-btn, .craps-dock .chat-btn')].map((el) => ({ el, label: 'Chat' })),
-      ...(dockedOnly ? [] : [...document.querySelectorAll('.craps-tools .btn')].map((el) => ({ el, label: el.textContent.trim() }))),
-      ...(dockedOnly ? [] : [...document.querySelectorAll('.craps-felt .craps-spot')].map((el) => ({ el, label: el.getAttribute('aria-label') }))),
-    ];
-    const out = items.map(({ el, label }) => {
-      const r = el.getBoundingClientRect();
-      return { label, top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right), h: Math.round(r.height), inside: r.top >= top - 0.5 && r.bottom <= bottom + 0.5 && r.left >= -0.5 && r.right <= window.innerWidth + 0.5 && r.height > 0 };
-    });
-    return { area: [Math.round(top), Math.round(bottom)], scrollY: window.scrollY, out, docked: Boolean(document.querySelector('.craps-dock')) };
-  }, dockedOnly);
+  return { page, context, calls, pageErrors };
 }
 
+// Where everything is, at the current size: stage scroll, the felt and rail boxes, every felt button's size, what sticks out.
+const FELT_BUTTON_EXCEPTION = '^comeOdds:'; // the Come-odds chip inside a 47–60 px number box on the shortest screens keeps 44 wide
+function measureCraps(page) {
+  return page.evaluate((exception) => {
+    const re = new RegExp(exception);
+    const st = document.querySelector('.craps-stage');
+    const box = (el) => { const r = el.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right), w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10 }; };
+    const felt = box(document.querySelector('.craps-felt'));
+    const rail = box(document.querySelector('.cs-rail'));
+    const small = [...document.querySelectorAll('.craps-felt button:not([data-part="strip"])')].filter((b) => b.getBoundingClientRect().width > 0).filter((b) => { const r = b.getBoundingClientRect(); return (r.width < 43.5 || r.height < 43.5) && !re.test(b.dataset.spot ?? ''); }).map((b) => `${b.dataset.spot} ${Math.round(b.getBoundingClientRect().width)}x${Math.round(b.getBoundingClientRect().height)}`);
+    const must = [...document.querySelectorAll('.cs-top button, .cs-top a, .cs-rail button, .cs-rail [role=radio], .craps-felt button:not([data-part="strip"])')].filter((b) => b.getBoundingClientRect().width > 0);
+    const outside = must.filter((b) => { const r = b.getBoundingClientRect(); return r.right > innerWidth + 0.5 || r.left < -0.5 || r.top < -0.5 || r.bottom > innerHeight + 0.5; }).map((b) => b.dataset.spot ?? b.getAttribute('aria-label') ?? b.textContent.trim().slice(0, 12));
+    const rackBoxes = [...document.querySelectorAll('.cs-rack [role=radio]')].map((b) => Math.round(b.getBoundingClientRect().width));
+    return { stageScroll: st.scrollHeight - st.clientHeight, docScroll: document.documentElement.scrollHeight - innerHeight, felt, rail, small, outside, rackBoxes, orient: innerWidth > innerHeight ? 'sideways' : 'upright', buttons: must.length };
+  }, FELT_BUTTON_EXCEPTION);
+}
+
+// Upright: 320×568 (may scroll below 600 px tall), 375×667, 390×844, 414×896. Sideways: 568×320, 667×375, 844×390, 932×430.
+// Computers (landscape, taller than 500 px): 1280×800, 1440×900.
+const FIT_SIZES = [[320, 568], [375, 667], [390, 844], [414, 896], [568, 320], [667, 375], [844, 390], [932, 430], [1280, 800], [1440, 900]];
 for (const game of ['craps', 'crapless']) {
-  await check(`${game}: Roll, chips, Take down, Undo/Clear, Chat and every spot on screen at scrollY 0 (375×667, 390×844, 414×896, 1280×720, 1440×900); docked bar at 320×568`, async () => {
+  await check(`${game}: the felt fits at every size (no page scroll where required, nothing clipped, every felt button 44×44), upright and sideways`, async () => {
     const report = [];
-    for (const [width, height] of SIZES) {
-      const { page, context } = await openCraps(`/casino/${game}`, [crapsWorst(game)], { width, height });
-      const dockedOnly = width === 320;
-      const m = await measureCraps(page, dockedOnly);
-      assert.equal(m.scrollY, 0);
-      assert.equal(m.docked, dockedOnly, `${width}×${height}: the docked bar shows only on the short screen`);
-      const need = dockedOnly ? ['Roll', 'chip', 'Take down', 'Chat'] : ['Roll', 'chip', 'Take down', 'Undo', 'Clear', 'Chat'];
-      for (const label of need) assert.ok(m.out.some((o) => o.label.startsWith(label)), `${width}×${height}: ${label} present`);
-      assert.equal(m.out.filter((o) => o.label.startsWith('chip')).length, 6, `${width}×${height}: all six chips ($1–$100) measured`);
-      const spots = m.out.filter((o) => !['Roll', 'chip', 'Take down', 'Undo', 'Clear', 'Chat'].some((l) => o.label.startsWith(l)));
-      if (!dockedOnly) // craps: Pass, Odds, Don't, Don't Odds, Come, Field, 6 Place, 3 Come bets, 4 Hard = 19; crapless: 2 + 2 + 10 + 3 + 4 = 21.
-      assert.equal(spots.length, game === 'crapless' ? 21 : 19, `${width}×${height}: every spot measured`);
-      const outside = m.out.filter((o) => !o.inside);
-      assert.deepEqual(outside.map((o) => `${o.label} [${o.top}–${o.bottom}]`), [], `${width}×${height}: outside the visible area ${m.area.join('–')}`);
-      const short = m.out.filter((o) => o.h < 44);
-      assert.deepEqual(short.map((o) => `${o.label} ${o.h}px`), [], `${width}×${height}: tap targets at least 44 px tall`);
-      const lowest = Math.max(...m.out.map((o) => o.bottom));
-      report.push(`${width}×${height}${dockedOnly ? ' docked' : ''}: lowest ${lowest}/${m.area[1]}`);
+    for (const [width, height] of FIT_SIZES) {
+      const { page, context, pageErrors } = await openCraps(`/casino/${game}`, [crapsWorst(game)], { width, height });
+      const m = await measureCraps(page);
+      const tag = `${width}×${height} ${m.orient}`;
+      assert.deepEqual(pageErrors, [], `${tag}: no page errors`);
+      assert.equal(m.orient, width > height ? 'sideways' : 'upright');
+      if (m.orient === 'sideways') {
+        assert.equal(m.stageScroll, 0, `${tag}: the stage does not scroll`);
+        assert.equal(m.docScroll, 0, `${tag}: the page does not scroll`);
+        assert.ok(m.felt.right <= m.rail.left + 1, `${tag}: felt left of the rail`);
+      } else {
+        // Upright: the felt sits above the dock from 600 px tall (below that the page may scroll). It fits without scrolling from 600 px tall (taller phones carry the seats
+        // under the felt, so the page scrolls there, but the felt and the dock stay in view).
+        if (height >= 600) assert.ok(m.felt.bottom <= m.rail.top + 1, `${tag}: felt (${m.felt.bottom}) above the dock (${m.rail.top})`);
+        if (height >= 600 && height < 780) assert.equal(m.stageScroll, 0, `${tag}: no page scrolling`);
+      }
+      assert.deepEqual(m.small, [], `${tag}: felt buttons at least 44×44`);
+      assert.deepEqual(m.outside, [], `${tag}: nothing outside the screen`);
+      const rackMin = m.orient === 'sideways' ? 44 : 48;
+      assert.ok(m.rackBoxes.length === 6 && m.rackBoxes.every((w) => w >= rackMin - 1), `${tag}: six rack chips of ${rackMin}+ px (${m.rackBoxes})`);
+      report.push(`${tag.split(' ')[0]}${m.stageScroll ? ` scroll ${m.stageScroll}` : ''}`);
       await context.close();
     }
-    results.push(`     (${game} ${report.join(' · ')})`);
+    results.push(`     (${game}: ${report.join(' · ')})`);
   });
 }
 
-await check('craps: "Sit down" takes the first open seat; "Table full" when all 5 are taken; an empty seat below still seats; the dock listener goes away on leave', async () => {
+// ---------- every area is a button that places a chip on its bet ----------
+const spot = (page, key) => page.locator(`.craps-felt [data-spot="${key}"]:not([data-part="strip"])`);
+const stripSpot = (page, key) => page.locator(`.craps-felt [data-spot="${key}"][data-part="strip"]`);
+const chipText = async (btn) => (await btn.locator('.fa-chip').count()) ? (await btn.locator('.fa-chip').first().innerText()).trim() : '';
+const lastBets = (calls) => calls.filter((c) => c.action === 'bets');
+
+for (const game of ['craps', 'crapless']) {
+  await check(`${game}: every felt area is a button with a clear label; tapping a free area puts a chip on that bet (come-out: Pass, Don't Pass, Field, Hard ways; with a Point: Place, Come, Odds)`, async () => {
+    const crapless = game === 'crapless';
+    // Come-out, nothing on the felt yet.
+    let { page, context, calls } = await openCraps(`/casino/${game}`, [crapsBlank(game, { point: null })], { width: 844, height: 390 });
+    await page.getByRole('radio', { name: '$5 chip' }).click();
+    const comeOutSpots = [...(crapless ? [] : ['dontPass']), 'pass', 'field', ...[...(crapless ? [4, 10] : [6, 8, 4, 10])].map((n) => `hard:${n}`)];
+    for (const key of comeOutSpots) {
+      await spot(page, key).first().click();
+      assert.equal(await chipText(spot(page, key).first()), '$5', `${key}: a $5 chip on the area`);
+      assert.match((await spot(page, key).first().getAttribute('aria-label')) ?? '', /, \$5\.00 on it$/, `${key}: label says what is on it`);
+    }
+    // Blocked on the come-out: Come, Place, Odds. Tapping says why and puts nothing there.
+    for (const key of ['come', 'odds', 'place:6']) {
+      assert.ok(await spot(page, key).evaluate((el) => el.classList.contains('blocked')), `${key}: blocked look on the come-out`);
+      await spot(page, key).click();
+      assert.equal(await chipText(spot(page, key)), '', `${key}: no chip`);
+      assert.ok((await page.locator('.cs-msg.error').innerText()).length > 5, `${key}: says why`);
+    }
+    if (crapless) {
+      assert.equal(await page.locator('.craps-felt [data-spot="dontPass"], .craps-felt [data-spot="dontOdds"]').count(), 0, 'Crapless: no Don\'t Pass anywhere');
+    }
+    // Everything goes to the server as the same bet changes the old felt sent.
+    await page.waitForTimeout(700);
+    const kinds = lastBets(calls).flatMap((c) => c.changes).map((c) => `${c.kind}${c.number ? `:${c.number}` : ''}=${c.cents}`).sort();
+    assert.deepEqual(kinds, comeOutSpots.map((k) => `${k}=500`).sort(), 'one $5 change per area');
+    await context.close();
+
+    // A Point is on: Place numbers, Come, Odds (behind my Pass), Don't Odds (behind my Don't Pass).
+    const point = crapless ? 11 : 6;
+    ({ page, context, calls } = await openCraps(`/casino/${game}`, [crapsBlank(game, { point, bets: { pass: 1000, dontPass: crapless ? 0 : 1000 } })], { width: 844, height: 390 }));
+    await page.getByRole('radio', { name: '$2 chip' }).click();
+    const nums = crapless ? [2, 3, 4, 5, 6, 8, 9, 10, 11, 12] : [4, 5, 6, 8, 9, 10];
+    for (const key of [...nums.map((n) => `place:${n}`), 'come', 'odds', ...(crapless ? [] : ['dontOdds'])]) {
+      await spot(page, key).click();
+      assert.equal(await chipText(spot(page, key)), '$2', `${key}: a $2 chip`);
+    }
+    // The Pass strip and the Pass row are the same bet: a tap on either adds to it. (Pass is up: with a point it's blocked, so
+    // check the shared amount instead: both show the $10.)
+    assert.equal(await chipText(spot(page, 'pass')), '$10');
+    assert.equal(await chipText(stripSpot(page, 'pass')), '$10', 'the strip shows the same Pass bet');
+    await context.close();
+  });
+}
+
+await check('craps: the Pass strip (sideways) and the Pass row reach the same bet; taking it off one takes it off the other', async () => {
+  const { page, context } = await openCraps('/casino/craps', [crapsBlank('craps', { point: null })], { width: 844, height: 390 });
+  assert.equal(await stripSpot(page, 'pass').isVisible(), true, 'the strip shows sideways');
+  assert.equal(await stripSpot(page, 'pass').getAttribute('aria-hidden'), 'true', 'hidden from screen readers (the row is the labelled one)');
+  await page.getByRole('radio', { name: '$5 chip' }).click();
+  await stripSpot(page, 'pass').click();
+  await spot(page, 'pass').click();
+  assert.equal(await chipText(spot(page, 'pass')), '$10', 'row: $5 from the strip + $5 from the row');
+  assert.equal(await chipText(stripSpot(page, 'pass')), '$10', 'strip: the same bet');
+  await page.getByRole('button', { name: 'Undo' }).click();
+  assert.equal(await chipText(stripSpot(page, 'pass')), '$5');
+  assert.equal(await chipText(spot(page, 'pass')), '$5');
+  // Upright: the strips are not drawn.
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.waitForTimeout(250);
+  assert.equal(await stripSpot(page, 'pass').isVisible(), false, 'no strip upright');
+  assert.equal(await spot(page, 'pass').isVisible(), true);
+  assert.equal(await chipText(spot(page, 'pass')), '$5', 'the chip is still there after rotating');
+  await context.close();
+});
+
+await check('craps: Odds stop at 2× the Pass bet (message on the felt), Undo and Clear work', async () => {
+  const { page, context } = await openCraps('/casino/craps', [crapsBlank('craps', { point: 6, bets: { pass: 500 } })], { width: 844, height: 390 });
+  await page.getByRole('radio', { name: '$5 chip' }).click();
+  await spot(page, 'odds').click();
+  await spot(page, 'odds').click();
+  assert.equal(await chipText(spot(page, 'odds')), '$10', '2× of $5');
+  await spot(page, 'odds').click();
+  assert.equal(await chipText(spot(page, 'odds')), '$10', 'the third chip is refused');
+  assert.match(await page.locator('.cs-msg').innerText(), /Odds can be up to 2× your Pass bet \(\$10\)/);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  assert.equal(await chipText(spot(page, 'odds')), '$5', 'Undo takes the last chip');
+  await spot(page, 'place:8').click();
+  await spot(page, 'field').click();
+  await page.getByRole('button', { name: 'Clear' }).click();
+  for (const key of ['odds', 'place:8', 'field']) assert.equal(await chipText(spot(page, key)), '', `${key} cleared`);
+  await context.close();
+});
+
+await check('craps: a Come bet that moved to a number shows as a chip marked C with its Odds beside it; tapping it adds Come Odds (capped at 2×)', async () => {
+  const { page, context, calls } = await openCraps('/casino/craps', [crapsBlank('craps', { point: 6, bets: { pass: 500, comeOn: { 5: { bet: 500, odds: 500 }, 9: { bet: 300, odds: 0 } } } })], { width: 375, height: 667 });
+  const five = spot(page, 'comeOdds:5');
+  assert.equal((await five.locator('.come-chip').innerText()).trim(), 'C');
+  assert.equal((await five.locator('.odds-chip').innerText()).trim(), '$5', 'its Odds chip');
+  assert.match((await five.getAttribute('aria-label')) ?? '', /^Come bet \$5\.00 on 5, Odds \$5\.00; tap for Odds/);
+  assert.equal(await spot(page, 'comeOdds:9').locator('.odds-chip').count(), 0, 'no Odds yet on 9');
+  await page.getByRole('radio', { name: '$5 chip' }).click();
+  await five.click();
+  assert.equal((await five.locator('.odds-chip').innerText()).trim(), '$10', 'Odds on 5 now $10 (2× the $5 Come bet)');
+  await five.click();
+  assert.match(await page.locator('.cs-msg').innerText(), /2× your Come 5 bet/);
+  await spot(page, 'comeOdds:9').click();
+  await page.waitForTimeout(700);
+  const sent = lastBets(calls).flatMap((c) => c.changes).map((c) => `${c.kind}:${c.number}=${c.cents}`).sort();
+  assert.deepEqual(sent, ['comeOdds:5=500', 'comeOdds:9=500']);
+  await context.close();
+});
+
+await check('craps: Take down removes a bet (and Odds off) with the same remove action as before', async () => {
+  const { page, context, calls } = await openCraps('/casino/craps', [crapsBlank('craps', { point: 6, bets: { pass: 500, odds: 1000, place: { 8: 600 }, field: 100 } })], { width: 844, height: 390 });
+  await page.getByRole('button', { name: 'Take down' }).click();
+  assert.equal(await page.locator('.craps-felt.taking-down').count(), 1);
+  assert.ok(await spot(page, 'place:6').evaluate((el) => el.classList.contains('blocked')), 'areas with nothing on them look blocked');
+  await spot(page, 'place:8').click();
+  await spot(page, 'odds').click();
+  await spot(page, 'pass').click(); // stays up with a Point
+  assert.match(await page.locator('.cs-msg').innerText(), /stays up until the Point is decided/);
+  await page.waitForTimeout(300);
+  const removes = calls.filter((c) => c.action === 'removeBet').map((c) => `${c.kind}${c.number ? `:${c.number}` : ''}`);
+  assert.deepEqual(removes, ['place:8', 'odds']);
+  await context.close();
+});
+
+await check('craps vs Crapless: 6 number boxes in the order 4 5 SIX 8 NINE 10 and Don\'t Pass; Crapless has 10 boxes (2 3 4 5 SIX 8 NINE 10 11 12 as two rows of five) and no Don\'t Pass; labels, hard-way pays and the Odds note', async () => {
+  const texts = (page) => page.locator('.craps-felt .fn-main .fn-num').allInnerTexts();
+  let { page, context } = await openCraps('/casino/craps', [crapsWorst('craps')], { width: 375, height: 667 });
+  assert.deepEqual(await texts(page), ['4', '5', 'SIX', '8', 'NINE', '10']);
+  assert.equal(await page.locator('.craps-felt [data-spot="dontPass"]:not([data-part="strip"])').count(), 1);
+  assert.equal(await page.locator('.craps-felt [data-spot="dontOdds"]').count(), 1);
+  assert.equal(await spot(page, 'place:6').getAttribute('aria-label'), 'Place Six, pays 7:6, $6.00 on it');
+  assert.equal(await spot(page, 'place:9').getAttribute('aria-label'), 'Place Nine, pays 7:5');
+  assert.deepEqual(await page.locator('.craps-felt .fh-box .fh-pay').allTextContents(), ['8 to 1', '6 to 1', '8 to 1', '6 to 1'], 'hard ways 6, 10, 8, 4 (8:1 and 6:1 are deliberate)');
+  assert.deepEqual(await page.locator('.craps-felt .fh-box').evaluateAll((els) => els.map((e) => e.dataset.spot)), ['hard:6', 'hard:10', 'hard:8', 'hard:4']);
+  assert.match(await page.locator('.craps-felt .fh-note').innerText(), /Odds pay true odds/i);
+  assert.match(await page.locator('.craps-felt .a-field').innerText(), /FIELD|Field/);
+  assert.equal(await page.locator('.craps-felt .a-field .ring').count(), 2, '2 and 12 are circled');
+  const main = await page.locator('.craps-felt .fn-main').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  assert.equal(new Set(main).size, 1, 'one row of six');
+  await context.close();
+
+  ({ page, context } = await openCraps('/casino/crapless', [crapsWorst('crapless')], { width: 375, height: 667 }));
+  assert.deepEqual(await texts(page), ['2', '3', '4', '5', 'SIX', '8', 'NINE', '10', '11', '12']);
+  const tops = await page.locator('.craps-felt .fn-main').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+  assert.equal(new Set(tops).size, 2, 'two rows');
+  assert.equal(tops.filter((t) => t === tops[0]).length, 5, 'five across');
+  assert.equal(await page.locator('.craps-felt [data-spot="dontPass"], .craps-felt [data-spot="dontOdds"]').count(), 0, 'no Don\'t Pass');
+  assert.equal(await page.locator('.craps-felt .a-dont, .craps-felt .a-dodds').count(), 0);
+  assert.equal(await spot(page, 'place:2').getAttribute('aria-label'), 'Place 2, pays 9:2, $2.00 on it');
+  await context.close();
+});
+
+await check('craps: the lettering font loads once from Google Fonts (preconnect + display=swap), only on a craps table; areas are real buttons with focus rings', async () => {
+  const { page, context } = await openCraps('/casino/craps', [crapsWorst('craps')], { width: 375, height: 667 });
+  const links = await page.evaluate(() => [...document.head.querySelectorAll('link[data-felt-font]')].map((l) => `${l.rel} ${l.href}`));
+  assert.equal(links.length, 3);
+  assert.ok(links.some((l) => /^preconnect https:\/\/fonts\.googleapis\.com/.test(l)) && links.some((l) => /^preconnect https:\/\/fonts\.gstatic\.com/.test(l)));
+  assert.ok(links.some((l) => /^stylesheet .*family=Oswald:wght@500;600;700&display=swap$/.test(l)), links.join('\n'));
+  assert.equal(await page.locator('.craps-felt .fa').evaluateAll((els) => els.every((e) => e.tagName === 'BUTTON')), true, 'every area is a <button>');
+  // Keyboard focus shows a gold ring.
+  let ringed = null;
+  for (let i = 0; i < 40 && !ringed; i += 1) {
+    await page.keyboard.press('Tab');
+    ringed = await page.evaluate(() => { const el = document.activeElement; if (!el?.classList.contains('fa')) return null; const s = getComputedStyle(el); return { outline: s.outlineStyle, width: s.outlineWidth, color: s.outlineColor, spot: el.dataset.spot }; });
+  }
+  assert.ok(ringed, 'a felt area took keyboard focus');
+  assert.notEqual(ringed.outline, 'none', 'focus ring drawn');
+  assert.match(ringed.color, /rgb\(245, 196, 81\)/, `gold ring (${ringed.color})`);
+  await context.close();
+  // The sportsbook never loads it.
+  const other = await openPage('/casino/baccarat', [], async (route) => json(route, 200, { ok: true, serverNow: now() }));
+  assert.equal(await other.page.evaluate(() => document.head.querySelectorAll('link[data-felt-font]').length), 0, 'only craps tables add the font');
+  await other.context.close();
+});
+
+await check('craps: rotating upright → sideways → upright mid-bet keeps the seat, the chip, the unsent chips and the open chat drawer; nothing leaves or re-sits', async () => {
+  const { page, context, calls } = await openCraps('/casino/craps', [crapsBlank('craps', { point: null })], { width: 375, height: 667 });
+  await page.getByRole('radio', { name: '$5 chip' }).click();
+  await spot(page, 'field').click();
+  await spot(page, 'field').click();
+  await spot(page, 'pass').click();
+  await page.getByRole('button', { name: /^Chat/ }).first().click();
+  await page.waitForSelector('.chat-drawer');
+  const state = async () => ({
+    field: await chipText(spot(page, 'field')),
+    pass: await chipText(spot(page, 'pass')),
+    chip: await page.getByRole('radio', { name: '$5 chip' }).getAttribute('aria-checked'),
+    seated: (await page.getByRole('button', { name: 'Sit down' }).count()) === 0 && (await page.getByRole('button', { name: 'Undo' }).count()) === 1,
+    drawer: await page.locator('.chat-drawer').count(),
+    meter: (await page.locator('.craps-meter').innerText()).replace(/\s+/g, ' '),
+  });
+  const before = await state();
+  assert.deepEqual(before, { field: '$10', pass: '$5', chip: 'true', seated: true, drawer: 1, meter: 'On the felt $15.00' });
+  await page.setViewportSize({ width: 667, height: 375 });
+  await page.waitForTimeout(350);
+  assert.deepEqual(await state(), before, 'sideways: same seat, chips and drawer');
+  assert.equal((await measureCraps(page)).orient, 'sideways');
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.waitForTimeout(350);
+  assert.deepEqual(await state(), before, 'and back upright');
+  assert.equal(calls.filter((c) => ['leave', 'sit'].includes(c.action)).length, 0, 'no leave or sit sent by rotating');
+  await context.close();
+});
+
+await check('craps: the Table sheet (seats, last rolls, Leave seat, help, rules) opens from the top bar sideways and closes (×, Escape, backdrop) without moving the felt; upright tall screens show it under the felt instead', async () => {
+  const { page, context } = await openCraps('/casino/craps', [crapsWorst('craps')], { width: 667, height: 375 });
+  const feltBox = () => page.locator('.craps-felt').evaluate((el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map((n) => Math.round(n * 10)); });
+  const before = await feltBox();
+  assert.equal(await page.locator('.cs-info').count(), 0, 'sideways: no inline info');
+  const tableBtn = page.getByRole('button', { name: 'Table', exact: true });
+  for (const how of ['x', 'escape', 'backdrop']) {
+    await tableBtn.click();
+    const sheet = page.getByRole('dialog', { name: /Craps table/ });
+    await sheet.waitFor();
+    assert.equal(await tableBtn.getAttribute('aria-expanded'), 'true');
+    assert.deepEqual(await feltBox(), before, 'the felt did not move while the sheet is open');
+    const text = await sheet.innerText();
+    assert.match(text, /Last rolls/);
+    assert.match(text, /Leave seat/);
+    assert.match(text, /Minimum \$1\. Bet as much as your wallet holds\./);
+    assert.match(text, /Come-out: 7 or 11 wins/);
+    assert.ok((await sheet.locator('.seat-row button, .seat-row [role=button], .seat-row > *').count()) >= 5, 'five seats');
+    if (how === 'x') await page.getByRole('button', { name: 'Close table' }).click();
+    else if (how === 'escape') await page.keyboard.press('Escape');
+    else await page.locator('.chat-backdrop').click({ position: { x: 5, y: 5 } });
+    await page.waitForTimeout(200);
+    assert.equal(await page.getByRole('dialog', { name: /Craps table/ }).count(), 0, `closed by ${how}`);
+    assert.deepEqual(await feltBox(), before, 'the felt did not move after closing');
+    assert.equal(await page.evaluate(() => document.body.classList.contains('no-scroll')), false, 'scroll lock released');
+  }
+  // Tall upright: the same content sits under the felt and there is no Table button.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
+  assert.equal(await page.getByRole('button', { name: 'Table', exact: true }).count(), 0);
+  assert.equal(await page.locator('.cs-info .craps-rolls').count(), 1);
+  await context.close();
+});
+
+await check('craps: "Sit down" takes the first open seat; "Table full" when all 5 are taken; an empty seat in the Table sheet still seats; the media-query listener goes away on leave', async () => {
   const sits = [];
-  const t = crapsWorst('craps');
-  const { page, context } = await openCraps('/casino/craps', [t], { uid: 'u4', onCasino: async (route, body) => {
+  const onCasino = async (route, body) => {
     if (body.action === 'sit') sits.push(body.seat);
     return json(route, 200, { ok: true, serverNow: now() });
-  } });
-  await page.getByRole('button', { name: 'Sit down' }).click();
-  await page.waitForTimeout(200);
+  };
+  const t = crapsWorst('craps');
+  const first = await openCraps('/casino/craps', [t], { uid: 'u4', onCasino, width: 390, height: 844 });
+  await first.page.getByRole('button', { name: 'Sit down' }).click();
+  await first.page.waitForTimeout(200);
   assert.deepEqual(sits, [2], 'first open seat is seat 3 (index 2)');
-  await page.getByRole('button', { name: 'Sit in seat 5' }).click();
-  await page.waitForTimeout(200);
-  assert.deepEqual(sits, [2, 4], 'tapping an empty seat below still works');
-  const seatsTop = await page.locator('.seat-row').evaluate((el) => el.getBoundingClientRect().top);
-  const barBottom = await page.locator('.craps-bar').evaluate((el) => el.getBoundingClientRect().bottom);
-  assert.ok(seatsTop > barBottom, 'seats are below the top bar');
-  await context.close();
+  await first.page.getByRole('button', { name: 'Sit in seat 5' }).click();
+  await first.page.waitForTimeout(200);
+  assert.deepEqual(sits, [2, 4], 'tapping an empty seat below the felt still works');
+  const seatsTop = await first.page.locator('.seat-row').evaluate((el) => el.getBoundingClientRect().top);
+  const feltBottom = await first.page.locator('.craps-felt').evaluate((el) => el.getBoundingClientRect().bottom);
+  assert.ok(seatsTop > feltBottom, 'seats are below the felt');
+  await first.context.close();
+
+  // Sideways: the seats are in the Table sheet.
+  sits.length = 0;
+  const side = await openCraps('/casino/craps', [t], { uid: 'u4', onCasino, width: 844, height: 390 });
+  await side.page.getByRole('button', { name: 'Table', exact: true }).click();
+  await side.page.getByRole('button', { name: 'Sit in seat 5' }).click();
+  await side.page.waitForTimeout(200);
+  assert.deepEqual(sits, [4], 'an empty seat in the Table sheet seats');
+  await side.context.close();
 
   const full = { ...crapsWorst('craps'), seats: ['u0', 'u1', 'u2', 'u3', 'u5'].map((u, i) => seat(u, ['Will', 'Mike', 'Dan', 'Ann', 'Bo'][i], { bets: { pass: 0, dontPass: 0, odds: 0, field: 0, place: {} }, lastRoll: null })) };
   const second = await openCraps('/casino/craps', [full], { uid: 'u4' });
@@ -478,15 +735,15 @@ await check('craps: "Sit down" takes the first open seat; "Table full" when all 
   assert.equal(await second.page.locator('.craps-full').innerText(), 'Table full');
   await second.context.close();
 
-  // The short-screen dock follows the media query both ways, and its subscription is removed on unmount.
-  const third = await openCraps('/casino/craps', [crapsWorst('craps')], { width: 320, height: 568, trackMedia: true });
+  // The inline-info decision follows the media query both ways, and its subscription is removed on unmount.
+  const third = await openCraps('/casino/craps', [crapsWorst('craps')], { width: 375, height: 667, trackMedia: true });
   assert.ok((await third.page.evaluate(() => window.__mq.added)) >= 1, 'the page subscribed to the media query');
-  assert.equal(await third.page.locator('.craps-dock').count(), 1);
-  await third.page.setViewportSize({ width: 320, height: 800 });
-  await third.page.waitForTimeout(200);
-  assert.equal(await third.page.locator('.craps-dock').count(), 0, 'taller screen: no dock, Roll back in the top bar');
-  assert.equal(await third.page.locator('.craps-bar .craps-roll-btn').count(), 1);
-  // Go to the lobby (unmounts the page): every listener added after the patch is removed.
+  assert.equal(await third.page.locator('.cs-info').count(), 0);
+  assert.equal(await third.page.getByRole('button', { name: 'Table', exact: true }).count(), 1);
+  await third.page.setViewportSize({ width: 375, height: 800 });
+  await third.page.waitForTimeout(250);
+  assert.equal(await third.page.locator('.cs-info').count(), 1, 'taller upright screen: the info moves under the felt');
+  assert.equal(await third.page.getByRole('button', { name: 'Table', exact: true }).count(), 0);
   await third.page.evaluate(() => { window.history.pushState({}, '', '/casino'); window.dispatchEvent(new PopStateEvent('popstate')); });
   await third.page.waitForTimeout(300);
   const mq = await third.page.evaluate(() => window.__mq);
@@ -559,7 +816,7 @@ await check('no maximum bets: $100 + $100 + $25 chips on Blackjack, Baccarat, Cr
     const t = { ...crapsWorst(game), seats: [null, seat('u1', 'Mike', { bets: { pass: 0, dontPass: 0, odds: 0, dontOdds: 0, come: 0, field: 0, place: {}, hard: {}, comeOn: {} }, lastRoll: null }), null, null, null], point: null, deadline: null };
     ({ page, context } = await openRich(`/casino/${game}`, [t], record(game)));
     await chipsAndText(page, game);
-    await tapChips(page, page.getByRole('button', { name: /^Pass/ }));
+    await tapChips(page, page.locator('.craps-felt [data-spot="pass"]:not([data-part="strip"])'));
     // The chips show at once (the mock table doc never changes, so read the meter before the reply clears them).
     assert.match(await page.locator('.craps-meter').innerText(), /^On the felt \$225\.00$/);
     await page.waitForTimeout(700);

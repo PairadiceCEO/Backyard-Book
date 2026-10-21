@@ -1,26 +1,31 @@
-// Craps and Crapless Craps (one page, the variant comes from the route). Everything on screen comes
-// from one live doc, casinoTables/{game}; every tap is a call to /api/casino.
+// Craps and Crapless Craps (one page, the variant comes from the route). Everything on screen comes from one live doc,
+// casinoTables/{game}; every tap is a call to /api/casino.
 //
-// Layout (0.15.0), built so betting, taking down and rolling never need a scroll:
-//   1. one compact bar: the puck (ON 6 / OFF), the two dice and the last total, the countdown, and Roll when it's my
-//      turn (or "Sit down" / "Table full" for a player who isn't seated);
-//   2. the betting interface: the six chips, then "On the felt $X" + Take down + Undo / Clear, and every spot (Pass, Odds,
-//      Don't Pass and its Odds, Come, Come bets on their numbers with their Odds, Place numbers, Field, Hard ways)
-//      in dense grids; two columns on a computer;
-//   3. below it: the seats, the last rolls, Leave seat, the help text and the rules.
-// On a short screen (max-height 620px, e.g. 320×568) the chip rack, Take down and Roll move into a bar fixed above the
-// bottom nav (DOCK_QUERY, via useMediaQuery: a media-query subscription that is removed on unmount); the spots scroll.
+// Look (0.18.0): the table is drawn like a real one (src/components/casino/CrapsFelt.jsx) and the page takes the whole
+// screen (it covers the app's top bar and bottom tabs; ‹ goes back). Two layouts from the same DOM, switched by CSS
+// alone (src/styles/craps.css), so turning the phone never remounts anything and the seat, the chips not yet sent and
+// the open drawers all stay:
+//   Upright  (orientation: portrait): top bar + status row, the felt stacked, and a dock at the bottom (wallet, message,
+//            six chips, Undo / Clear / Take down and Roll).
+//   Sideways (landscape; computers too, sized up): one-row top bar, the felt on the left, a rail on the right (wallet,
+//            chips, Undo / Clear / Take down, message, Roll).
+// Seats, last rolls, Leave seat, help and the rules live in the "Table" sheet (a top-bar button, the chat drawer's sheet
+// styles); on tall upright screens they sit under the felt instead (the only thing JS decides: one media query, removed
+// on unmount).
 //
-// Pick a chip and tap a spot: the chip is on the felt at once, and taps close together go to the server
-// as one request (Undo / Clear take back chips placed since the last roll). "Take down" + tap takes a
-// whole bet back. Roll carries the table's rollSeq, so a double tap can only roll once; the shooter's
-// dice start tumbling the moment Roll is tapped and land on the result from the reply.
+// Betting is unchanged since 0.15.0: pick a chip and tap an area; the chip is on the felt at once, taps close together
+// go to the server as one request (Undo / Clear take back chips placed since the last roll), "Take down" + tap takes a
+// whole bet back. Roll carries the table's rollSeq, so a double tap can only roll once; the shooter's dice start
+// tumbling the moment Roll is tapped and land on the result from the reply.
 // No maximum bets (0.16.0): any whole-dollar amount the wallet covers; Odds stay at most 2× their line bet (a game rule).
 // One seat per player here; leaving the page gives the seat up (useLeaveOnExit). No game rule lives in this file.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { CHIP_VALUES, ChipToken } from '../../components/casino/Chips.jsx';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
+import CrapsFelt from '../../components/casino/CrapsFelt.jsx';
+import { CHIP_VALUES } from '../../components/casino/Chips.jsx';
+import { FeltChip } from '../../components/casino/FeltChip.jsx';
 import Die from '../../components/casino/Die.jsx';
 import TableSeats from '../../components/casino/TableSeats.jsx';
 import { ErrorState, LoadingState, friendlyError } from '../../components/StatusViews.jsx';
@@ -32,16 +37,19 @@ import { useMediaQuery } from '../../hooks/useMediaQuery.js';
 import { useCasinoChat } from '../../hooks/useCasinoChat.js';
 import { ChatButton, ChatDrawer } from '../../components/casino/CasinoChat.jsx';
 import { newRequestId } from '../../lib/casino.js';
+import { ensureFeltFont } from '../../lib/feltFont.js';
 import { formatMoney } from '../../lib/format.js';
 import { DICE_ANIMATION_MS } from '../../../shared/casino/constants.js';
 import { DICE_VARIANTS } from '../../../shared/casino/diceVariants.js';
 import { BET_HELP_TEXT } from '../../../shared/casino/constants.js';
 import { cloneBets, emptyDiceBets, limitProblem, placeBlocker, removeBlocker, spotAmount, spotLimitCents, totalOnFelt } from '../../../shared/casino/dice.js';
+import '../../styles/craps.css';
 
 const NO_SEATS = [null, null, null, null, null];
 const KIND_TEXT = { natural: 'Winner!', craps: 'Craps', point: 'Point set', pointMade: 'Point made!', sevenOut: 'Seven out', roll: '' };
-// Short screens: chip rack, Take down and Roll go into a bar fixed at the bottom.
-export const DOCK_QUERY = '(max-height: 620px)';
+// Tall upright screens have room under the felt for the seats, last rolls, help and rules; everywhere else they are in
+// the Table sheet. (Everything else about the two layouts is plain CSS.)
+export const INLINE_INFO_QUERY = '(orientation: portrait) and (min-height: 780px)';
 
 function ratio([n, d]) {
   return `${n}:${d}`;
@@ -86,42 +94,65 @@ function signedMoney(cents) {
   return formatMoney(0);
 }
 
-// A spot's amount as one short line: whole dollars without cents ("$15"; chips are whole dollars), or a placeholder.
-function shortMoney(cents) {
-  return cents % 100 === 0 ? `$${cents / 100}` : formatMoney(cents);
-}
-
-function amountText(cents, empty = '') {
-  return cents ? shortMoney(cents) : empty;
-}
-
-// Chip rack for the craps table: the six chips in one row (Take down sits with Undo / Clear, or in the dock).
+// Chip rack for the craps table: the six chips in one row upright, 3 × 2 sideways (CSS decides).
 function CrapsRack({ chip, takeDown, onChip, disabled }) {
   return (
-    <div className="craps-rack-chips" role="radiogroup" aria-label="Chip">
-      {CHIP_VALUES.map((d) => (
-        <button
-          key={d}
-          type="button"
-          role="radio"
-          aria-checked={!takeDown && chip === d}
-          aria-label={`$${d} chip`}
-          className={!takeDown && chip === d ? 'chip-pick active' : 'chip-pick'}
-          onClick={() => onChip(d)}
-          disabled={disabled}
-        >
-          <ChipToken dollars={d} />
-        </button>
-      ))}
+    <div className="cs-rack" role="radiogroup" aria-label="Chip">
+      {CHIP_VALUES.map((d) => {
+        const active = !takeDown && chip === d;
+        return (
+          <button
+            key={d}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            aria-label={`$${d} chip`}
+            className={active ? 'rack-chip active' : 'rack-chip'}
+            onClick={() => onChip(d)}
+            disabled={disabled}
+          >
+            <FeltChip dollars={d} />
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function TakeDownButton({ takeDown, onToggle, disabled }) {
-  return (
-    <button type="button" aria-pressed={takeDown} className={takeDown ? 'btn take-down active' : 'btn take-down'} onClick={onToggle} disabled={disabled}>
-      Take down
-    </button>
+// While the craps page is on screen the app's top bar and bottom tabs step aside (CSS on body); put back on exit.
+function HideAppChrome() {
+  useLayoutEffect(() => {
+    document.body.classList.add('craps-stage-on');
+    return () => document.body.classList.remove('craps-stage-on');
+  }, []);
+  return null;
+}
+
+// The "Table" sheet: the chat drawer's sheet over the page (it never moves the felt). Escape, the × and the backdrop close it.
+function TableSheet({ title, onClose, children }) {
+  const closeRef = useRef(null);
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    closeRef.current?.focus({ preventScroll: true });
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return createPortal(
+    <>
+      <div className="chat-backdrop" role="presentation" onClick={onClose} />
+      <section className="chat-drawer table-sheet" role="dialog" aria-modal="true" aria-label={title}>
+        <header className="chat-head">
+          <h3>{title}</h3>
+          <button ref={closeRef} type="button" className="icon-button" aria-label="Close table" onClick={onClose}>
+            ×
+          </button>
+        </header>
+        <div className="table-sheet-body">{children}</div>
+      </section>
+    </>,
+    document.body,
   );
 }
 
@@ -130,7 +161,7 @@ export default function CrapsPage({ game }) {
   const { authUser, profile } = useAuth();
   const myUid = authUser?.uid ?? null;
   const balanceCents = Number(profile?.balanceCents) || 0;
-  const { setHeldCents, setPendingCents, reportBalance } = useWalletDisplay();
+  const { setHeldCents, setPendingCents, reportBalance, displayCents } = useWalletDisplay();
   const { table, loading, error, accept } = useCasinoTable(game);
   const call = useTableCall(game, accept, reportBalance);
 
@@ -152,14 +183,20 @@ export default function CrapsPage({ game }) {
   const [takeDown, setTakeDown] = useState(false);
   const [busy, setBusy] = useState('');
   const [actionError, setActionError] = useState('');
-  const docked = useMediaQuery(DOCK_QUERY);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const inlineInfo = useMediaQuery(INLINE_INFO_QUERY);
   const chat = useCasinoChat(game); // Craps and Crapless each have their own room (0.17.0)
+  const closeSheet = useCallback(() => setSheetOpen(false), []);
+
+  useEffect(() => {
+    ensureFeltFont();
+  }, []);
 
   useEffect(() => {
     call('tick').catch(() => {}); // through call: the reply's table shows at once
   }, [call]); // call is stable per game, so this still runs once per visit
 
-  // While the dice tumble, the nav wallet stays where it was before the roll.
+  // While the dice tumble, the wallet stays where it was before the roll.
   const preRollRef = useRef(null);
   useEffect(() => {
     if (!rolling) preRollRef.current = balanceCents;
@@ -239,11 +276,10 @@ export default function CrapsPage({ game }) {
   const iShoot = Boolean(mySeat) && shooterIndex === mySeatIndex;
   const myBets = spotsToBets(chips.spots, serverBets);
   const hasLine = myBets.pass > 0 || myBets.dontPass > 0;
-  const placeNumbers = variant.points;
   const oddsMax = spotLimitCents(variant, myBets, 'odds');
   const dontOddsMax = spotLimitCents(variant, myBets, 'dontOdds');
   const onFelt = totalOnFelt(myBets);
-  const comeNumbers = placeNumbers.filter((n) => myBets.comeOn[n]);
+  const walletCents = displayCents(balanceCents);
 
   function tapSpot(kind, number) {
     if (!mySeat || rolling) return;
@@ -260,6 +296,10 @@ export default function CrapsPage({ game }) {
     setActionError('');
     chips.place(spotKey(kind, number), chip * 100);
   }
+
+  // An area that can't take a bet right now keeps the old "blocked" look; tapping it says why (the reason comes from chips.place).
+  const blockedOf = (kind, number) =>
+    takeDown ? !spotAmount(myBets, kind, number) || Boolean(removeBlocker(table?.point ?? null, kind)) : Boolean(placeBlocker(variant, table?.point ?? null, myBets, kind, number));
 
   function seatDetail(seat, i) {
     const showResult = !rolling && seat.lastRoll && seat.lastRoll.seq === table?.rollSeq;
@@ -280,30 +320,10 @@ export default function CrapsPage({ game }) {
   else status = `${point ? '' : 'Come-out · '}Shooter: ${shooter ? (shooter.uid === myUid ? 'you' : shooter.name) : 'nobody'}`; // the puck shows the point
 
   const lastKind = lastRoll && !rolling ? KIND_TEXT[lastRoll.kind] : '';
-  const oddsRatio = point ? variant.odds[point] : null;
   const firstOpen = seats.findIndex((s) => !s);
   const message = chips.error || actionError;
-
-  const spotClass = (kind, number, extra = '') => {
-    const mine = spotAmount(myBets, kind, number);
-    const blocked = takeDown ? !mine || removeBlocker(table?.point ?? null, kind) : placeBlocker(variant, table?.point ?? null, myBets, kind, number);
-    return ['craps-spot', extra, mine ? 'has-bet' : '', blocked ? 'blocked' : ''].filter(Boolean).join(' ');
-  };
-
-  // One spot button: a name, an optional short sub-line (payout or limit) and the amount on it.
-  const spot = ({ kind, number, name, sub = '', extra = '', aria, cents }) => (
-    <button
-      key={spotKey(kind, number)}
-      type="button"
-      className={spotClass(kind, number, extra)}
-      onClick={() => tapSpot(kind, number)}
-      aria-label={`${aria ?? name}${cents ? `, ${formatMoney(cents)} on it` : ''}`}
-    >
-      <span className="spot-name">{name}</span>
-      {sub ? <span className="spot-odds">{sub}</span> : null}
-      <span className="spot-bet">{amountText(cents)}</span>
-    </button>
-  );
+  const hint = rolling ? '' : takeDown ? 'Tap a bet to take it down.' : iShoot && !hasLine ? `Bet Pass${variant.dontPass ? " or Don't Pass" : ''} to roll.` : '';
+  const players = seats.filter(Boolean).length;
 
   const rollButton = iShoot ? (
     <button type="button" className="btn btn-primary craps-roll-btn" disabled={!hasLine || rolling} onClick={rollDice} title={hasLine ? undefined : status}>
@@ -311,170 +331,24 @@ export default function CrapsPage({ game }) {
     </button>
   ) : null;
 
-  const rack = mySeat ? (
-    <CrapsRack
-      chip={chip}
-      takeDown={takeDown}
-      disabled={!canChip}
-      onChip={(d) => {
-        setChip(d);
-        setTakeDown(false);
-      }}
-    />
-  ) : null;
-  const takeDownButton = mySeat ? <TakeDownButton takeDown={takeDown} onToggle={() => setTakeDown((v) => !v)} disabled={!canChip} /> : null;
+  const rollArea = mySeat ? (
+    rollButton ?? (
+      <p className="cs-wait" role="status">
+        {status}
+      </p>
+    )
+  ) : firstOpen >= 0 ? (
+    <button type="button" className="btn btn-primary craps-sit-btn" onClick={() => run('sit', 'sit', { seat: firstOpen })} disabled={busy === 'sit'}>
+      {busy === 'sit' ? 'Sitting…' : 'Sit down'}
+    </button>
+  ) : (
+    <span className="craps-full">Table full</span>
+  );
 
-  const lineSpots = [
-    spot({ kind: 'pass', name: 'Pass', extra: 'line pass', aria: 'Pass Line, pays 1:1', cents: myBets.pass }),
-    spot({
-      kind: 'odds',
-      name: point ? `Odds ${point}` : 'Odds',
-      sub: oddsRatio ? ratio(oddsRatio) : 'after point',
-      extra: 'line odds',
-      aria: point ? `Odds on ${point}, pays ${oddsRatio ? ratio(oddsRatio) : ''}, at most ${formatMoney(oddsMax)} (2× Pass)` : 'Odds behind Pass, once a Point is set',
-      cents: myBets.odds,
-    }),
-  ];
-  if (variant.dontPass) {
-    lineSpots.push(
-      spot({ kind: 'dontPass', name: "Don't", sub: 'Pass', extra: 'line dont', aria: "Don't Pass, pays 1:1, 12 pushes", cents: myBets.dontPass }),
-      spot({
-        kind: 'dontOdds',
-        name: "Don't Odds",
-        sub: oddsRatio ? ratio([oddsRatio[1], oddsRatio[0]]) : 'after point',
-        extra: 'line odds dont',
-        aria: point ? `Don't Pass Odds on ${point}, at most ${formatMoney(dontOddsMax)} (2× Don't Pass)` : "Don't Pass Odds, once a Point is set",
-        cents: myBets.dontOdds,
-      }),
-    );
-  }
-  const comeSpot = spot({ kind: 'come', name: 'Come', sub: point ? '' : 'after point', extra: 'line come', aria: 'Come, pays 1:1', cents: myBets.come });
-  const fieldSpot = spot({ kind: 'field', name: 'Field', sub: '2·12 ×2', extra: 'field', aria: 'Field: 3, 4, 9, 10, 11 pay 1:1; 2 and 12 pay 2:1', cents: myBets.field });
-
-  return (
-    <section className={docked && mySeat ? 'page table-page craps-page docked' : 'page table-page craps-page'}>
-      <h2 className="visually-hidden">{variant.name}</h2>
-
-      <div className="card craps-bar">
-        <span className={point ? 'puck on' : 'puck'} aria-label={point ? `Puck on ${point}` : 'Puck off'}>
-          {point ? `ON ${point}` : 'OFF'}
-        </span>
-        <span className="craps-dice">
-          <Die value={lastRoll?.dice?.[0] ?? 1} rolling={rolling} />
-          <Die value={lastRoll?.dice?.[1] ?? 1} rolling={rolling} />
-        </span>
-        <span className="craps-bar-text">
-          <span className="craps-roll-text" aria-live="polite">
-            {lastRoll ? (rolling ? 'Rolling…' : `${lastRoll.total}${lastKind ? ` · ${lastKind}` : ''}`) : 'No rolls yet'}
-          </span>
-          <span className="craps-bar-status" role="status" title={status}>
-            {status}
-          </span>
-        </span>
-        {deadline && !rolling ? (
-          <span className={seconds !== null && seconds <= 5 ? 'countdown urgent' : 'countdown'} aria-label={`${seconds ?? 0} seconds to roll`}>
-            {seconds ?? 0}
-          </span>
-        ) : null}
-        {docked ? null : rollButton}
-        {!mySeat ? (
-          firstOpen >= 0 ? (
-            <button type="button" className="btn btn-primary craps-sit-btn" onClick={() => run('sit', 'sit', { seat: firstOpen })} disabled={busy === 'sit'}>
-              {busy === 'sit' ? 'Sitting…' : 'Sit down'}
-            </button>
-          ) : (
-            <span className="craps-full">Table full</span>
-          )
-        ) : null}
-        <ChatButton chat={chat} compact />
-      </div>
-
-      {mySeat ? (
-        <div className={rolling ? 'card craps-felt dim' : 'card craps-felt'}>
-          {message ? (
-            <p className="craps-toast" role="alert">
-              {message}
-            </p>
-          ) : null}
-          <div className="craps-col">
-            {docked ? null : rack}
-            <div className={docked ? 'craps-tools no-take-down' : 'craps-tools'}>
-              <div className="craps-meter" aria-live="polite">
-                On the felt <strong>{formatMoney(onFelt)}</strong>
-              </div>
-              {docked ? null : takeDownButton}
-              <button type="button" className="btn" onClick={chips.undo} disabled={!canChip || !chips.canUndo}>
-                Undo
-              </button>
-              <button type="button" className="btn" onClick={chips.clear} disabled={!canChip || !chips.canUndo}>
-                Clear
-              </button>
-            </div>
-            {variant.dontPass ? (
-              <>
-                <div className="craps-grid cols-4 craps-lines">{lineSpots}</div>
-                <div className="craps-grid cols-2">
-                  {comeSpot}
-                  {fieldSpot}
-                </div>
-              </>
-            ) : (
-              <div className="craps-grid cols-4 craps-lines">
-                {lineSpots}
-                {comeSpot}
-                {fieldSpot}
-              </div>
-            )}
-          </div>
-
-          <div className="craps-col">
-            <div className={`craps-grid craps-place n${placeNumbers.length}`} aria-label="Place numbers">
-              {placeNumbers.map((n) =>
-                spot({
-                  kind: 'place',
-                  number: n,
-                  name: String(n),
-                  sub: ratio(variant.place[n]),
-                  extra: point === n ? 'is-point' : '',
-                  aria: `Place ${n}, pays ${ratio(variant.place[n])}${point ? '' : ', off on the come-out'}`,
-                  cents: spotAmount(myBets, 'place', n),
-                }),
-              )}
-            </div>
-
-            {comeNumbers.length ? (
-              <div className={`craps-grid craps-come-row n${placeNumbers.length}`} aria-label="Your Come bets">
-                {comeNumbers.map((n) =>
-                  spot({
-                    kind: 'comeOdds',
-                    number: n,
-                    name: String(n),
-                    sub: `Come ${shortMoney(myBets.comeOn[n].bet)}${point ? '' : ' off'}`,
-                    extra: 'come-on',
-                    aria: `Come bet ${formatMoney(myBets.comeOn[n].bet)} on ${n}; tap for Odds (${ratio(variant.odds[n])}, at most ${formatMoney(spotLimitCents(variant, myBets, 'comeOdds', n))})`,
-                    cents: myBets.comeOn[n].odds,
-                  }),
-                )}
-              </div>
-            ) : null}
-
-            <div className="craps-grid cols-4 craps-hard" aria-label="Hard ways">
-              {Object.keys(variant.hardWays).map((key) => {
-                const n = Number(key);
-                return spot({
-                  kind: 'hard',
-                  number: n,
-                  name: `Hard ${n}`,
-                  sub: ratio(variant.hardWays[n]),
-                  aria: `Hard ${n} (${n / 2} and ${n / 2}), pays ${ratio(variant.hardWays[n])}`,
-                  cents: spotAmount(myBets, 'hard', n),
-                });
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
+  // Seats, last rolls, Leave seat, help and rules: in the Table sheet, or under the felt on tall upright screens.
+  const tableInfo = (
+    <>
+      <p className="cs-info-status">{status}</p>
       <TableSeats seats={seats} myUid={myUid} canSit={!mySeat} sitting={busy === 'sit'} onSit={(seat) => run('sit', 'sit', { seat })} detail={seatDetail} />
 
       <div className="card">
@@ -499,7 +373,7 @@ export default function CrapsPage({ game }) {
       ) : (
         <div className="card watch-note">
           <strong>You're watching.</strong>
-          <span className="muted small">{firstOpen >= 0 ? 'Tap Sit down above, or an empty seat, to play.' : 'All 5 seats are taken. You can keep watching.'}</span>
+          <span className="muted small">{firstOpen >= 0 ? 'Tap Sit down, or an empty seat, to play.' : 'All 5 seats are taken. You can keep watching.'}</span>
         </div>
       )}
 
@@ -508,34 +382,141 @@ export default function CrapsPage({ game }) {
           ? 'You are leaving: line, Come and Odds bets play out, then the seat frees and Place, Field and Hard ways come back.'
           : takeDown
             ? 'Take down: tap one of your bets to take all of it down (Pass and Don’t Pass stay up once a Point is set; a Come bet on its number stays, its Odds can come down).'
-            : `Pick a chip and tap a spot; each tap adds a chip. ${BET_HELP_TEXT} Odds up to ${variant.oddsMultiple}× their line bet.`}
+            : `Pick a chip and tap a bet on the table; each tap adds a chip. ${BET_HELP_TEXT} Odds up to ${variant.oddsMultiple}× their line bet. A Come bet on its number shows as a chip marked C; tap it to add Odds.`}
       </p>
 
       <p className="muted small table-rules">
         {game === 'crapless'
           ? 'Come-out: 7 wins; every other number becomes the Point (no craps, no Don’t Pass). '
           : 'Come-out: 7 or 11 wins, 2, 3 or 12 loses; Don’t Pass wins on 2 or 3 and pushes on 12. '}
-        Pass, Don’t Pass and Come pay 1:1. Odds pay true odds ({placeNumbers.map((n) => `${n} ${ratio(variant.odds[n])}`).join(', ')}), up to{' '}
+        Pass, Don’t Pass and Come pay 1:1. Odds pay true odds ({variant.points.map((n) => `${n} ${ratio(variant.odds[n])}`).join(', ')}), up to{' '}
         {variant.oddsMultiple}× their line bet{variant.dontPass ? '; Don’t Pass Odds pay the inverse' : ''}. Come bets work like a new Pass bet on the
         next roll ({variant.comeOutPassWins.join(' or ')} wins{variant.comeOutPassLoses.length ? `, ${variant.comeOutPassLoses.join(', ')} loses` : ''}), then
-        move to their number; Come Odds are off on the come-out. Place bets pay {placeNumbers.map((n) => `${n} ${ratio(variant.place[n])}`).join(', ')} and,
+        move to their number; Come Odds are off on the come-out. Place bets pay {variant.points.map((n) => `${n} ${ratio(variant.place[n])}`).join(', ')} and,
         like Hard ways, are off on the come-out. Field: 3, 4, 9, 10, 11 pay 1:1; 2 and 12 pay 2:1. Hard 4 and 10 pay {ratio(variant.hardWays[4])}, Hard 6
         and 8 pay {ratio(variant.hardWays[6])} and stay up after a win. With 2 or more players the shooter has 30 s to roll, then the dice roll themselves;
         a player alone rolls when they tap Roll. One seat per player.
       </p>
+    </>
+  );
 
-      <Link to="/casino" className="btn btn-ghost small craps-back">
-        ‹ Casino
-      </Link>
+  return (
+    <section className={['craps-stage', mySeat ? 'seated' : 'watching', rolling ? 'is-rolling' : ''].filter(Boolean).join(' ')} data-game={game}>
+      <HideAppChrome />
 
-      {docked && mySeat ? (
-        <div className="craps-dock">
-          {rack}
-          <div className={rollButton ? 'craps-dock-row' : 'craps-dock-row solo'}>
-            {takeDownButton}
-            {rollButton}
-          </div>
+      <header className="craps-bar cs-top">
+        <Link to="/casino" className="cs-back" aria-label="Back to the casino">
+          ‹
+        </Link>
+        <h2 className="cs-name">{variant.name}</h2>
+
+        <div className="cs-status">
+          <span className={point ? 'cs-point on' : 'cs-point'} aria-label={point ? `Puck on ${point}` : 'Puck off'}>
+            <span className="cs-puck">{point ? 'ON' : 'OFF'}</span>
+            <span className="cs-point-text">{point ? `Point ${point}` : 'Come-out'}</span>
+          </span>
+          <span className="craps-dice">
+            <Die value={lastRoll?.dice?.[0] ?? 1} rolling={rolling} />
+            <Die value={lastRoll?.dice?.[1] ?? 1} rolling={rolling} />
+          </span>
+          <span className="cs-rolled" aria-live="polite">
+            {lastRoll ? (
+              rolling ? (
+                <span className="craps-roll-text">Rolling…</span>
+              ) : (
+                <>
+                  <span className="craps-roll-text">
+                    <span className="roll-total">{lastRoll.total}</span>
+                    <span className="roll-word">Rolled</span>
+                  </span>
+                  {lastKind ? <span className="cs-kind">{lastKind}</span> : null}
+                </>
+              )
+            ) : (
+              <span className="craps-roll-text">No rolls yet</span>
+            )}
+          </span>
+          <span className="cs-shooter" role="status" title={status}>
+            {status}
+          </span>
         </div>
+
+        <div className="cs-meta">
+          <span className="cs-players" aria-label={`${players} ${players === 1 ? 'player' : 'players'} at the table`}>
+            <span aria-hidden="true">👥</span> {players}
+          </span>
+          {deadline && !rolling ? (
+            <span className={seconds !== null && seconds <= 5 ? 'cs-count urgent' : 'cs-count'} aria-label={`${seconds ?? 0} seconds to roll`}>
+              {seconds ?? 0}
+            </span>
+          ) : null}
+          {inlineInfo ? null : (
+            <button type="button" className="btn cs-table-btn" aria-haspopup="dialog" aria-expanded={sheetOpen} onClick={() => setSheetOpen(true)}>
+              Table
+            </button>
+          )}
+          <ChatButton chat={chat} compact />
+        </div>
+      </header>
+
+      <div className={rolling ? 'cs-felt-wrap dim' : 'cs-felt-wrap'}>
+        <CrapsFelt
+          variant={variant}
+          point={point}
+          bets={myBets}
+          takeDown={takeDown}
+          oddsMax={oddsMax}
+          dontOddsMax={dontOddsMax}
+          blockedOf={blockedOf}
+          onTap={tapSpot}
+          disabled={!mySeat}
+        />
+      </div>
+
+      <aside className="cs-rail" aria-label="Chips and rolling">
+        <div className="cs-money" aria-live="polite">
+          <span className="cs-bal">
+            Wallet <strong>{formatMoney(walletCents)}</strong>
+          </span>
+          <span className="craps-meter">
+            On the felt <strong>{formatMoney(onFelt)}</strong>
+          </span>
+        </div>
+        {mySeat ? (
+          <>
+            <CrapsRack
+              chip={chip}
+              takeDown={takeDown}
+              disabled={!canChip}
+              onChip={(d) => {
+                setChip(d);
+                setTakeDown(false);
+              }}
+            />
+            <div className="cs-tools">
+              <button type="button" className="btn" onClick={chips.undo} disabled={!canChip || !chips.canUndo}>
+                Undo
+              </button>
+              <button type="button" className="btn" onClick={chips.clear} disabled={!canChip || !chips.canUndo}>
+                Clear
+              </button>
+              <button type="button" aria-pressed={takeDown} className={takeDown ? 'btn take-down active' : 'btn take-down'} onClick={() => setTakeDown((v) => !v)} disabled={!canChip}>
+                Take down
+              </button>
+            </div>
+          </>
+        ) : null}
+        <p className={message ? 'cs-msg error' : 'cs-msg'} role={message ? 'alert' : undefined}>
+          {message || hint || (mySeat ? '' : 'You are watching.')}
+        </p>
+        <div className="cs-roll">{rollArea}</div>
+      </aside>
+
+      {inlineInfo ? <div className="cs-info">{tableInfo}</div> : null}
+      {!inlineInfo && sheetOpen ? (
+        <TableSheet title={`${variant.name} table`} onClose={closeSheet}>
+          {tableInfo}
+        </TableSheet>
       ) : null}
 
       <ChatDrawer chat={chat} />
