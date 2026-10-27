@@ -5,6 +5,38 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.20.0 (Will, 2026-10-27 02:57 CT) — COMPLETE (2026-10-27), merged to main, ready for Will to test
+Spec: Will's message of 02:57 ("Slots paytable, win line and big wins, autospin, casino sounds"). 0.19.0 merged first
+(main = 284cb79). Client only: no server, rules or money change; every spin is the normal /api/casino spin call.
+No firestore.rules change; nothing to publish.
+
+### Checklist
+- [x] 1 Paytable sheet: PaytableSheet.jsx (chat drawer sheet classes), a Paytable button in the Slots top bar; rows read from
+      PAYTABLE with "N×" and the payout for the current bet. Replaces the paytable card that sat under the machine.
+- [x] 2 Win line + count-up: Reel `glow` (the Cherries for a Cherry line, all three otherwise), `.win-line` drawn over the
+      payline, WinCount from $0 over 1 s. Big win (winCents >= 10 × betCents): BigWin banner + 18 CSS coins, 2.5 s, a tap
+      skips; reduced motion: banner + amount, no coins, no animations.
+- [x] 3 Autospin: Auto → 10 / 25 / 50, stop on Any win / 10× bet / Don't stop; run = { total, done, rule, bet } in state +
+      ref; land() decides the stop (count, rule, the reply's balanceCents < bet); one effect sends the next spin 900 ms after
+      a landing, never while busy or during a Big win; a failed spin, Stop, leaving the page (unmount) or a hidden tab end it.
+      "Auto 3/10" + a big red Stop; chips, bet and Undo / Clear locked.
+- [x] 4 Sounds: src/lib/casinoSound.js (Web Audio oscillators + filtered noise; no files): chip (useChipBetting.place and
+      Slots), card (PlayingCard slide), diceRattle / diceLand + win (CrapsPage), reelSpin loop / reelStop / win / bigWin (Slots),
+      win (ResultFx). SoundToggle.jsx in every casino top bar and the lobby; 'backyardbook.casinoSound' in localStorage
+      (try/catch), on by default, useSyncExternalStore, synced across tabs; AudioContext created on the first
+      pointerdown / keydown, suspended while hidden, closed when the last casino page unmounts; vibrate(30) on win / bigWin.
+- [x] 5 Harness: shoot.mjs slots-paytable, slots-auto-panel, slots-auto-running, slots-big-win, casino-lobby-sound;
+      interact.mjs: paytable vs PAYTABLE ($5 bet), autospin (count down to 10/10 with no spin before the last landed, a new
+      requestId each; Any win; 10× bet ignoring a small win; short wallet; failed spin; Stop; leaving; hidden tab), win line
+      and count-up, Big win (2.5 s, tap to skip, reduced motion), sound toggle (one 44×44 button on all six pages, off survives
+      a reload, shared between games, no sound asked for while muted). Pages log requested sounds to window.__soundLog
+      when the harness puts an array there.
+- [x] 6 Version 0.20.0, README, casino and phone-check notes, test:all, eslint, build, phone check, merge to main.
+Decisions: the inline paytable card is replaced by the sheet (one place, read from PAYTABLE). Autospin waits 0.9 s after each
+result and through a Big win before the next spin. The Big win's 10× is the server's winCents against the spin's betCents.
+Checks: test:all (all suites pass), eslint clean, build ok, interact 70/70, dealcheck 8/8, shoot 62 screens (Slots and the
+lobby at 320/375/414; Blackjack, Baccarat, Craps, Crapless and chat at their sizes) with no overflow, no small buttons, no errors.
+
 ## Phase 0.19.0 (Will, 2026-10-20 23:01 CT) — COMPLETE (2026-10-21), merged to main, ready for Will to test
 Spec: Will's attachment of 23:01 ("Blackjack and Baccarat table look, Rebet, hand totals and win effects, Baccarat squeeze,
 one chip style everywhere"). 0.18.1 merged first (main = 9a15e6d). Fresh wip. Look and client only: server, betting rules,

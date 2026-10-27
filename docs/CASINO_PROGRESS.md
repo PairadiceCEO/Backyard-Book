@@ -125,3 +125,14 @@ per round key (module-level set, so remounts and React's dev double-mount can't 
 (`lastBet` / `lastBets`), through chips.place. Squeeze: PeelCard (a CSS animation as long as the 1.5 s gap, with a negative delay worked
 out at mount, so it ends on coupRevealTimes' time on every phone). Details and decisions in PROGRESS.md 0.19.0.
 
+## 0.20.0 (2026-10-27): Slots paytable, win line and big wins, autospin, casino sounds
+Client only. SlotsPage.jsx: PaytableSheet.jsx (chat drawer sheet classes; rows from PAYTABLE), Reel `glow`, `.win-line`, WinCount /
+BigWin (SlotWinFx.jsx; Big win = winCents >= 10 × betCents, 2.5 s, tap to skip), autospin as state + one effect: a run is
+{ total, done, rule, bet }; land() decides whether it stops (autoStopReason: count, rule, outcome.balanceCents < bet); the effect
+sends the next spin AUTO_GAP_MS after a landing (never while busy or during a Big win); a failed spin, Stop, unmount or
+visibilitychange → hidden end it. src/styles/slots.css. Sounds: src/lib/casinoSound.js (Web Audio oscillators + filtered noise;
+mute in localStorage 'backyardbook.casinoSound', useSyncExternalStore; AudioContext created on the first pointerdown/keydown,
+suspended while hidden, closed when the last page using it unmounts; navigator.vibrate(30) on win / bigWin). SoundToggle.jsx in every
+casino top bar and the lobby. Hooks: useChipBetting.place (chip), PlayingCard slide (card), ResultFx (win), CrapsPage (dice), Slots
+(reels, win, big win). Details in PROGRESS.md 0.20.0.
+

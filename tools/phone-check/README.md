@@ -16,6 +16,11 @@ covers Rebet / Rebet ×2 (totals, one request, a double tap, a tap while a batch
 pills, the "+$" float and chip slide at results (and reduced motion), and the Baccarat squeeze finishing on its reveal time;
 `dealcheck.mjs` also checks that cards slide from the shoe without changing when they show.
 
+Since 0.20.0: Slots screens `slots-paytable`, `slots-auto-panel`, `slots-auto-running`, `slots-big-win` and the lobby with its sound
+button; `interact.mjs` checks the paytable against PAYTABLE, every autospin stop rule (with a mocked spin that also checks no spin
+is sent before the last one has landed), the win line / count-up / Big win, and the sound toggle persisting across reloads and games.
+Pages log the sounds they ask for to `window.__soundLog` when the harness puts an array there.
+
 1. Copy the repo somewhere temporary, then put `mocks/` there as `harness-mocks/` and
    `vite.harness.config.mjs` at its root; `npm install`.
 2. Start it: `VITE_FIREBASE_API_KEY=x VITE_FIREBASE_AUTH_DOMAIN=x VITE_FIREBASE_PROJECT_ID=x VITE_FIREBASE_APP_ID=x npx vite --config vite.harness.config.mjs` (port 5199).

@@ -36,6 +36,8 @@ import { useChipBetting } from '../../hooks/useChipBetting.js';
 import { useMediaQuery } from '../../hooks/useMediaQuery.js';
 import { useCasinoChat } from '../../hooks/useCasinoChat.js';
 import { ChatButton, ChatDrawer } from '../../components/casino/CasinoChat.jsx';
+import SoundToggle from '../../components/casino/SoundToggle.jsx';
+import { playSound } from '../../lib/casinoSound.js';
 import { newRequestId } from '../../lib/casino.js';
 import { ensureFeltFont } from '../../lib/feltFont.js';
 import { formatMoney } from '../../lib/format.js';
@@ -192,6 +194,19 @@ export default function CrapsPage({ game }) {
   useEffect(() => {
     ensureFeltFont();
   }, []);
+
+  // 0.20.0 sounds: the dice rattle as they start to tumble and knock when they land; my win this roll chimes once they show.
+  const wasRolling = useRef(rolling);
+  const myRollNet = mySeat?.lastRoll && mySeat.lastRoll.seq === table?.rollSeq ? mySeat.lastRoll.netCents : 0;
+  useEffect(() => {
+    if (rolling === wasRolling.current) return;
+    wasRolling.current = rolling;
+    if (rolling) playSound('diceRattle');
+    else {
+      playSound('diceLand');
+      if (myRollNet > 0) playSound('win');
+    }
+  }, [rolling, myRollNet]);
 
   useEffect(() => {
     call('tick').catch(() => {}); // through call: the reply's table shows at once
@@ -461,6 +476,7 @@ export default function CrapsPage({ game }) {
               Table
             </button>
           )}
+          <SoundToggle className="cs-sound" />
           <ChatButton chat={chat} compact />
         </div>
       </header>

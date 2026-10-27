@@ -256,6 +256,12 @@ const scenarios = [
   S('admin-system', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'System' }).click(); await p.waitForTimeout(200); } }),
   // 0.17.0 casino chat: every game page with the drawer closed (unread badge) and open; the admin's Delete + confirm.
   S('slots-no-chat', '/casino/slots', { admin: false, user: 'u1' }),
+  // 0.20.0: the Paytable sheet, Autospin running, a Big win (the mocked spin is Red 7 × 3 on a $2 bet: 300×).
+  S('slots-paytable', '/casino/slots', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('button', { name: 'Paytable' }).click(); await p.waitForTimeout(200); } }),
+  S('slots-auto-panel', '/casino/slots', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('button', { name: 'Auto', exact: true }).click(); await p.waitForTimeout(150); } }),
+  S('slots-auto-running', '/casino/slots', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('button', { name: 'Auto', exact: true }).click(); await p.getByRole('radio', { name: "Don't stop" }).click(); await p.getByRole('button', { name: /^Start Auto/ }).click(); await p.waitForTimeout(500); } }),
+  S('slots-big-win', '/casino/slots', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('button', { name: /^Spin/ }).click(); await p.waitForTimeout(2100); } }),
+  S('casino-lobby-sound', '/casino', { admin: false, user: 'u1' }),
   S('chat-blackjack', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting) }),
   S('chat-blackjack-open', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting), act: openChat }),
   S('chat-baccarat', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.betting) }),

@@ -14,6 +14,7 @@
 //   onPending  (cents) → chips not confirmed yet, so the wallet can show them as spent
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { playSound } from '../lib/casinoSound.js';
 
 export const BATCH_MS = 300;
 export const BET_CHANGED_MESSAGE = 'Your bet changed, try again';
@@ -156,6 +157,7 @@ export function useChipBetting({ spots, roundKey, validate, send, onPending, ena
         return false;
       }
       setError('');
+      playSound('chip'); // 0.20.0: a chip going down (sound only; the batching is unchanged)
       const id = nextId.current++;
       setQ([...queuedRef.current, { id, spot, cents }]);
       setH([...historyRef.current, { id, spot, cents }]);
