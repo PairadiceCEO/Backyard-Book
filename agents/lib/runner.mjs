@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { usernameToEmail } from '../../shared/constants.js';
 import { createTools, estimateTokens, toolDefs } from './tools.mjs';
-import { ProviderError, makeAdapter } from './providers.mjs';
+import { CACHE_READ_WEIGHT, CACHE_WRITE_WEIGHT, ProviderError, makeAdapter } from './providers.mjs';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 
@@ -35,11 +35,12 @@ export function renderPrompt(template, limits) {
   return String(template).replaceAll('{{MAX_SEARCHES}}', String(limits.maxSearches)).replaceAll('{{MAX_TURNS}}', String(limits.maxTurns));
 }
 
-// What the next model request will add to the run's input total: the conversation so far (the last request's input plus the
-// reply it got) plus the new tool results. A deliberately cautious count (3.5 characters per token) for the new text.
-export function nextTurnEstimate({ lastInput, lastOutput, results }) {
-  const newText = results ? Math.ceil(JSON.stringify(results).length / 3.5) : 0;
-  return lastInput + lastOutput + newText;
+// What the next model request will add to the run's input total: the conversation so far (the last request's size plus the reply
+// it got) plus the new tool results, cautiously counted at 3.5 characters per token. When the last request used the prompt cache
+// the re-sent conversation counts 0.1x and only the new text (the reply and the results) 1.25x, the same weights the budget uses.
+export function nextTurnEstimate({ lastInput, lastRaw = lastInput, lastOutput, cached = false, results }) {
+  const newText = (results ? Math.ceil(JSON.stringify(results).length / 3.5) : 0) + lastOutput;
+  return cached ? Math.ceil(CACHE_READ_WEIGHT * lastRaw + CACHE_WRITE_WEIGHT * newText) : lastRaw + newText;
 }
 
 export function redactor(secrets) {
@@ -118,7 +119,11 @@ export function formatSummary(s) {
   lines.push(`Searches: ${s.searches} of ${s.limits.maxSearches}${s.searchFailures ? ` (${s.searchFailures} unavailable or failed)` : ''}`);
   lines.push(`Model turns: ${s.turns} of ${s.limits.maxTurns}`);
   if (s.retries) lines.push(`Retries: ${s.retries} (provider was busy; waited 60 s and tried once more)`);
-  lines.push(`Tokens: ${s.usage.input.toLocaleString('en-US')} in / ${s.usage.output.toLocaleString('en-US')} out`);
+  lines.push(`Tokens: ${s.usage.input.toLocaleString('en-US')} in / ${s.usage.output.toLocaleString('en-US')} out${s.usage.cacheRead || s.usage.cacheWrite ? ` (input is billed-equivalent: ${s.usage.cacheRead.toLocaleString('en-US')} read from cache at 0.1x, ${s.usage.cacheWrite.toLocaleString('en-US')} written to cache at 1.25x)` : ''}`);
+  if (s.trace.length) {
+    lines.push('Turn by turn (input is what the budget counts; tool results are about chars / 4):');
+    for (const t of s.trace) lines.push(`- Turn ${t.turn}: ${t.input.toLocaleString('en-US')} in${t.cacheRead ? ` (${t.cacheRead.toLocaleString('en-US')} read from cache)` : ''} · ${t.output.toLocaleString('en-US')} out${t.tools.length ? ` · ${t.tools.map((x) => `${x.name} ≈${x.tokens.toLocaleString('en-US')}`).join(', ')}` : ''}`);
+  }
   lines.push(`Estimated cost: ${s.costUsd === null ? 'unknown (model not in agents/prices.json)' : `$${s.costUsd.toFixed(4)}`}`);
   if (s.finalText) lines.push(`Agent's note: ${s.finalText.replace(/\s+/g, ' ').slice(0, 600)}`);
   return lines.join('\n');
@@ -136,7 +141,7 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
   const password = env[`AGENT_${cfg.secret}_PASSWORD`] || env.AGENT_PASSWORD;
   const apiKey = env[cfg.keyVar];
   const redact = redactor([password, apiKey, env.VITE_FIREBASE_API_KEY, env.ANTHROPIC_API_KEY, env.OPENAI_API_KEY, env.GEMINI_API_KEY]);
-  const summary = { agentId, provider: cfg.provider, model, outcome: 'skipped', stopReason: '', retries: 0, bets: [], refusals: [], searches: 0, searchFailures: 0, turns: 0, usage: { input: 0, output: 0 }, costUsd: 0, balanceCents: null, finalText: '', limits };
+  const summary = { agentId, provider: cfg.provider, model, outcome: 'skipped', stopReason: '', retries: 0, bets: [], refusals: [], searches: 0, searchFailures: 0, turns: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, trace: [], costUsd: 0, balanceCents: null, finalText: '', limits };
   const finish = () => {
     summary.costUsd = estimateCost(prices ?? JSON.parse(readFileSync(here('../prices.json'), 'utf8')), cfg.provider, model, summary.usage, summary.searches);
     return { summary, text: redact(formatSummary(summary)) };
@@ -162,6 +167,8 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
   const addUsage = (u) => {
     summary.usage.input += Number(u?.input) || 0;
     summary.usage.output += Number(u?.output) || 0;
+    summary.usage.cacheRead += Number(u?.cacheRead) || 0;
+    summary.usage.cacheWrite += Number(u?.cacheWrite) || 0;
   };
   const overTokens = () => summary.usage.input >= limits.maxInput || summary.usage.output >= limits.maxOutput;
   const tools = createTools({
@@ -188,7 +195,7 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
 
   summary.outcome = 'ran';
   let results = null;
-  let last = { input: 0, output: 0 }; // the previous request's own token counts (0 before the first turn)
+  let last = { raw: 0, output: 0, cached: false }; // the previous request's own token counts (0 before the first turn)
   const capLine = () => `token cap reached (${summary.usage.input} in of ${limits.maxInput}, ${summary.usage.output} out of ${limits.maxOutput})`;
   try {
     while (true) {
@@ -201,7 +208,7 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
         break;
       }
       // Before sending: would this request take the run's input total over its budget? Then end the run here.
-      const next = results ? nextTurnEstimate({ lastInput: last.input, lastOutput: last.output, results }) : estimateTokens(`${system}\n${opening}`);
+      const next = results ? nextTurnEstimate({ lastRaw: last.raw, lastOutput: last.output, cached: last.cached, results }) : estimateTokens(`${system}\n${opening}`);
       if (summary.usage.input + next > limits.maxInput) {
         summary.stopReason = `${capLine()}; the next turn would add about ${next} and was not sent`;
         break;
@@ -209,12 +216,15 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
       const step = await ai.turn(results ?? [], results ? null : opening);
       summary.turns += 1;
       addUsage(step.usage);
-      last = { input: Number(step.usage?.input) || 0, output: Number(step.usage?.output) || 0 };
+      last = { raw: Number(step.usage?.raw ?? step.usage?.input) || 0, output: Number(step.usage?.output) || 0, cached: (Number(step.usage?.cacheRead) || 0) + (Number(step.usage?.cacheWrite) || 0) > 0 };
+      const entry = { turn: summary.turns, input: Number(step.usage?.input) || 0, cacheRead: Number(step.usage?.cacheRead) || 0, output: last.output, tools: [] };
+      summary.trace.push(entry);
       if (step.text) summary.finalText = step.text;
       if (!step.calls.length) break; // the model is done for the day
       results = [];
       for (const call of step.calls) {
         const output = await tools.run(call.name, call.args);
+        entry.tools.push({ name: call.name, tokens: estimateTokens(output) });
         results.push({ id: call.id, providerId: call.providerId, name: call.name, output });
       }
       if (overTokens()) {

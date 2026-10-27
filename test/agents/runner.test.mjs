@@ -306,13 +306,13 @@ test('anthropic adapter: tools, tool_use → calls, tool_result back; search = t
   const a = anthropicAdapter({ apiKey: 'k', model: 'claude-haiku-5-5', system: 'sys', tools: TOOL_DEFS, fetchImpl: p.fetchImpl });
   const t1 = await a.turn([], 'hi');
   assert.deepEqual(t1.calls, [{ id: 'tu_1', name: 'get_board', args: { league: 'nfl' } }]);
-  assert.deepEqual(t1.usage, { input: 1200, output: 40 });
+  assert.deepEqual(t1.usage, { input: 1200, output: 40, raw: 1200, cacheRead: 0, cacheWrite: 0 });
   assert.equal(p.sent[0].headers['x-api-key'], 'k');
   assert.equal(p.sent[0].headers['anthropic-version'], '2023-06-01');
   assert.equal(p.sent[0].body.tools.find((t) => t.name === 'place_bet').input_schema.type, 'object');
   const t2 = await a.turn([{ id: 'tu_1', name: 'get_board', output: { games: [] } }]);
   assert.equal(t2.text, 'Done.');
-  assert.deepEqual(p.sent[1].body.messages.at(-1), { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu_1', content: '{"games":[]}' }] });
+  assert.deepEqual(p.sent[1].body.messages.at(-1), { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu_1', content: '{"games":[]}', cache_control: { type: 'ephemeral' } }] });
   assert.equal(p.sent[1].body.messages[1].role, 'assistant');
   const s = await a.search('Texans injuries');
   assert.deepEqual(p.sent[2].body.tools, [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }]);
