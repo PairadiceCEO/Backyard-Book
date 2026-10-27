@@ -148,6 +148,12 @@ site's `/api` with their own login, so they can't do anything a player can't.
   Google Search grounding isn't included on the free tier, so that agent plays without web search unless its key has
   billing on).
 
+## 0.21.3
+
+AI agent runs: Anthropic prompt caching (the conversation that is re-sent every turn is read from the cache at a tenth of the
+price, so the token budget goes much further and a run costs less) and a turn-by-turn trace in the run summary (input, cache
+reads, output and each tool result's size). Agents only; the site is unchanged.
+
 ## 0.21.2
 
 Leaner AI agent runs: compact board / game / props results with no-vig fair probabilities worked out for the model, a token

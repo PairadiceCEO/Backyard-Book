@@ -5,21 +5,30 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.21.3 (Will, 2026-10-27 11:33 CT) — IN PROGRESS
+## Phase 0.21.3 (Will, 2026-10-27 11:33 CT) — COMPLETE (2026-10-27), merged to main, ready for Will to test
 Spec: "go ahead" after the first 0.21.2 logs (claude-big stopped at 39,843 of 40,000 after 4 turns, claude-small 32,675 after 3,
 both passed without deciding; openai finished at 25,853; gemini 503 twice, skipped after the retry). The input cap is a total over
 the run and every request re-sends the conversation, so it grows with turns squared. Agents only: nothing under server/, no
 house-rule change, no firestore.rules change, no index, /api still 7.
 
 ### Checklist
-- [ ] 1 Per-turn trace in the run summary: for each turn the input / output tokens, cache read, and each tool called with the
+- [x] 1 Per-turn trace in the run summary: for each turn the input / output tokens, cache read, and each tool called with the
       size of its result (chars / 4), so the heavy result is visible.
-- [ ] 2 Anthropic prompt caching: cache_control on the system prompt and on the last block of the conversation (never more than
+- [x] 2 Anthropic prompt caching: cache_control on the system prompt and on the last block of the conversation (never more than
       two breakpoints); usage reports cache read / write; the budget and the cost count billed-equivalent tokens (read 0.1x,
       write 1.25x); the pre-turn estimate uses the same weights once a cache exists.
-- [ ] 3 Tests (request has exactly the right breakpoints, usage maths, budget with caching, trace lines); version 0.21.3; PROGRESS
+- [x] 3 Tests (request has exactly the right breakpoints, usage maths, budget with caching, trace lines); version 0.21.3; PROGRESS
       and agents/README.md; all CLAUDE.md checks; merge wip to main.
-Decisions so far:
+Decisions:
+- Billed-equivalent budget: for Anthropic, usage.input = plain + 1.25 x cache writes + 0.1 x cache reads, so AGENT_MAX_INPUT_TOKENS
+  now measures cost, not conversation size. The pre-turn estimate uses the same weights once the last request used the cache,
+  and counts everything at full weight before that (cautious). Summary numbers (cost estimate too) are billed-equivalent.
+- Breakpoints are put on a copy of the request each turn (system + last block), never accumulating past two (the API allows four).
+  Models need a minimum prompt length to cache (about 1-4k tokens depending on the model): below it nothing is cached and the
+  numbers are the same as before, no error.
+- OpenAI and Gemini cache automatically on their side; their numbers are unchanged (OpenAI's run was $0.003 anyway).
+- The trace shows tool result sizes as chars / 4 of the JSON (not a real tokenizer), so compare turns with each other.
+- Suggested variable for Will: AGENT_MAX_INPUT_TOKENS around 120000 (a cached Sonnet run is far cheaper than that implies).
 
 ## Phase 0.21.2 (Will, 2026-10-27 05:12 CT) — COMPLETE (2026-10-27), merged to main, ready for Will to test
 Spec: Will's message of 05:12 ("leaner agent runs (compact boards), one retry when a provider is busy, correct search count in

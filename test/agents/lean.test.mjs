@@ -309,11 +309,81 @@ test('prompt: the real searches and turns from the settings, filled in by the ru
     return api({})(u, init);
   };
   await runAgent({ agentId: 'claude-big', env: { ...ENV, AGENT_MAX_SEARCHES: '3', AGENT_MAX_TURNS: '12' }, fetchImpl, now: () => NOW, prices: PRICES });
-  assert.match(sent.system, /at most 3 searches in a session/);
-  assert.match(sent.system, /at most 12 model turns/);
+  assert.match(sent.system[0].text, /at most 3 searches in a session/);
+  assert.match(sent.system[0].text, /at most 12 model turns/);
   assert.match(sent.tools.find((t) => t.name === 'web_search').description, /At most 3 searches/);
   // Defaults when nothing is set: 5 searches, 25 turns.
   await runAgent({ agentId: 'claude-big', env: ENV, fetchImpl, now: () => NOW, prices: PRICES });
-  assert.match(sent.system, /at most 5 searches in a session/);
-  assert.match(sent.system, /at most 25 model turns/);
+  assert.match(sent.system[0].text, /at most 5 searches in a session/);
+  assert.match(sent.system[0].text, /at most 25 model turns/);
+});
+
+// ---- 0.21.3: Anthropic prompt caching and the per-turn trace ----
+test('caching: two breakpoints at most (system and the last block), earlier turns carry none, usage is billed-equivalent', async () => {
+  const { anthropicUsage } = await import(url('agents/lib/providers.mjs'));
+  const bodies = [];
+  const usages = [
+    { input_tokens: 500, cache_creation_input_tokens: 2000, cache_read_input_tokens: 0, output_tokens: 40 },
+    { input_tokens: 300, cache_creation_input_tokens: 700, cache_read_input_tokens: 2000, output_tokens: 20 },
+    { input_tokens: 100, cache_creation_input_tokens: 200, cache_read_input_tokens: 2700, output_tokens: 10 },
+  ];
+  const fetchImpl = async (u, init) => {
+    bodies.push(JSON.parse(init.body));
+    const n = bodies.length;
+    return { ok: true, status: 200, text: async () => JSON.stringify({ content: n < 3 ? [{ type: 'tool_use', id: `t${n}`, name: 'get_leagues', input: {} }] : [{ type: 'text', text: 'done' }], usage: usages[n - 1] }) };
+  };
+  const ad = anthropicAdapter({ apiKey: 'k', model: 'm', system: 'sys', tools: toolDefs(LIMITS), fetchImpl });
+  const t1 = await ad.turn([], 'opening');
+  const t2 = await ad.turn([{ id: 't1', name: 'get_leagues', output: { a: 1 } }], null);
+  await ad.turn([{ id: 't2', name: 'get_leagues', output: { b: 2 } }], null);
+  const count = (b) => JSON.stringify(b).split('cache_control').length - 1;
+  assert.deepEqual(bodies.map(count), [2, 2, 2], 'system + last block only, however long the conversation');
+  assert.deepEqual(bodies[2].system, [{ type: 'text', text: 'sys', cache_control: { type: 'ephemeral' } }]);
+  const lastBlock = (b) => b.messages.at(-1).content.at(-1);
+  assert.deepEqual(lastBlock(bodies[0]), { type: 'text', text: 'opening', cache_control: { type: 'ephemeral' } });
+  assert.equal(lastBlock(bodies[2]).type, 'tool_result');
+  assert.equal(bodies[2].messages.slice(0, -1).some((m) => JSON.stringify(m).includes('cache_control')), false);
+  assert.equal(bodies[2].messages.length, 5);
+  // 500 + 2000 × 1.25 = 3000; 300 + 700 × 1.25 + 2000 × 0.1 = 1375.
+  assert.deepEqual(t1.usage, { input: 3000, output: 40, raw: 2500, cacheRead: 0, cacheWrite: 2000 });
+  assert.deepEqual(t2.usage, { input: 1375, output: 20, raw: 3000, cacheRead: 2000, cacheWrite: 700 });
+  assert.deepEqual(anthropicUsage({ input_tokens: 10, output_tokens: 3 }), { input: 10, output: 3, raw: 10, cacheRead: 0, cacheWrite: 0 }, 'no cache fields, same as before');
+});
+
+test('caching: the pre-turn estimate counts a cached conversation at 0.1x and only new text at 1.25x', () => {
+  const plain = nextTurnEstimate({ lastRaw: 20000, lastOutput: 500, cached: false, results: null });
+  assert.equal(plain, 20500);
+  const cached = nextTurnEstimate({ lastRaw: 20000, lastOutput: 500, cached: true, results: null });
+  assert.equal(cached, Math.ceil(0.1 * 20000 + 1.25 * 500));
+  assert.ok(cached < plain / 5);
+});
+
+test('caching: a run with a cache fits more turns under the same budget, and the summary shows the turn-by-turn trace', async () => {
+  const boards = { nfl: fixtureBoard('nfl') };
+  const call = (name, args) => ({ id: `c${Math.random()}`, name, args });
+  // Each request sends 8,000 tokens of conversation, almost all read from the cache: 8000 × 0.1 + 200 × 1.25 = 1,050 billed.
+  const usage = { input: 1050, raw: 8000, cacheRead: 7800, cacheWrite: 200, output: 50 };
+  const steps = [{ calls: [call('get_leagues', {})] }, { calls: [call('get_board', { league: 'nfl' })] }, { calls: [call('get_leagues', {})] }, { calls: [call('get_leagues', {})] }, { calls: [call('get_leagues', {})] }, { text: 'Passing today.' }];
+  const model = scriptedModel(steps, usage);
+  const r = await runAgent({ agentId: 'claude-big', env: { ...ENV, AGENT_MAX_INPUT_TOKENS: '8000' }, fetchImpl: api(boards), now: () => NOW, adapter: model, prompt: 'p', prices: PRICES });
+  assert.equal(r.summary.turns, 6, 'uncached, 8,000-token requests would have stopped the run after the first');
+  assert.equal(r.summary.stopReason, '');
+  assert.equal(r.summary.usage.input, 6 * 1050);
+  assert.equal(r.summary.usage.cacheRead, 6 * 7800);
+  assert.match(r.text, /Tokens: 6,300 in \/ 300 out \(input is billed-equivalent: 46,800 read from cache at 0\.1x, 1,200 written to cache at 1\.25x\)/);
+  assert.match(r.text, /Turn by turn/);
+  assert.match(r.text, /- Turn 1: 1,050 in \(7,800 read from cache\) · 50 out · get_leagues ≈\d/);
+  assert.match(r.text, /- Turn 2: .* get_board ≈\d/);
+  assert.match(r.text, /- Turn 6: 1,050 in .* · 50 out$/m, 'the last turn calls no tool');
+  assert.equal(r.summary.trace.length, 6);
+  assert.ok(r.summary.trace[1].tools[0].tokens > 500, 'the board result size is recorded');
+});
+
+test('no cache fields (OpenAI, Gemini, an uncached Anthropic reply): the trace shows turns without cache text', async () => {
+  const boards = { nfl: fixtureBoard('nfl') };
+  const model = scriptedModel([{ calls: [{ id: 'c1', name: 'get_board', args: { league: 'nfl' } }] }, { text: 'pass' }], { input: 2000, output: 80 });
+  const r = await runAgent({ agentId: 'claude-big', env: ENV, fetchImpl: api(boards), now: () => NOW, adapter: model, prompt: 'p', prices: PRICES });
+  assert.match(r.text, /Tokens: 4,000 in \/ 160 out$/m);
+  assert.match(r.text, /- Turn 1: 2,000 in · 80 out · get_board ≈/);
+  assert.doesNotMatch(r.text, /billed-equivalent|read from cache/);
 });

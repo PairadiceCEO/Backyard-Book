@@ -64,6 +64,28 @@ const SEARCH_PROMPT = (q) =>
   `Search the web for: ${q}\nAnswer in at most 120 words with the facts that matter for a sports bet (injuries, lineups, weather, form, odds news), each with its date, then list up to 3 source URLs.`;
 
 // ---------- Anthropic (Messages API; web search = the web_search server tool, one use) ----------
+// Prompt caching (0.21.3): every request re-sends the whole conversation, so two cache breakpoints (the system prompt, which
+// also covers the tools, and the last block of the conversation) make the re-sent part a cache read. Breakpoints are put on a
+// copy of the request each turn, so there are never more than two. Cache reads cost 0.1x, writes 1.25x: usage.input is the
+// billed-equivalent token count (what the run's budget and cost estimate use); usage.raw is the real conversation size.
+export const CACHE_READ_WEIGHT = 0.1;
+export const CACHE_WRITE_WEIGHT = 1.25;
+export function anthropicUsage(u) {
+  const plain = Number(u?.input_tokens) || 0;
+  const write = Number(u?.cache_creation_input_tokens) || 0;
+  const read = Number(u?.cache_read_input_tokens) || 0;
+  return { input: Math.round(plain + write * CACHE_WRITE_WEIGHT + read * CACHE_READ_WEIGHT), output: Number(u?.output_tokens) || 0, raw: plain + write + read, cacheRead: read, cacheWrite: write };
+}
+const CACHE = { type: 'ephemeral' };
+function withBreakpoint(messages) {
+  const last = messages.length - 1;
+  return messages.map((m, i) => {
+    if (i !== last) return m;
+    const blocks = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content.map((b) => ({ ...b }));
+    blocks[blocks.length - 1] = { ...blocks[blocks.length - 1], cache_control: CACHE };
+    return { ...m, content: blocks };
+  });
+}
 export function anthropicAdapter({ apiKey, model, system, tools, maxOutputPerTurn = 2048, fetchImpl = fetch, sleep, retryWaitMs }) {
   const net = makeNet({ fetchImpl, sleep, retryWaitMs });
   const url = 'https://api.anthropic.com/v1/messages';
@@ -79,13 +101,13 @@ export function anthropicAdapter({ apiKey, model, system, tools, maxOutputPerTur
     async turn(results, firstText) {
       if (firstText) messages.push({ role: 'user', content: firstText });
       else messages.push({ role: 'user', content: results.map((r) => ({ type: 'tool_result', tool_use_id: r.id, content: toResultText(r.output) })) });
-      const json = await postJson('anthropic', net, url, headers, { model, max_tokens: maxOutputPerTurn, system, tools: toolDefs, messages });
+      const json = await postJson('anthropic', net, url, headers, { model, max_tokens: maxOutputPerTurn, system: [{ type: 'text', text: system, cache_control: CACHE }], tools: toolDefs, messages: withBreakpoint(messages) });
       const content = Array.isArray(json.content) ? json.content : [];
       messages.push({ role: 'assistant', content });
       return {
         calls: content.filter((b) => b.type === 'tool_use').map((b) => ({ id: b.id, name: b.name, args: b.input ?? {} })),
         text: content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim(),
-        usage: { input: Number(json.usage?.input_tokens) || 0, output: Number(json.usage?.output_tokens) || 0 },
+        usage: anthropicUsage(json.usage),
       };
     },
     async search(query) {
