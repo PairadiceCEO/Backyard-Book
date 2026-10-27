@@ -5,6 +5,25 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.20.0 (Will, 2026-10-27 02:57 CT) — IN PROGRESS
+Spec: Will's message of 02:57 ("Slots paytable, win line and big wins, autospin, casino sounds"). 0.19.0 merged first
+(main = 284cb79). Fresh wip. Client only: no server, rules or money change; every spin is the normal /api/casino spin call.
+No firestore.rules change; nothing to publish.
+
+### Checklist
+- [ ] 1 Paytable sheet (Paytable button in the Slots top bar; chat drawer sheet styles), rows read from PAYTABLE, pays for the
+      current bet beside each.
+- [ ] 2 Win line + count-up (about 1 s) on a win; Big win (>= 10x bet): banner + CSS coin shower, at most 2.5 s, tap to skip;
+      reduced motion: amount and banner only.
+- [ ] 3 Autospin: 10 / 25 / 50, stop on any win / 10x bet / don't stop; one spin at a time after the last result shows; stops on
+      count, rule, short wallet, failed spin, Stop, leaving, hidden tab; bet locked; "Auto 12/25" + big Stop.
+- [ ] 4 Sounds (src/lib/casinoSound.js, Web Audio only): chip, card, dice rattle/land, reel spin/stop, win, big win; mute button in
+      every casino top bar and the lobby (localStorage, on by default); AudioContext on the first tap; silent while hidden;
+      vibrate(30) on a win when sound is on.
+- [ ] 5 Harness: Slots screens (paytable open, autospin running, big win) at 320/375/414; interact: paytable values, autospin rules,
+      mute persisting across a reload and between games.
+- [ ] 6 Version 0.20.0, README, casino notes, test:all, eslint, build, phone check, merge to main.
+
 ## Phase 0.19.0 (Will, 2026-10-20 23:01 CT) — COMPLETE (2026-10-21), merged to main, ready for Will to test
 Spec: Will's attachment of 23:01 ("Blackjack and Baccarat table look, Rebet, hand totals and win effects, Baccarat squeeze,
 one chip style everywhere"). 0.18.1 merged first (main = 9a15e6d). Fresh wip. Look and client only: server, betting rules,
