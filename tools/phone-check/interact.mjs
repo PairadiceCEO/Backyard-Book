@@ -1875,7 +1875,9 @@ const startAuto = async (page, count, rule) => {
   await page.getByRole('radio', { name: rule }).click();
   await page.getByRole('button', { name: /^Start Auto/ }).click();
 };
-const autoNote = (page) => page.locator('.auto-note').innerText().catch(() => '');
+// Read at once (a missing element is '' now, not a 30 s wait for it to appear).
+const textNow = async (page, sel) => ((await page.locator(sel).count()) ? (await page.locator(sel).first().innerText()).trim() : '');
+const autoNote = (page) => textNow(page, '.auto-note');
 const waitNote = async (page, ms) => {
   const end = now() + ms;
   while (now() < end) {
@@ -1914,9 +1916,11 @@ await check('slots autospin: counts down 1/10 … 10/10, one spin at a time afte
   const seen = new Set();
   const end = now() + 40000;
   while (now() < end && !(await autoNote(page))) {
-    const t = await page.locator('.auto-count').innerText().catch(() => '');
-    if (t) seen.add(t.trim());
-    assert.ok(await page.getByRole('radio', { name: '$5 chip' }).isDisabled(), 'the bet is locked');
+    const t = await textNow(page, '.auto-count');
+    if (t) {
+      seen.add(t);
+      assert.ok(await page.getByRole('radio', { name: '$5 chip' }).isDisabled(), 'the bet is locked');
+    }
     await page.waitForTimeout(200);
   }
   assert.match(await autoNote(page), /Auto finished: 10 spins/);

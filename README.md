@@ -119,6 +119,14 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
 
+## 0.20.0
+
+- **Slots paytable:** the **Paytable** button opens a sheet with every winning line and what it pays for your current bet (read from the game's own paytable). It replaces the paytable card that was under the machine.
+- **Wins you can see:** the winning symbols glow, a gold line is drawn through them and the win counts up from $0. A win of 10× your bet or more is a **Big win**: a big banner and a short shower of coins (at most 2.5 s; tap to skip).
+- **Autospin:** **Auto** → 10, 25 or 50 spins, and stop on a win of at least: any win, 10× bet, or don't stop. It shows "Auto 3/10" and a big **Stop**; the bet is locked while it runs. Each spin is a normal spin, sent only after the last one has landed and shown its result. It also stops when the wallet can't cover the next spin, a spin fails, you leave the page or switch away from it.
+- **Casino sounds:** chips, cards, dice, reels, a win chime and a big-win fanfare, all made in the browser (no sound files). One 🔊 button in the top bar of every casino page and the lobby turns them off or on for every game on that phone. Sound starts after your first tap (phones require it) and never plays in the background. Android phones also buzz briefly on a win.
+- No server, payout or money change. No console step.
+
 ## 0.19.0
 
 - **Blackjack on a real felt:** green felt in a wood rail, a half-moon table with the dealer and a small shoe at the top, "BLACKJACK PAYS 3 TO 2", "DEALER MUST HIT SOFT 17" and "INSURANCE PAYS 2 TO 1" printed in an arc, and the five seats as betting circles (yours gold, other players white, empty ones dashed with "Sit"). Each circle shows its chips and the player's name. Your seat's panel and buttons stay under the table. Tap one of your own circles to switch seats.
