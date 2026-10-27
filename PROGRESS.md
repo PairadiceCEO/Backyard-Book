@@ -5,28 +5,28 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.21.0 (Will, 2026-10-27 03:16 CT) — IN PROGRESS
+## Phase 0.21.0 (Will, 2026-10-27 03:16 CT) — COMPLETE (2026-10-27), merged to main, ready for Will to set up and test
 Spec: Will's attachment of 03:16 ("AI agent players (Claude ×2, OpenAI, Gemini) that bet from their own accounts once a
 day"). 0.20.0 merged first (main = 352b71f). Agents bet only through the existing /api with a normal Firebase login.
 /api count stays 7 of 12 (no new function). No firestore.rules change (agentDaily is covered by the server-only catch-all);
 no new index (mine = two equality filters; rebuildStats and the prune use single-field queries; Agents tab = agent != null).
 
 ### Checklist
-- [ ] 1 Agent accounts: createUser / updateUser take agent { provider, label } (shared/agents.js cleanAgentProfile); Admin →
+- [x] 1 Agent accounts: createUser / updateUser take agent { provider, label } (shared/agents.js cleanAgentProfile); Admin →
       Players: "AI agent" option, Provider, Model label; edit can change or clear it (never the admin's own account).
-- [ ] 2 House rules in server/placeBet.js (AGENT_NO_CRYPTO, AGENT_NOT_ALLOWED for Challenge legs, AGENT_PREGAME_ONLY,
+- [x] 2 House rules in server/placeBet.js (AGENT_NO_CRYPTO, AGENT_NOT_ALLOWED for Challenge legs, AGENT_PREGAME_ONLY,
       AGENT_STAKE_CAP 5% floor, AGENT_DAILY_LIMIT 10 / Central day in agentDaily inside the transaction); AGENT_NO_CASHOUT;
       /api/battles (Battles + Challenge posting) 403 AGENT_NOT_ALLOWED; agentWhy (clean, 280); settle cron prunes agentDaily > 3 days.
-- [ ] 3 /api/bets action "mine" (server/agentMine.js).
-- [ ] 4 stats.stakedCents / returnedCents / settledBets / byLeague kept by settlement, cash out and admin regrades
+- [x] 3 /api/bets action "mine" (server/agentMine.js).
+- [x] 4 stats.stakedCents / returnedCents / settledBets / byLeague kept by settlement, cash out and admin regrades
       (shared/perfStats.js); adminAdjustCents kept by createUser / adjustWallet; admin action rebuildStats (dry run first).
-- [ ] 5 UI: leaderboard AI badge + label; agentWhy on bet cards (My Bets, Admin → Bets); Admin → Agents tab (cards, per league
+- [x] 5 UI: leaderboard AI badge + label; agentWhy on bet cards (My Bets, Admin → Bets); Admin → Agents tab (cards, per league
       on tap, Rebuild stats).
-- [ ] 6 agents/ runner: run.mjs, prompt.md, tools, provider adapters (anthropic, openai, google), budgets, run summary, prices.json.
-- [ ] 7 .github/workflows/agents.yml (cron 0 16 * * *, workflow_dispatch with an agent choice, matrix of 4, fail-fast off).
-- [ ] 8 Tests: test/agents/agents.test.mjs (house rules, stats, mine, rebuild) and test/agents/runner.test.mjs (mocked providers
+- [x] 6 agents/ runner: run.mjs, prompt.md, tools, provider adapters (anthropic, openai, google), budgets, run summary, prices.json.
+- [x] 7 .github/workflows/agents.yml (cron 0 16 * * *, workflow_dispatch with an agent choice, matrix of 4, fail-fast off).
+- [x] 8 Tests: test/agents/agents.test.mjs (house rules, stats, mine, rebuild) and test/agents/runner.test.mjs (mocked providers
       and /api: tool loop, LINE_CHANGED, caps, provider error, no secrets in logs).
-- [ ] 9 Version 0.21.0, README "AI agents", CLAUDE.md (agent house rules, /api still 7), all checks, merge to main.
+- [x] 9 Version 0.21.0, README "AI agents", CLAUDE.md (agent house rules, /api still 7), all checks, merge to main.
 Decisions so far:
 - A "bet slip" for the 5% cap and the 10-a-day limit is one bet doc: a parlay is one, each single in a singles request is
   one (so 3 singles in one request count 3 and each must be within 5%).
@@ -38,6 +38,18 @@ Decisions so far:
 - Gemini: Google Search grounding is "Not available" on the free tier for every current Flash model (pricing page,
   2026-10-27); a paid key includes 5,000 searches / month. The Gemini agent asks for search; if the key refuses it, the run
   goes on without search and the summary says so.
+- The search sub-call: every agent has the same web_search(query) function; the runner answers it with one request to that
+  provider's own search (Anthropic web_search tool, OpenAI web_search tool, Gemini googleSearch), so the 5-search cap is
+  exact and the tools are identical for every model.
+- Pick ids are sent as the legs' legId, so LINE_CHANGED / ODDS_CHANGED map back to the pick exactly; the runner updates
+  the pick's price and the model must call place_bet again (a new clientRequestId).
+- OpenAI default gpt-6-luna: the cheapest current text model on OpenAI's pricing page (2026-10-27, $0.10 / $0.50 per 1M),
+  Responses API, function calling and web_search supported. Gemini default gemini-3.8-flash (free tier). Claude prices in
+  agents/prices.json are estimates to verify (the Anthropic pricing page couldn't be read from here).
+- Node 22 for the workflow from a new .nvmrc (Vercel ignores it; it reads package.json engines, which is unset as before).
+Checks: test:all (11 suites incl. test:agents: 12 server + 11 runner tests), eslint clean, build ok, /api = 7 files,
+interact 70/70, dealcheck 8/8, shoot 155 scenarios (new: leaderboard-agents, admin-agents, admin-create-agent,
+admin-bets-why) with no overflow, no small buttons, no errors.
 
 ## Phase 0.20.0 (Will, 2026-10-27 02:57 CT) — COMPLETE (2026-10-27), merged to main, ready for Will to test
 Spec: Will's message of 02:57 ("Slots paytable, win line and big wins, autospin, casino sounds"). 0.19.0 merged first
