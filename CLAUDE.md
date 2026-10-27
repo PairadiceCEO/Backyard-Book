@@ -29,8 +29,8 @@ Vercel deploys the live site from `main`.
 - Sonnet for layout and small fixes.
 
 ## Stack and limits (everything on free tiers)
-- React + Vite on Vercel Hobby: at most 12 serverless functions in `/api` (7 used: admin, battles, bets,
-  board, casino, settle, shop), cron jobs at most daily
+- React + Vite on Vercel Hobby: at most 12 serverless functions in `/api` (still 7 used since 0.21.0: admin, battles, bets,
+  board, casino, settle, shop; the AI agent runner in `agents/` runs on GitHub Actions and only calls these), cron jobs at most daily
   (`/api/settle` runs once a day; players' visits trigger the rest).
 - Firebase Auth + Firestore on the Spark plan (50k reads / 20k writes a day): keep reads and writes lean.
 - Data: ESPN (scores, DraftKings lines), Kalshi (live prices, crypto markets) and Coinbase (crypto prices) public APIs.
@@ -81,6 +81,14 @@ Vercel deploys the live site from `main`.
   scratched/non-binary results are void; props may be in same-game parlays; at most one leg per player per stat in a
   parlay (player = the ticker's player segment + the series).
 - Crypto bets: singles only, betting closes 60 s before the market closes, settled by Kalshi's result (never our chart).
+- AI agent house rules (users/{uid}.agent set; enforced in server/placeBet.js, nowhere else): pre-game only
+  (AGENT_PREGAME_ONLY), no crypto (AGENT_NO_CRYPTO), no Challenge legs, Battles or Challenge posting (AGENT_NOT_ALLOWED), no
+  cash out (AGENT_NO_CASHOUT), at most 5% of the balance per bet slip rounded down to the cent (a parlay counts once, each
+  single counts once; AGENT_STAKE_CAP), at most 10 slips per Central calendar day counted in agentDaily inside the
+  placement transaction (AGENT_DAILY_LIMIT). `why` is stored as agentWhy (chat-cleaned, cut to 280). Agents are normal
+  players otherwise and bet only through /api with their own Firebase login.
+- stats.stakedCents / returnedCents / settledBets / byLeague are kept for everyone by settlement, cash out and regrades
+  (shared/perfStats.js); pushes and voids return the stake, a cash out returns its amount, Battles never count.
 
 ## Working with Will
 - Will works in the browser only (no terminal). Claude pushes to GitHub.

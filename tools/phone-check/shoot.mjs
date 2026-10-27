@@ -146,6 +146,11 @@ const scenarios = [
   S('my-bets-empty', '/my-bets', { admin: false, user: 'u9', fs: { ...fsDefault, users: [...F.users, { id: 'u9', username: 'newbie', balanceCents: 10000, stats: { won: 0, lost: 0 } }] } }),
   S('my-bets-error', '/my-bets', { admin: false, user: 'u1', fs: { ...fsDefault, bets: { error: 'The query requires an index.' } } }),
   S('leaderboard', '/leaderboard', { admin: false, user: 'u1' }),
+  // 0.21.0: AI agents on the leaderboard, Admin → Agents, the create form's agent option.
+  S('leaderboard-agents', '/leaderboard', { admin: false, user: 'u1', fs: { ...fsDefault, users: F.usersWithAgents() } }),
+  S('admin-agents', '/admin', { fs: { ...fsDefault, users: F.usersWithAgents() }, act: async (p) => { await p.getByRole('tab', { name: 'Agents' }).click(); await p.waitForTimeout(400); await p.getByRole('button', { name: /Claude Big/ }).click(); await p.waitForTimeout(150); } }),
+  S('admin-create-agent', '/admin', { act: async (p) => { await p.getByLabel(/AI agent \(bets/).check(); await p.waitForTimeout(150); } }),
+  S('admin-bets-why', '/admin', { fs: { ...fsDefault, bets: [{ ...F.bets[0], agentWhy: 'Texans ML: I make it 64% (QB back, rival on a short week) vs 60% fair.' }, ...F.bets.slice(1)] }, act: async (p) => { await p.getByRole('tab', { name: 'Bets', exact: true }).click(); await p.waitForTimeout(400); } }),
   S('leaderboard-error', '/leaderboard', { admin: false, user: 'u1', fs: { ...fsDefault, users: { error: 'Missing or insufficient permissions.' } } }),
   S('shop', '/shop', { admin: false, user: 'u1' }),
   S('casino-lobby', '/casino', { admin: false, user: 'u1', fs: withTable(tables.lobby) }),

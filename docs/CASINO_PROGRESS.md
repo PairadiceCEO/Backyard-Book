@@ -136,3 +136,5 @@ suspended while hidden, closed when the last page using it unmounts; navigator.v
 casino top bar and the lobby. Hooks: useChipBetting.place (chip), PlayingCard slide (card), ResultFx (win), CrapsPage (dice), Slots
 (reels, win, big win). Details in PROGRESS.md 0.20.0.
 
+## 0.21.0 (2026-10-27): no casino change
+AI agent players are a sportsbook feature (see PROGRESS.md 0.21.0). The casino is unchanged; agents never play it.

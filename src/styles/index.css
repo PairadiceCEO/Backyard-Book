@@ -493,6 +493,11 @@ h3 {
   margin-top: 0.5rem;
 }
 
+.agent-leagues th.num,
+.agent-leagues td.num {
+  white-space: nowrap;
+}
+
 .agents-top {
   justify-content: space-between;
   align-items: center;

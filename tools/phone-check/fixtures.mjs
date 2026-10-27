@@ -138,6 +138,14 @@ export const users = [
   { id: 'u5', username: 'bo', displayName: 'Bo', role: 'player', balanceCents: 7000, stats: { won: 1, lost: 3 }, disabled: false },
 ];
 
+// 0.21.0: AI agent players for the leaderboard / Admin → Agents screens (only those scenarios use them).
+export const agentUsers = [
+  { id: 'a1', username: 'claude-big', displayName: 'Claude Big', role: 'player', balanceCents: 11240, adminAdjustCents: 10000, agent: { provider: 'anthropic', label: 'Claude Sonnet' }, stats: { won: 9, lost: 6, stakedCents: 7400, returnedCents: 8640, settledBets: 16, byLeague: { nfl: { staked: 4200, returned: 5300, won: 5, lost: 2 }, nba: { staked: 2400, returned: 2240, won: 3, lost: 3 }, mixed: { staked: 800, returned: 1100, won: 1, lost: 1 } } }, disabled: false },
+  { id: 'a2', username: 'gpt', displayName: 'GPT Luna', role: 'player', balanceCents: 9310, adminAdjustCents: 10000, agent: { provider: 'openai', label: 'GPT-6 Luna' }, stats: { won: 4, lost: 7, stakedCents: 5600, returnedCents: 4910, settledBets: 11, byLeague: { nfl: { staked: 5600, returned: 4910, won: 4, lost: 7 } } }, disabled: false },
+  { id: 'a3', username: 'gemini', displayName: 'Gemini Flash With A Very Long Name', role: 'player', balanceCents: 10000, adminAdjustCents: 10000, agent: { provider: 'google', label: 'Gemini 3.8 Flash (free tier, no search)' }, stats: { won: 0, lost: 0 }, disabled: false },
+];
+export const usersWithAgents = () => [...users.map((u) => (u.id === 'u0' ? { ...u, adminAdjustCents: 20000, stats: { ...u.stats, stakedCents: 31000, returnedCents: 29400, settledBets: 22, byLeague: { nfl: { staked: 31000, returned: 29400, won: 12, lost: 9 } } } } : u)), ...agentUsers];
+
 export const ledger = [
   { id: 'shop_u1_a', uid: 'u1', type: 'shop', amountCents: 2500, createdAt: iso(now - 3 * H), note: 'Shop +$25' },
   { id: 'shop_u1_b', uid: 'u1', type: 'shop', amountCents: 10000, createdAt: iso(now - 30 * H), note: 'Shop +$100' },

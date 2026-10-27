@@ -1,0 +1,69 @@
+# AI agent players (0.21.0): once a day each agent plays one session from its own Backyard Book account.
+# Runs agents/run.mjs, which signs in with the agent's username and password and bets only through the site's /api
+# (the same rules as every player, plus the AI house rules enforced by the server). The run summary (bets, passes, refusals,
+# searches, tokens, estimated cost) is printed to the log and the job summary; no secrets are ever printed. This repo is public,
+# so those logs are public.
+#
+# Secrets (repo Settings → Secrets and variables → Actions → Secrets):
+#   AGENT_CLAUDE_SMALL_USERNAME, AGENT_CLAUDE_SMALL_PASSWORD, AGENT_CLAUDE_BIG_USERNAME, AGENT_CLAUDE_BIG_PASSWORD,
+#   AGENT_OPENAI_USERNAME, AGENT_OPENAI_PASSWORD, AGENT_GEMINI_USERNAME, AGENT_GEMINI_PASSWORD,
+#   ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, BB_SITE_URL, VITE_FIREBASE_API_KEY
+# Variables (same page → Variables; optional, defaults in agents/lib/runner.mjs):
+#   AGENT_CLAUDE_SMALL_MODEL (claude-haiku-5-5), AGENT_CLAUDE_BIG_MODEL (claude-sonnet-5-5), AGENT_OPENAI_MODEL (gpt-6-luna),
+#   AGENT_GEMINI_MODEL (gemini-3.8-flash), AGENT_MAX_TURNS (25), AGENT_MAX_SEARCHES (5), AGENT_MAX_INPUT_TOKENS (150000),
+#   AGENT_MAX_OUTPUT_TOKENS (20000)
+
+name: Agents
+
+on:
+  schedule:
+    - cron: '0 16 * * *' # 16:00 UTC = 11 AM Central in daylight time, 10 AM in winter; GitHub may start it late
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: Which agent to run
+        type: choice
+        default: all
+        options: [all, claude-small, claude-big, openai, gemini]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agents
+  cancel-in-progress: false
+
+jobs:
+  play:
+    name: ${{ matrix.agent }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        agent: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.agent != 'all' && format('["{0}"]', inputs.agent) || '["claude-small","claude-big","openai","gemini"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Play one session
+        env:
+          AGENT_ID: ${{ matrix.agent }}
+          # Only this agent's login and only its provider's key reach the step.
+          AGENT_USERNAME: ${{ matrix.agent == 'claude-small' && secrets.AGENT_CLAUDE_SMALL_USERNAME || matrix.agent == 'claude-big' && secrets.AGENT_CLAUDE_BIG_USERNAME || matrix.agent == 'openai' && secrets.AGENT_OPENAI_USERNAME || matrix.agent == 'gemini' && secrets.AGENT_GEMINI_USERNAME || '' }}
+          AGENT_PASSWORD: ${{ matrix.agent == 'claude-small' && secrets.AGENT_CLAUDE_SMALL_PASSWORD || matrix.agent == 'claude-big' && secrets.AGENT_CLAUDE_BIG_PASSWORD || matrix.agent == 'openai' && secrets.AGENT_OPENAI_PASSWORD || matrix.agent == 'gemini' && secrets.AGENT_GEMINI_PASSWORD || '' }}
+          ANTHROPIC_API_KEY: ${{ (matrix.agent == 'claude-small' || matrix.agent == 'claude-big') && secrets.ANTHROPIC_API_KEY || '' }}
+          OPENAI_API_KEY: ${{ matrix.agent == 'openai' && secrets.OPENAI_API_KEY || '' }}
+          GEMINI_API_KEY: ${{ matrix.agent == 'gemini' && secrets.GEMINI_API_KEY || '' }}
+          BB_SITE_URL: ${{ secrets.BB_SITE_URL }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          AGENT_CLAUDE_SMALL_MODEL: ${{ vars.AGENT_CLAUDE_SMALL_MODEL }}
+          AGENT_CLAUDE_BIG_MODEL: ${{ vars.AGENT_CLAUDE_BIG_MODEL }}
+          AGENT_OPENAI_MODEL: ${{ vars.AGENT_OPENAI_MODEL }}
+          AGENT_GEMINI_MODEL: ${{ vars.AGENT_GEMINI_MODEL }}
+          AGENT_MAX_TURNS: ${{ vars.AGENT_MAX_TURNS }}
+          AGENT_MAX_SEARCHES: ${{ vars.AGENT_MAX_SEARCHES }}
+          AGENT_MAX_INPUT_TOKENS: ${{ vars.AGENT_MAX_INPUT_TOKENS }}
+          AGENT_MAX_OUTPUT_TOKENS: ${{ vars.AGENT_MAX_OUTPUT_TOKENS }}
+        run: node agents/run.mjs "$AGENT_ID"

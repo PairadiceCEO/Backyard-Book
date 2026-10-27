@@ -36,6 +36,7 @@ function rows(target) {
     if (c.type === 'where' && c.op === '>=') list = list.filter((d) => d[c.field] != null && val(d[c.field]) >= val(c.value));
     if (c.type === 'where' && c.op === '>') list = list.filter((d) => d[c.field] != null && val(d[c.field]) > val(c.value));
     if (c.type === 'where' && c.op === '<') list = list.filter((d) => d[c.field] != null && val(d[c.field]) < val(c.value));
+    if (c.type === 'where' && c.op === '!=') list = list.filter((d) => d[c.field] !== undefined && d[c.field] !== null && JSON.stringify(d[c.field]) !== JSON.stringify(c.value));
     if (c.type === 'orderBy') list.sort((a, b) => (val(a[c.field]) < val(b[c.field]) ? -1 : val(a[c.field]) > val(b[c.field]) ? 1 : 0) * (c.dir === 'desc' ? -1 : 1));
     if (c.type === 'startAfter') { const i = list.findIndex((d) => d.id === c.id); list = i >= 0 ? list.slice(i + 1) : list; }
     if (c.type === 'limit') list = list.slice(0, c.n);
@@ -77,6 +78,12 @@ export function onSnapshot(target, next, error) {
 }
 export async function getDocs(target) {
   window.__H.getDocsCalls = (window.__H.getDocsCalls ?? 0) + 1; // the phone check counts one-off reads
+  const r = snapshotFor(target);
+  if (r.error) throw new Error(r.error);
+  return r.snap;
+}
+export async function getDoc(target) {
+  window.__H.getDocsCalls = (window.__H.getDocsCalls ?? 0) + 1;
   const r = snapshotFor(target);
   if (r.error) throw new Error(r.error);
   return r.snap;
