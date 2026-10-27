@@ -1830,6 +1830,251 @@ await check('baccarat squeeze: reduced motion: the card stays face down (no anim
   await context.close();
 });
 
+// ---------- 0.20.0: Slots paytable, autospin, big win; casino sound toggle ----------
+let SLOT;
+try {
+  SLOT = await import(new URL('../../shared/casino/slotMachine.js', import.meta.url));
+} catch {
+  SLOT = await import(new URL('../harness/shared/casino/slotMachine.js', import.meta.url)); // the copy the harness serves
+}
+const LOSS = (bal = 9540) => ({ ok: true, duplicate: false, stops: [2, 2, 1], symbols: ['BL', 'BL', 'BL'], line: null, betCents: 100, winCents: 0, balanceCents: bal, serverNow: now() });
+const CHERRY = (bal = 9740) => ({ ok: true, duplicate: false, stops: [4, 2, 1], symbols: ['CH', 'BL', 'BL'], line: { id: 'cherry1', label: 'Any one Cherry', pays: 2 }, betCents: 100, winCents: 200, balanceCents: bal, serverNow: now() });
+const BIG = (bal = 39540) => ({ ok: true, duplicate: false, stops: [14, 5, 4], symbols: ['R7', 'R7', 'R7'], line: { id: 'red7x3', label: 'Red 7 · Red 7 · Red 7', pays: 300 }, betCents: 100, winCents: 30000, balanceCents: bal, serverNow: now() });
+
+// A Slots page whose spins answer from `script` (an outcome, or 'fail'). Every spin request checks that the last spin has
+// landed: its result is in the session history (history length = spins sent before this one) and nothing is in flight.
+async function openSlots(script, { reducedMotion = 'no-preference' } = {}) {
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true, reducedMotion });
+  const page = await context.newPage();
+  const rig = { spins: [], violations: [], inFlight: 0, page, context };
+  await page.addInitScript((h) => { window.__H = h; window.__soundLog = []; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: [] } });
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
+  await page.route('**/api/**', async (route) => {
+    const u = new URL(route.request().url());
+    const body = route.request().postDataJSON?.() ?? {};
+    if (u.pathname !== '/api/casino' || body.action !== 'spin') return json(route, 200, { ok: true, serverNow: now() });
+    const n = rig.spins.length + 1;
+    const landed = await page.evaluate(() => document.querySelectorAll('.spin-history li').length).catch(() => -1);
+    if (rig.inFlight) rig.violations.push(`spin ${n} sent while another was in flight`);
+    if (landed !== n - 1) rig.violations.push(`spin ${n} sent with ${landed} results on screen`);
+    rig.spins.push({ at: now(), body });
+    rig.inFlight += 1;
+    await new Promise((r) => setTimeout(r, 120));
+    rig.inFlight -= 1;
+    const out = script[n - 1] ?? LOSS();
+    if (out === 'fail') return json(route, 500, { error: { code: 'INTERNAL', message: 'Something went wrong. Nothing was charged.' } });
+    return json(route, 200, out);
+  });
+  await page.goto(BASE + '/casino/slots', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(600);
+  return rig;
+}
+const startAuto = async (page, count, rule) => {
+  await page.getByRole('button', { name: 'Auto', exact: true }).click();
+  await page.getByRole('radio', { name: String(count), exact: true }).click();
+  await page.getByRole('radio', { name: rule }).click();
+  await page.getByRole('button', { name: /^Start Auto/ }).click();
+};
+const autoNote = (page) => page.locator('.auto-note').innerText().catch(() => '');
+const waitNote = async (page, ms) => {
+  const end = now() + ms;
+  while (now() < end) {
+    const t = await autoNote(page);
+    if (t) return t;
+    await page.waitForTimeout(150);
+  }
+  return '';
+};
+
+await check('slots paytable: every PAYTABLE line with its pays and the payout for the current bet ($5)', async () => {
+  const rig = await openSlots([]);
+  const { page } = rig;
+  await page.getByRole('button', { name: 'Clear' }).click();
+  await page.getByRole('radio', { name: '$5 chip' }).click();
+  await page.getByRole('button', { name: /^Bet \$/ }).click();
+  await page.getByRole('button', { name: 'Paytable' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Paytable' });
+  await sheet.waitFor();
+  const rows = await sheet.locator('.paytable-row').evaluateAll((els) => els.map((el) => ({ id: el.dataset.line, label: el.querySelector('.paytable-label').textContent.trim(), times: el.querySelector('.paytable-times').textContent.trim(), amount: el.querySelector('.paytable-amount').textContent.trim() })));
+  assert.equal(rows.length, SLOT.PAYTABLE.length);
+  SLOT.PAYTABLE.forEach((line, i) => {
+    assert.deepEqual(rows[i], { id: line.id, label: line.label, times: `${line.pays}×`, amount: `$${(line.pays * 5).toLocaleString('en-US')}.00` }, `row ${i}`);
+  });
+  const close = await sheet.getByRole('button', { name: 'Close paytable' }).boundingBox();
+  assert.ok(close.width >= 43.5 && close.height >= 43.5, 'close button 44×44');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.getByRole('dialog', { name: 'Paytable' }).count(), 0, 'Escape closes it');
+  await rig.context.close();
+});
+
+await check('slots autospin: counts down 1/10 … 10/10, one spin at a time after each result shows, stops at the end', async () => {
+  const rig = await openSlots([]);
+  const { page } = rig;
+  await startAuto(page, 10, "Don't stop");
+  const seen = new Set();
+  const end = now() + 40000;
+  while (now() < end && !(await autoNote(page))) {
+    const t = await page.locator('.auto-count').innerText().catch(() => '');
+    if (t) seen.add(t.trim());
+    assert.ok(await page.getByRole('radio', { name: '$5 chip' }).isDisabled(), 'the bet is locked');
+    await page.waitForTimeout(200);
+  }
+  assert.match(await autoNote(page), /Auto finished: 10 spins/);
+  assert.equal(rig.spins.length, 10);
+  assert.deepEqual(rig.violations, []);
+  for (const n of [1, 5, 10]) assert.ok(seen.has(`Auto ${n}/10`), `showed Auto ${n}/10 (${[...seen].join(', ')})`);
+  for (let i = 1; i < rig.spins.length; i += 1) assert.ok(rig.spins[i].at - rig.spins[i - 1].at >= 1600 + 900 - 150, `spin ${i + 1} came ${rig.spins[i].at - rig.spins[i - 1].at} ms after the last`);
+  assert.ok(rig.spins.every((s) => s.body.amount === 1 && typeof s.body.requestId === 'string'), 'each spin is the normal spin call');
+  assert.equal(new Set(rig.spins.map((s) => s.body.requestId)).size, 10, 'a new requestId per spin');
+  await page.waitForTimeout(2500);
+  assert.equal(rig.spins.length, 10, 'nothing after the last');
+  await rig.context.close();
+});
+
+await check('slots autospin: "Any win" stops on the first win; "10× bet" ignores a small win and stops on a big one', async () => {
+  let rig = await openSlots([LOSS(), LOSS(), CHERRY(), LOSS()]);
+  await startAuto(rig.page, 25, 'Any win');
+  assert.match(await waitNote(rig.page, 15000), /stopped on a win after 3 spins/);
+  await rig.page.waitForTimeout(2500);
+  assert.equal(rig.spins.length, 3);
+  assert.deepEqual(rig.violations, []);
+  await rig.context.close();
+  rig = await openSlots([LOSS(), CHERRY(), LOSS(), BIG(), LOSS()]);
+  await startAuto(rig.page, 25, '10× bet');
+  assert.match(await waitNote(rig.page, 20000), /stopped on a win after 4 spins/);
+  await rig.page.waitForTimeout(3000);
+  assert.equal(rig.spins.length, 4);
+  assert.deepEqual(rig.violations, []);
+  await rig.context.close();
+});
+
+await check('slots autospin: stops when the wallet can\'t cover the next bet, and when a spin fails', async () => {
+  let rig = await openSlots([LOSS(9540), LOSS(50), LOSS()]);
+  await startAuto(rig.page, 10, "Don't stop");
+  assert.match(await waitNote(rig.page, 12000), /after 2 spins: not enough in your wallet/);
+  await rig.page.waitForTimeout(2500);
+  assert.equal(rig.spins.length, 2);
+  await rig.context.close();
+  rig = await openSlots([LOSS(), 'fail', LOSS()]);
+  await startAuto(rig.page, 10, "Don't stop");
+  assert.match(await waitNote(rig.page, 12000), /after 2 spins: a spin failed/);
+  assert.match((await rig.page.locator('.error-text').allInnerTexts()).join(' '), /Nothing was charged|went wrong/);
+  await rig.page.waitForTimeout(2500);
+  assert.equal(rig.spins.length, 2);
+  assert.equal(await rig.page.getByRole('button', { name: /^Spin/ }).count(), 1, 'Spin is back');
+  await rig.context.close();
+});
+
+await check('slots autospin: Stop, leaving the page and hiding the tab each end it', async () => {
+  let rig = await openSlots([]);
+  await startAuto(rig.page, 10, "Don't stop");
+  await rig.page.waitForTimeout(3200); // the 2nd spin is out
+  await rig.page.getByRole('button', { name: 'Stop', exact: true }).click();
+  const sent = rig.spins.length;
+  await rig.page.waitForTimeout(4000);
+  assert.equal(rig.spins.length, sent, 'no spin after Stop');
+  assert.match(await autoNote(rig.page), new RegExp(`Auto stopped after ${sent} spins`));
+  await rig.context.close();
+
+  rig = await openSlots([]);
+  await startAuto(rig.page, 10, "Don't stop");
+  await rig.page.waitForTimeout(400);
+  await rig.page.getByRole('link', { name: '‹ Casino' }).click();
+  await rig.page.waitForTimeout(5000);
+  assert.equal(rig.spins.length, 1, `no spin after leaving the page (${rig.spins.length})`);
+  await rig.context.close();
+
+  rig = await openSlots([]);
+  await startAuto(rig.page, 10, "Don't stop");
+  await rig.page.waitForTimeout(2000); // the first spin has landed
+  await rig.page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  const atHide = rig.spins.length;
+  await rig.page.waitForTimeout(4000);
+  assert.equal(rig.spins.length, atHide, 'no spin after the tab was hidden');
+  assert.match(await autoNote(rig.page), /when you left the page/);
+  await rig.context.close();
+});
+
+await check('slots win: the winning symbols glow, a line is drawn and the win counts up from $0', async () => {
+  const rig = await openSlots([CHERRY()]);
+  const { page } = rig;
+  await page.getByRole('button', { name: /^Spin/ }).click();
+  await page.waitForSelector('.win-line', { timeout: 4000 });
+  const early = await page.locator('.slot-result .win-count').innerText();
+  assert.equal(await page.locator('.reel-cell.glow').count(), 1, 'only the Cherry glows');
+  await page.waitForTimeout(1200);
+  const late = await page.locator('.slot-result .win-count').innerText();
+  assert.ok(early !== '$2.00', `counting up at first (${early})`);
+  assert.equal(late, '$2.00');
+  assert.equal(await page.locator('.big-win').count(), 0, 'a 2× win is not a Big win');
+  const log = await page.evaluate(() => window.__soundLog);
+  for (const s of ['reelSpin', 'reelStop', 'win']) assert.ok(log.includes(s), `${s} sound (${log.join(',')})`);
+  await rig.context.close();
+});
+
+await check('slots big win: banner and coins at 10× or more, gone within 2.5 s, a tap skips it; reduced motion has no coins', async () => {
+  let rig = await openSlots([BIG(), BIG()]);
+  await rig.page.getByRole('button', { name: /^Spin/ }).click();
+  await rig.page.waitForSelector('.big-win', { timeout: 4000 });
+  const shownAt = now();
+  assert.ok((await rig.page.locator('.big-win .coin').count()) > 0, 'coins');
+  assert.match(await rig.page.locator('.big-win-title').innerText(), /big win/i);
+  await rig.page.waitForSelector('.big-win', { state: 'detached', timeout: 3500 });
+  assert.ok(now() - shownAt <= 2700, `gone after ${now() - shownAt} ms`);
+  assert.ok((await rig.page.evaluate(() => window.__soundLog)).includes('bigWin'), 'fanfare');
+  await rig.page.getByRole('button', { name: /^Spin/ }).click();
+  await rig.page.waitForSelector('.big-win', { timeout: 4000 });
+  await rig.page.locator('.big-win').click();
+  assert.equal(await rig.page.locator('.big-win').count(), 0, 'tap skips');
+  await rig.context.close();
+  rig = await openSlots([BIG()], { reducedMotion: 'reduce' });
+  await rig.page.getByRole('button', { name: /^Spin/ }).click();
+  await rig.page.waitForSelector('.big-win', { timeout: 4000 });
+  assert.equal(await rig.page.locator('.big-win-coins').evaluate((el) => getComputedStyle(el).display), 'none', 'no coins');
+  assert.equal(await rig.page.locator('.big-win .win-count').innerText(), '$300.00', 'the amount at once');
+  await rig.context.close();
+});
+
+await check('casino sound: on by default, the mute button is saved per phone and shared by every game (and survives a reload)', async () => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  await page.addInitScript((h) => { window.__H = h; window.__soundLog = []; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: [] } });
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
+  await page.route('**/api/**', (route) => json(route, 200, route.request().postDataJSON?.()?.action === 'spin' ? LOSS() : { ok: true, serverNow: now() }));
+  const toggle = () => page.locator('.sound-btn');
+  const pressed = async () => toggle().first().getAttribute('aria-pressed');
+  for (const path of ['/casino', '/casino/slots', '/casino/blackjack', '/casino/baccarat', '/casino/craps', '/casino/crapless']) {
+    await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(500);
+    assert.equal(await toggle().count(), 1, `one sound button on ${path}`);
+    const box = await toggle().boundingBox();
+    assert.ok(box.width >= 43.5 && box.height >= 43.5, `44×44 on ${path}`);
+  }
+  await page.goto(BASE + '/casino/slots', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(500);
+  assert.equal(await pressed(), 'true', 'on by default');
+  await toggle().click();
+  assert.equal(await pressed(), 'false');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(500);
+  assert.equal(await pressed(), 'false', 'still off after a reload');
+  await page.getByRole('button', { name: /^Spin/ }).click();
+  await page.waitForTimeout(2200);
+  assert.deepEqual(await page.evaluate(() => window.__soundLog), [], 'no sound while muted');
+  await page.goto(BASE + '/casino/blackjack', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(500);
+  assert.equal(await pressed(), 'false', 'Blackjack remembers it');
+  await toggle().click();
+  await page.goto(BASE + '/casino/slots', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(500);
+  assert.equal(await pressed(), 'true', 'turned back on in Blackjack, on in Slots');
+  assert.equal(await page.evaluate(() => localStorage.getItem('backyardbook.casinoSound')), 'on');
+  await context.close();
+});
+
 await browser.close();
 console.log(results.join('\n'));
 if (results.some((r) => r.startsWith('FAIL'))) process.exit(1);

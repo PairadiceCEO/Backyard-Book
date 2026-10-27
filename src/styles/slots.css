@@ -1,0 +1,299 @@
+/* ===================== Slots extras (0.20.0) =====================
+   The win line and glowing symbols, the count-up, the Big win (banner + coin shower, CSS only), Autospin, the Paytable sheet. */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.slots-top .paytable-btn {
+  margin-left: auto;
+}
+
+/* ---------- the win ---------- */
+.reel-cell.payline.glow {
+  background: rgba(245, 196, 81, 0.28);
+  box-shadow: inset 0 0 0 2px rgba(245, 196, 81, 0.9), inset 0 0 18px rgba(245, 196, 81, 0.55);
+  animation: sym-glow 0.9s ease-in-out 3 alternate;
+}
+
+.reel-cell.payline.glow .sym {
+  filter: drop-shadow(0 0 6px rgba(255, 215, 110, 0.95));
+}
+
+@keyframes sym-glow {
+  from {
+    box-shadow: inset 0 0 0 2px rgba(245, 196, 81, 0.6), inset 0 0 8px rgba(245, 196, 81, 0.3);
+  }
+  to {
+    box-shadow: inset 0 0 0 3px rgba(255, 220, 120, 1), inset 0 0 24px rgba(245, 196, 81, 0.75);
+  }
+}
+
+.win-line {
+  position: absolute;
+  left: 2%;
+  right: 2%;
+  top: calc(50% - 2px);
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #ffe08a, #f5c451, #ffe08a);
+  box-shadow: 0 0 10px rgba(245, 196, 81, 0.9);
+  transform-origin: left center;
+  animation: win-line-draw 0.45s ease-out both;
+  pointer-events: none;
+  z-index: 2;
+}
+
+@keyframes win-line-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.win-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Big win ---------- */
+.big-win {
+  position: absolute;
+  inset: -4px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 12px;
+  padding: 0;
+  background: radial-gradient(ellipse at center, rgba(40, 24, 0, 0.82), rgba(0, 0, 0, 0.72));
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  animation: big-win-in 0.25s ease-out both;
+}
+
+@keyframes big-win-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.big-win-banner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 18px;
+  border-radius: 14px;
+  border: 2px solid #f5c451;
+  background: linear-gradient(180deg, #3b2600, #1b1100);
+  box-shadow: 0 0 24px rgba(245, 196, 81, 0.6);
+  animation: big-win-pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.big-win-title {
+  font-family: var(--felt-font, 'Oswald', 'Arial Narrow', Arial, sans-serif);
+  font-weight: 700;
+  font-size: 2rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffd76e;
+  text-shadow: 0 2px 0 #7a4b00, 0 0 12px rgba(255, 200, 80, 0.7);
+  line-height: 1.05;
+}
+
+.big-win-banner .win-count {
+  font-size: 1.7rem;
+  color: #fff;
+}
+
+.big-win-skip {
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+
+@keyframes big-win-pop {
+  from {
+    transform: scale(0.6);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.big-win-coins {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.coin {
+  position: absolute;
+  top: -30px;
+  left: var(--x);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff3c4 0 12%, #ffd76e 30%, #e0a526 62%, #a86d00 100%);
+  box-shadow: inset 0 0 0 2px rgba(122, 75, 0, 0.6);
+  transform: scale(var(--s));
+  animation: coin-fall 1.6s ease-in var(--d) both;
+}
+
+@keyframes coin-fall {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(var(--s));
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(260px) rotate(var(--r)) scale(var(--s));
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reel-cell.payline.glow,
+  .win-line,
+  .big-win,
+  .big-win-banner {
+    animation: none;
+  }
+  .big-win-coins {
+    display: none;
+  }
+}
+
+/* ---------- Spin, Auto ---------- */
+.spin-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.auto-btn {
+  min-height: 56px;
+  min-width: 76px;
+  font-weight: 800;
+}
+
+.auto-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.6rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.auto-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.auto-choice-label {
+  flex: 1 0 100%;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.auto-opt {
+  min-height: 44px;
+  min-width: 56px;
+  flex: 1 1 0;
+  font-weight: 700;
+}
+
+.auto-opt.active {
+  border-color: var(--gold);
+  color: var(--gold);
+  box-shadow: inset 0 0 0 1px var(--gold);
+}
+
+.auto-start {
+  min-height: 52px;
+  font-weight: 800;
+}
+
+.auto-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.auto-count {
+  font-weight: 800;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+.auto-stop {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
+  min-height: 60px;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.auto-note {
+  margin: 0;
+  color: var(--gold);
+}
+
+/* ---------- Paytable sheet ---------- */
+.paytable-sheet {
+  height: auto;
+  max-height: min(84dvh, 640px);
+}
+
+.paytable-sheet .paytable-note {
+  margin: 0.4rem 0;
+}
+
+.paytable-sheet .paytable-list {
+  overflow-y: auto;
+  padding-bottom: 0.5rem;
+}
+
+.paytable-sheet .paytable-pays {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.15;
+}
+
+.paytable-times {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.paytable-amount {
+  font-size: 0.95rem;
+}

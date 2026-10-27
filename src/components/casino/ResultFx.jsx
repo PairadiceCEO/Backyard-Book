@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatMoney } from '../../lib/format.js';
 import { prefersReducedMotion } from '../../lib/reducedMotion.js';
+import { playSound } from '../../lib/casinoSound.js';
 import { FeltChip } from './FeltChip.jsx';
 
 export const FX_MS = 1200;
@@ -38,6 +39,11 @@ export default function ResultFx({ show, netCents, stakeCents = 0, roundKey, dea
     return () => clearTimeout(timer);
   }, [show, roundKey]);
   const active = show && !played.has(roundKey);
+
+  // 0.20.0: a win chimes once as its effect starts (several winning spots at the same moment chime once).
+  useEffect(() => {
+    if (active && netCents > 0) playSound('win');
+  }, [active, netCents]);
 
   // The chip: from the dealer to here (win) or from here to the dealer (loss).
   useEffect(() => {

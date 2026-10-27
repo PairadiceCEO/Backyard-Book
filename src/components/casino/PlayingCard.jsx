@@ -10,6 +10,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { cardFace, cardName, isRedCard } from '../../../shared/casino/cards.js';
 import { serverNow } from '../../lib/casino.js';
 import { prefersReducedMotion } from '../../lib/reducedMotion.js';
+import { playSound } from '../../lib/casinoSound.js';
 
 export const SLIDE_MS = 250;
 const SLIDE_WINDOW_MS = 700; // the card slides only if it mounts within this of its reveal time
@@ -41,6 +42,7 @@ export default function PlayingCard({ card, fresh = false, small = false, dealAt
     slid.current = true;
     if (Math.abs(serverNow() - dealAt) > SLIDE_WINDOW_MS) return;
     slideFromShoe(ref.current);
+    playSound('card'); // 0.20.0 (also with reduced motion: the card still turns over at this moment)
   }, [card, dealAt]);
 
   if (!card) {

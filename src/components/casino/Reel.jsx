@@ -1,10 +1,11 @@
 // One reel: while spinning, a blurred column of symbols scrolls past (CSS animation only);
-// when stopped, the three stops around `stop`, with the payline (middle) symbol highlighted.
+// when stopped, the three stops around `stop`, with the payline (middle) symbol highlighted. `glow` (0.20.0): this reel's
+// payline symbol is part of the win.
 
 import SlotSymbol from './SlotSymbol.jsx';
 import { REELS, symbolAt } from '../../../shared/casino/slotMachine.js';
 
-export default function Reel({ reel, stop, spinning }) {
+export default function Reel({ reel, stop, spinning, glow = false }) {
   if (spinning) {
     const strip = REELS[reel];
     return (
@@ -28,7 +29,7 @@ export default function Reel({ reel, stop, spinning }) {
       <div className="reel-cell dim">
         <SlotSymbol id={above} />
       </div>
-      <div className="reel-cell payline">
+      <div className={glow ? 'reel-cell payline glow' : 'reel-cell payline'}>
         <SlotSymbol id={line} />
       </div>
       <div className="reel-cell dim">

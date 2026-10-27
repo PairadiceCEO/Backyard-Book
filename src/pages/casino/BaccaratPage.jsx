@@ -34,6 +34,7 @@ import { ensureFeltFont } from '../../lib/feltFont.js';
 import { formatMoney } from '../../lib/format.js';
 import { BET_HELP_TEXT, betCeilingProblem } from '../../../shared/casino/constants.js';
 import { ChatButton, ChatDrawer } from '../../components/casino/CasinoChat.jsx';
+import SoundToggle from '../../components/casino/SoundToggle.jsx';
 import { useCasinoChat } from '../../hooks/useCasinoChat.js';
 import {
   BACCARAT_ODDS,
@@ -407,6 +408,7 @@ export default function BaccaratPage() {
             Shoe {table.shoe.remaining}/{table.shoe.total}
           </span>
         ) : null}
+        <SoundToggle />
         <ChatButton chat={chat} />
       </div>
 

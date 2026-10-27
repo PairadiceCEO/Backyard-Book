@@ -1,5 +1,6 @@
 // Casino lobby: the 7s slot and the four tables (live seats from each table doc, Sit / Watch).
 
+import SoundToggle from '../../components/casino/SoundToggle.jsx';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BET_HELP_TEXT, CASINO_GAMES, CASINO_SEATS } from '../../../shared/casino/constants.js';
@@ -87,7 +88,10 @@ function OpenTableCard({ game }) {
 export default function CasinoLobby() {
   return (
     <section className="page">
-      <h2 className="section-title">Casino</h2>
+      <div className="slots-top lobby-top">
+        <h2 className="section-title">Casino</h2>
+        <SoundToggle className="lobby-sound" />
+      </div>
       <p className="muted small">Play money from your wallet. {BET_HELP_TEXT}</p>
       <ul className="lobby-list">
         {CASINO_GAMES.map((game) => {
