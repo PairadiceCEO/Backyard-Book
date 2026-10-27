@@ -1,0 +1,734 @@
+/* ===================== Blackjack and Baccarat tables (0.19.0) =====================
+   Green felt (#0b5d3b) in a 6 px wood rail (#5a3519), the family of the craps felt. Lettering is Oswald, uppercase
+   (ensureFeltFont). Blackjack: half-moon, the rules printed in arcs, five betting circles. Baccarat: printed PLAYER / BANKER
+   card boxes and three printed bet areas. Chips come from chips.css. Everything here is look: the buttons call the same
+   handlers they always did. */
+
+.tfelt-rail {
+  --felt: #0b5d3b;
+  --wood: #5a3519;
+  --gold: #f5c451;
+  --felt-font: 'Oswald', 'Arial Narrow', 'Roboto Condensed', 'Helvetica Neue', Arial, sans-serif;
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+  padding: 6px;
+  background: var(--wood);
+  border-radius: 20px 20px 54% 54% / 20px 20px 34% 34%;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  font-family: var(--felt-font);
+}
+
+.tfelt {
+  position: relative;
+  background: var(--felt);
+  border-radius: 14px 14px 52% 52% / 14px 14px 33% 33%;
+  box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  color: #fff;
+  overflow: hidden;
+}
+
+/* ---------- The shoe ---------- */
+.shoe {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 44px;
+  height: 30px;
+  pointer-events: none;
+}
+
+.shoe-body {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px 4px 8px 4px;
+  background: linear-gradient(180deg, #2a2a2e, #101013);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+  transform: skewX(-8deg);
+}
+
+.shoe-cards {
+  position: absolute;
+  left: 5px;
+  right: 7px;
+  top: -4px;
+  height: 9px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(90deg, #f5f5f0 0 3px, #cfcfc8 3px 4px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- Blackjack ---------- */
+.bjt-rail {
+  max-width: 640px;
+}
+
+.bjt-felt {
+  aspect-ratio: 300 / 310;
+  width: 100%;
+  background-image: radial-gradient(ellipse at 50% 46%, rgba(255, 255, 255, 0.07), rgba(0, 0, 0, 0) 62%);
+}
+
+.bjt-arcs {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.bjt-arc-text {
+  font-family: var(--felt-font);
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: 1.6px;
+  fill: rgba(255, 255, 255, 0.88);
+  text-transform: uppercase;
+}
+
+.bjt-arc-text.gold {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  fill: var(--gold);
+}
+
+.bjt-dealer {
+  position: absolute;
+  top: 2%;
+  left: 18%;
+  right: 22%;
+  display: flex;
+  justify-content: center;
+}
+
+.bjt-shoe {
+  top: 2.5%;
+  right: 5%;
+}
+
+.bjt-seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bjt-seat {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  text-align: center;
+}
+
+.bjt-circle-wrap {
+  position: relative;
+  width: 94%;
+}
+
+.bjt-circle {
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.2);
+  color: #fff;
+  font: inherit;
+  padding: 0;
+}
+
+button.bjt-circle {
+  cursor: pointer;
+}
+
+button.bjt-circle:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.bjt-seat.empty .bjt-circle {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.65);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.bjt-seat.mine .bjt-circle {
+  border-color: var(--gold);
+  border-width: 3px;
+  box-shadow: 0 0 0 2px rgba(245, 196, 81, 0.25), 0 0 10px rgba(245, 196, 81, 0.35);
+}
+
+.bjt-seat.focused .bjt-circle {
+  background: rgba(245, 196, 81, 0.22);
+}
+
+.bjt-seat.active .bjt-circle {
+  box-shadow: 0 0 0 3px rgba(245, 196, 81, 0.6), 0 0 14px rgba(245, 196, 81, 0.6);
+}
+
+.bjt-seat.leaving {
+  opacity: 0.6;
+}
+
+.bjt-sit {
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bjt-num {
+  font-weight: 600;
+  font-size: 0.85rem;
+  opacity: 0.5;
+}
+
+.bjt-name {
+  margin-top: 3px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.bjt-seat.mine .bjt-name {
+  color: var(--gold);
+}
+
+.bjt-detail {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  font-size: 0.64rem;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  min-height: 0.7rem;
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
+
+.bjt-seat.win .bjt-detail {
+  color: #8ff0b0;
+  opacity: 1;
+  font-weight: 700;
+}
+
+.bjt-seat.lose .bjt-detail {
+  color: #ff9a9a;
+  opacity: 1;
+}
+
+.bjt-seat.active .bjt-detail {
+  color: var(--gold);
+  opacity: 1;
+  font-weight: 700;
+}
+
+/* The dealer's hand sits on the felt without a box */
+.bjt-dealer .bj-hand {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  align-items: center;
+}
+
+.bjt-dealer .bj-hand-head {
+  justify-content: center;
+  font-family: var(--felt-font);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.bjt-dealer .bj-cards-row {
+  justify-content: center;
+}
+
+.bj-felt-extra {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* ---------- Total pills (Blackjack and Baccarat) ---------- */
+.bj-cards-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.bj-total,
+.bac-total {
+  min-width: 2.4rem;
+  height: 1.7rem;
+  padding: 0 0.6rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--felt-font, 'Oswald', 'Arial Narrow', Arial, sans-serif);
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-transform: none;
+}
+
+.bj-total.bust {
+  background: rgba(150, 30, 30, 0.85);
+  border-color: #ff9a9a;
+  color: #fff;
+}
+
+/* ---------- Win / loss effects ---------- */
+.fx-host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.fx-float {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  transform: translateX(-50%);
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.7);
+  font-family: var(--felt-font, 'Oswald', 'Arial Narrow', Arial, sans-serif);
+  font-weight: 700;
+  font-size: 1.05rem;
+  white-space: nowrap;
+  animation: fx-rise 1.2s ease-out both;
+}
+
+.fx-float.win {
+  color: #7dffa8;
+}
+
+.fx-float.lose {
+  color: #ff8f8f;
+}
+
+.fx-float.push {
+  color: #fff;
+}
+
+@keyframes fx-rise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.8);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.08);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -34px) scale(1);
+  }
+}
+
+.fx-chip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: -15px 0 0 -15px;
+  z-index: 5;
+}
+
+.fx-chip-disc {
+  --chip-size: 30px;
+}
+
+@keyframes fx-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  15%,
+  70% {
+    opacity: 1;
+  }
+}
+
+/* ---------- Rebet buttons ---------- */
+.rebet-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.rebet-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--gold, #f5c451);
+  background: rgba(245, 196, 81, 0.12);
+  color: var(--gold, #f5c451);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.rebet-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---------- Baccarat ---------- */
+.bact-rail {
+  max-width: 640px;
+  border-radius: 20px;
+}
+
+.bact-felt {
+  border-radius: 14px;
+  padding: 8px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bact-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  padding-right: 52px; /* the shoe */
+}
+
+.bact-title {
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.22em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+
+.bact-felt .shoe {
+  top: 8px;
+  right: 8px;
+}
+
+.bact-boxes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bact-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px 6px 6px;
+  border-radius: 10px;
+  border: 2px solid var(--print);
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.bact-box.player {
+  --print: #6bb6ff;
+}
+
+.bact-box.banker {
+  --print: #ff8f8f;
+}
+
+.bact-box.won {
+  box-shadow: 0 0 0 2px var(--gold), 0 0 12px rgba(245, 196, 81, 0.5);
+}
+
+.bact-box-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--print);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.bact-box .bac-cards {
+  display: flex;
+  align-items: center;
+  min-height: 66px;
+  min-width: 0;
+}
+
+.bact-box .bac-cards .pcard + .pcard,
+.bact-box .bac-cards .pcard + .peel-card,
+.bact-box .bac-cards .peel-card + .pcard {
+  margin-left: -16px;
+}
+
+.bact-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.bact-spots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.bac-spot-slot {
+  display: contents;
+}
+
+/* The printed bet areas: PLAYER, BANKER and TIE */
+.bact-spots .bac-spot {
+  --print: #6bb6ff;
+  position: relative;
+  box-sizing: border-box;
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'name chip' 'odds chip' 'note chip';
+  align-items: center;
+  column-gap: 6px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  border: 2px solid var(--print);
+  background: rgba(0, 0, 0, 0.14);
+  color: var(--print);
+  font-family: var(--felt-font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.bact-spots .bac-spot.player {
+  --print: #6bb6ff;
+}
+
+.bact-spots .bac-spot.banker {
+  --print: #ff8f8f;
+}
+
+.bact-spots .bac-spot.tie {
+  --print: #fff;
+  grid-column: 1 / -1;
+  min-height: 52px;
+  background: #1f8f4e;
+  border-color: #fff;
+  color: #fff;
+}
+
+.bact-spots .bac-spot.has-bet {
+  box-shadow: 0 0 0 2px var(--gold);
+}
+
+.bact-spots .bac-spot.won {
+  box-shadow: 0 0 0 3px var(--gold), 0 0 14px rgba(245, 196, 81, 0.6);
+}
+
+.bact-spots .bac-spot:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.bact-spots .bac-spot-name {
+  grid-area: name;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.bact-spots .bac-spot-odds {
+  grid-area: odds;
+  font-weight: 500;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0.95;
+  line-height: 1.1;
+}
+
+.bact-spots .bac-spot-note {
+  grid-area: note;
+  font-weight: 500;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0.85;
+  line-height: 1.1;
+}
+
+.bact-spots .bac-spot-chipwrap {
+  grid-area: chip;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 34px;
+  color: #fff;
+}
+
+@media (max-width: 360px) {
+  .bact-spots .bac-spot {
+    padding: 4px 6px;
+    column-gap: 4px;
+  }
+  .bact-spots .bac-spot-name {
+    font-size: 0.95rem;
+    letter-spacing: 0.1em;
+  }
+  .bact-spots .bac-spot-odds {
+    font-size: 0.62rem;
+    letter-spacing: 0.02em;
+  }
+  .bact-spots .bac-spot-note {
+    font-size: 0.56rem;
+  }
+}
+
+.bact-spots .bac-spot-empty {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px dashed currentColor;
+  opacity: 0.45;
+}
+
+/* ---------- The Baccarat squeeze: the third card, face down, lifts a corner and turns ---------- */
+.peel-card {
+  position: relative;
+  width: 46px;
+  height: 66px;
+  flex: 0 0 46px;
+  perspective: 420px;
+}
+
+.peel-inner {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform-origin: 50% 50%;
+  animation: peel var(--peel-ms, 1500ms) linear var(--peel-delay, 0ms) both;
+}
+
+.peel-back,
+.peel-face {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border-radius: 6px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.peel-back {
+  background: repeating-linear-gradient(45deg, #1f4f8a 0 4px, #2a62a6 4px 8px);
+  border: 1px solid #163a66;
+}
+
+.peel-face {
+  transform: rotateY(180deg);
+  background: #fbfbf8;
+  border: 1px solid #c9c9c2;
+  color: #1b1b1b;
+  font-family: Georgia, 'Times New Roman', serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.peel-face.red {
+  color: #c62828;
+}
+
+.peel-face .pcard-pip {
+  font-size: 1.6rem;
+  margin-top: 0.6rem;
+}
+
+@keyframes peel {
+  0%,
+  8% {
+    transform: rotateX(0deg) rotateY(0deg);
+  }
+  48%,
+  58% {
+    transform: rotateX(26deg) rotateY(16deg);
+  }
+  100% {
+    transform: rotateX(0deg) rotateY(180deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .peel-inner {
+    animation: none;
+  }
+  .fx-float {
+    animation: fx-fade 1.2s linear both;
+  }
+  .fx-chip {
+    display: none;
+  }
+}
+
+/* ---------- Bigger screens ---------- */
+@media (min-width: 700px) {
+  .bjt-felt .pcard,
+  .bact-felt .pcard,
+  .bact-felt .peel-card {
+    width: 54px;
+    height: 78px;
+    flex-basis: 54px;
+  }
+  .bact-felt .peel-card {
+    flex-basis: 54px;
+  }
+}
+
+/* ---------- Sideways phones ---------- */
+@media (orientation: landscape) and (max-height: 500px) {
+  .bjt-rail {
+    max-width: 440px;
+  }
+}

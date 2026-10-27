@@ -1,7 +1,9 @@
 // Casino chips for the craps felt (0.18.0): a round disc with a dashed edge, coloured by the largest chip in the amount
 // ($1 white with a blue edge, $2 yellow, $5 red, $10 blue, $25 green, $100 black with a gold edge) and the amount printed
-// on it ("$12", "$1.2k"). The chip rack uses the same look. Other games keep their own chip tokens (Chips.jsx).
+// on it ("$12", "$1.2k"). 0.19.0: this is the one chip look for every casino game (the rack, every bet spot, Slots); the
+// styles are in src/styles/chips.css.
 
+import '../../styles/chips.css';
 import { CHIP_VALUES } from '../../../shared/casino/constants.js';
 import { chipsFor } from './Chips.jsx';
 

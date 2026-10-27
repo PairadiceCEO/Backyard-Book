@@ -119,6 +119,16 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
 
+## 0.19.0
+
+- **Blackjack on a real felt:** green felt in a wood rail, a half-moon table with the dealer and a small shoe at the top, "BLACKJACK PAYS 3 TO 2", "DEALER MUST HIT SOFT 17" and "INSURANCE PAYS 2 TO 1" printed in an arc, and the five seats as betting circles (yours gold, other players white, empty ones dashed with "Sit"). Each circle shows its chips and the player's name. Your seat's panel and buttons stay under the table. Tap one of your own circles to switch seats.
+- **Baccarat on a printed table:** PLAYER and BANKER card boxes at the top (hand totals in pills), and three printed bet areas: PLAYER (pays 1 to 1, blue), BANKER (pays 0.95 to 1, 5% commission, red) and TIE (pays 8 to 1, green). Roads are unchanged below.
+- **Cards come out of the shoe** and slide to their hand as they turn face up (no change to when they show). In Baccarat the third card shows face down when its wait begins, lifts a corner and turns over exactly when it is due (the "squeeze").
+- **Totals and results:** a total pill beside every hand (and the dealer's), updated as each card turns. At results "+$15.00" (green) or "−$10.00" (red) floats up from each of your seats (Baccarat: each of your spots; "Push" for an even result), and chips slide to you from the dealer or to the dealer from you.
+- **Rebet and Rebet ×2:** when betting opens, a seat that bet last hand shows "Rebet $X" and "Rebet ×2 $Y" next to the chips. One tap puts the same chips back (Baccarat: every spot) as one bet; they hide once a chip is down. Not enough in the wallet: the usual message, nothing placed. Last bets are remembered only until the page is reloaded.
+- **One chip look everywhere:** the craps chips are now the chips in the rack, on every Blackjack seat and Baccarat spot, and in the Slots bet picker.
+- **Reduced motion:** no slide, no peel, no chip slide; only the "+$" text. Look and client only: no rule, payout, timing or money change. No console step.
+
 ## 0.18.1
 
 - **Slots** has no chat any more (it's a one-player game); chat stays in Blackjack, Baccarat, Craps and Crapless.

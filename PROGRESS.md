@@ -5,6 +5,44 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.19.0 (Will, 2026-10-20 23:01 CT) — COMPLETE (2026-10-21), merged to main, ready for Will to test
+Spec: Will's attachment of 23:01 ("Blackjack and Baccarat table look, Rebet, hand totals and win effects, Baccarat squeeze,
+one chip style everywhere"). 0.18.1 merged first (main = 9a15e6d). Fresh wip. Look and client only: server, betting rules,
+money code and useChipBetting's send/reply logic (0.17.2) are untouched. No firestore.rules change; nothing to publish.
+
+### Checklist
+- [x] 1 One chip style: src/styles/chips.css + FeltChip.jsx are the only chip look; Chips.jsx (ChipRack, ChipStack) uses it;
+      old .chip-token CSS removed; Slots, Blackjack, Baccarat use ChipRack/ChipStack; Oswald loaded on all three pages.
+- [x] 2 Blackjack felt (BlackjackFelt.jsx, src/styles/tablefelt.css): #0b5d3b in a 6 px #5a3519 rail, half-moon, dealer + shoe
+      top right, Oswald arcs (SVG textPath), five betting circles (mine gold, others white, empty dashed "Sit"), name + status
+      under each. Tap one of my circles to switch seats (with 2+ seats). Someone else's turn: their hand in a card under the felt.
+- [x] 3 Cards slide from the shoe (PlayingCard `dealAt`, 250 ms, Web Animations; reveal times unchanged; reduced motion = none).
+      The old card-in flip is now a 0.2 s fade.
+- [x] 4 Total pills beside every hand (Blackjack: dealer, my hands, the spotlight; Baccarat: both boxes). ResultFx: +$ / −$ / Push
+      float 1.2 s and a chip slide dealer<->spot, on each of my Blackjack seats and each of my focused Baccarat seat's spots
+      (net per spot = spotReturnCents − stake). Plays once per round key (module-level set).
+- [x] 5 Rebet / Rebet ×2 (Blackjack per seat, Baccarat every spot) through chips.place; remembered per seat in memory when the
+      cards are dealt; hidden once any chip is on screen (shows again after Undo to $0); wallet shortfall shows the usual
+      message and places nothing (Baccarat checks the whole total first).
+- [x] 6 Baccarat printed table (BaccaratFelt.jsx): PLAYER (blue) / BANKER (red, 5% commission) / TIE (green, white text) spots
+      64 / 64 / 52 px tall, printed PLAYER / BANKER card boxes with total pills, roads unchanged below.
+- [x] 7 Baccarat squeeze: PeelCard from the start of the third card's gap, a CSS animation as long as the gap with a negative
+      delay set at mount, so it finishes on the coupRevealTimes time (checked within 220 ms in the harness).
+- [x] 8 Harness: shoot.mjs TABLE_SIZES (320×640, 375×800, 414×896, 844×390, 1280×800, full-page shots); interact.mjs: Rebet (5 checks
+      × 2 games), pills (2), floats (5 + Baccarat 2), squeeze (2); dealcheck.mjs: slide checks (2), seat text now from the felt.
+      Rebet math is checked end to end in interact.mjs (the fake server holds the totals) rather than as a unit test.
+- [x] 9 Version 0.19.0, README, casino notes, test:all, eslint, build, phone check, merge to main.
+Decisions: the hole-card reveal slides from the shoe too (a card only slides when it mounts within 0.7 s of its reveal time, so
+a phone opening mid-hand just shows the cards). The Baccarat spots are rendered by the focused seat's panel into the printed
+area (portal) so the buttons and their aria-labels keep their old meaning. Floats read "+$15.00" (formatMoney, like the rest
+of the app). The seat row (tiles) stays under the Baccarat table for sitting and watching others. On a computer, buttons on
+the casino table pages and the app's Sign out are now 44 px tall too (they were 31 px with a mouse).
+Checks: test:all (all suites pass), eslint clean, build ok, interact 59 + 3 updated (chip text now read from the aria-label;
+the font now loads on every casino table, never on the sportsbook), dealcheck 8/8, shoot: every bj-/bac- screen at 5 sizes and
+every craps screen at 8 sizes with no sideways scroll and no small buttons.
+Also fixed (test only): test/activity/walletActivity.test.mjs "admin only" seeded its entry at the fixed 2026-10-20 date but
+the handler uses the real clock, so it failed from 2026-10-21; the entry is now stamped with real time.
+
 ## Phase 0.18.1 (Will, 2026-10-20 22:38 CT) — COMPLETE (2026-10-20), merged to main, ready for Will to test
 Spec: Will's message of 22:38. Fresh wip off main (0.18.0). No firestore.rules change; nothing to publish.
 

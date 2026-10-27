@@ -10,6 +10,12 @@ Since 0.18.0 the craps and Crapless screens in `shoot.mjs` run at eight sizes (u
 felt behaviour checks (each area places a chip, rotating mid-bet, the Table sheet, Crapless) are in `interact.mjs`. The
 fonts.googleapis.com stylesheet is answered with an empty one in `fixtures.mjs`.
 
+Since 0.19.0 the Blackjack and Baccarat screens (`bj-*`, `bac-*`) run at 320×640, 375×800, 414×896, 844×390 (sideways) and
+1280×800 (a computer), shot full page (scrolling is allowed) and checked for sideways overflow and small buttons. `interact.mjs`
+covers Rebet / Rebet ×2 (totals, one request, a double tap, a tap while a batch is in flight, a wallet that can't cover it), the total
+pills, the "+$" float and chip slide at results (and reduced motion), and the Baccarat squeeze finishing on its reveal time;
+`dealcheck.mjs` also checks that cards slide from the shoe without changing when they show.
+
 1. Copy the repo somewhere temporary, then put `mocks/` there as `harness-mocks/` and
    `vite.harness.config.mjs` at its root; `npm install`.
 2. Start it: `VITE_FIREBASE_API_KEY=x VITE_FIREBASE_AUTH_DOMAIN=x VITE_FIREBASE_PROJECT_ID=x VITE_FIREBASE_APP_ID=x npx vite --config vite.harness.config.mjs` (port 5199).

@@ -286,6 +286,13 @@ h3 {
   font-size: 0.85rem;
 }
 
+/* 0.19.0: on the casino tables (and the app's Sign out) every button is at least 44 px tall, on a computer too */
+.navbar .btn.small,
+.table-page .btn,
+.slots-page .btn {
+  min-height: 44px;
+}
+
 .btn.full {
   width: 100%;
 }
@@ -2382,17 +2389,16 @@ body.no-scroll {
   margin-top: 0.6rem;
 }
 
+/* 0.19.0: the card slides out of the shoe (PlayingCard `dealAt`); this is only a short fade-in under it */
 .pcard.fresh {
-  animation: card-in 0.35s ease-out;
+  animation: card-in 0.2s ease-out;
 }
 
 @keyframes card-in {
   from {
-    transform: translateY(-14px) rotateY(80deg);
     opacity: 0;
   }
   to {
-    transform: none;
     opacity: 1;
   }
 }
@@ -2405,65 +2411,6 @@ body.no-scroll {
 
 /* ===================== Baccarat ===================== */
 
-.bac-felt {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem;
-  background: radial-gradient(ellipse at center, #1d5a3a 0%, #134029 70%, #0f3322 100%);
-  border-color: #24694a;
-  min-height: 150px;
-}
-
-.bac-hand {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.4rem;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  min-width: 0;
-}
-
-.bac-hand.won {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 1px var(--gold), 0 0 14px rgba(245, 196, 81, 0.25);
-}
-
-.bac-hand-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 800;
-  font-size: 0.8rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.bac-hand.player .bac-hand-head {
-  color: #8ec5ff;
-}
-
-.bac-hand.banker .bac-hand-head {
-  color: #ff9a9a;
-}
-
-.bac-total {
-  min-width: 1.8rem;
-  height: 1.8rem;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.35);
-  color: var(--text);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.bac-total:empty {
-  visibility: hidden;
-}
-
 .bac-cards {
   display: flex;
   min-height: 66px;
@@ -2474,7 +2421,6 @@ body.no-scroll {
 }
 
 .bac-banner {
-  grid-column: 1 / -1;
   text-align: center;
   font-weight: 800;
   font-size: 1.05rem;
@@ -2513,69 +2459,6 @@ body.no-scroll {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-}
-
-.bac-spots {
-  display: grid;
-  grid-template-columns: 1fr 0.8fr 1fr;
-  gap: 0.4rem;
-}
-
-.bac-spot {
-  min-height: 84px;
-  border-radius: 12px;
-  border: 2px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text);
-  font: inherit;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
-  cursor: pointer;
-  padding: 0.3rem;
-  min-width: 0;
-}
-
-.bac-spot.player {
-  border-color: #3d7fc8;
-}
-
-.bac-spot.banker {
-  border-color: #c84d4d;
-}
-
-.bac-spot.tie {
-  border-color: #3fa566;
-}
-
-.bac-spot.has-bet {
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.bac-spot.won {
-  box-shadow: 0 0 0 2px var(--gold);
-}
-
-.bac-spot:disabled {
-  cursor: default;
-  opacity: 0.75;
-}
-
-.bac-spot-name {
-  font-weight: 800;
-}
-
-.bac-spot-odds {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-}
-
-.bac-spot-bet {
-  font-weight: 800;
-  font-size: 1.05rem;
-  font-variant-numeric: tabular-nums;
 }
 
 .bac-actions {
@@ -2897,33 +2780,6 @@ body.no-scroll {
   min-width: 0;
 }
 
-.bj-total {
-  margin-left: auto;
-  min-width: 1.8rem;
-  padding: 0 0.45rem;
-  height: 1.8rem;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.35);
-  color: var(--text);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-  text-transform: none;
-  letter-spacing: 0;
-  white-space: nowrap;
-}
-
-.bj-total:empty {
-  visibility: hidden;
-}
-
-.bj-total.bust {
-  background: rgba(255, 107, 107, 0.2);
-  color: var(--danger);
-}
-
 .bj-hand-bet {
   font-variant-numeric: tabular-nums;
 }
@@ -3013,93 +2869,6 @@ body.no-scroll {
 
 /* ===================== Chips ===================== */
 
-.chip-token {
-  --chip: #f2f2ee;
-  --chip-ink: #1d2730;
-  --chip-edge: #2f6fd6;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at center, var(--chip) 0 55%, transparent 56%),
-    repeating-conic-gradient(var(--chip-edge) 0 15deg, var(--chip) 15deg 30deg);
-  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.45), inset 0 0 0 2px rgba(0, 0, 0, 0.18);
-  color: var(--chip-ink);
-  font-weight: 900;
-  flex: 0 0 auto;
-}
-
-.chip-token .chip-face {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 64%;
-  height: 64%;
-  border-radius: 999px;
-  border: 1.5px dashed rgba(0, 0, 0, 0.25);
-}
-
-.chip-md {
-  width: 42px;
-  height: 42px;
-  font-size: 0.95rem;
-}
-
-.chip-sm {
-  width: 22px;
-  height: 22px;
-  font-size: 0.55rem;
-}
-
-.chip-sm .chip-face {
-  border-width: 1px;
-}
-
-.chip-1 {
-  --chip: #f2f2ee;
-  --chip-edge: #3e76c9;
-  --chip-ink: #1d2730;
-}
-
-.chip-2 {
-  --chip: #f5c451;
-  --chip-edge: #7a4f00;
-  --chip-ink: #3b2600;
-}
-
-.chip-5 {
-  --chip: #d93838;
-  --chip-edge: #f7f2e8;
-  --chip-ink: #fff;
-}
-
-.chip-10 {
-  --chip: #2f6fd6;
-  --chip-edge: #f7f2e8;
-  --chip-ink: #fff;
-}
-
-/* 0.16.0: $25 green, $100 black (casino standard colors) */
-.chip-25 {
-  --chip: #1f8f4e;
-  --chip-edge: #f7f2e8;
-  --chip-ink: #fff;
-}
-
-.chip-100 {
-  --chip: #1b1b1f;
-  --chip-edge: #e9c46a;
-  --chip-ink: #f5d27a;
-}
-
-/* Three digits fit on the smaller faces */
-.chip-100 .chip-face {
-  font-size: 0.82em;
-  letter-spacing: -0.04em;
-}
-
 .chip-rack {
   display: flex;
   flex-direction: column;
@@ -3113,13 +2882,6 @@ body.no-scroll {
 }
 
 /* Six chips in one row: the token shrinks to fit the cell on narrow phones (the button stays ≥ 44 px tall). */
-.chip-choices .chip-md {
-  width: min(38px, 100%);
-  height: auto;
-  aspect-ratio: 1;
-  font-size: 0.85rem;
-}
-
 .chip-pick {
   min-height: 52px;
   border-radius: 12px;
@@ -3135,10 +2897,6 @@ body.no-scroll {
 .chip-pick.active {
   border-color: var(--gold);
   background: rgba(245, 196, 81, 0.12);
-}
-
-.chip-pick.active .chip-token {
-  transform: translateY(-2px);
 }
 
 .chip-pick:disabled {
@@ -3160,20 +2918,9 @@ body.no-scroll {
 
 .chip-stack {
   display: inline-flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  min-height: 22px;
-}
-
-.chip-stack-pile {
-  position: relative;
-  width: 22px;
-  display: inline-block;
-}
-
-.chip-stack-item {
-  position: absolute;
-  left: 0;
+  min-height: 34px;
 }
 
 .spot-chips {

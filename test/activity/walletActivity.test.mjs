@@ -122,7 +122,9 @@ test('pagination: 50 a page with a cursor, newest first, no gaps or repeats; not
 });
 
 test('admin only: /api/admin walletActivity refuses a player and answers the admin', async () => {
-  seed('mike', 0, [{ type: 'shop', amountCents: 500, ago: 1000 }]);
+  // The handler goes through the real clock (no `now` to pass), so this entry is stamped with real time, not NOW: with NOW
+  // it fell out of the 24 h window once the calendar passed 2026-10-21.
+  seed('mike', 0, [{ type: 'shop', amountCents: 500, ts: Timestamp.fromMillis(Date.now() - 1000) }]);
   fake.write('users/mike', { username: 'mike', displayName: 'Mike', balanceCents: 500 });
   const res = () => ({ statusCode: 200, headers: {}, body: null, headersSent: false, setHeader(a, b) { this.headers[a] = b; }, status(c) { this.statusCode = c; return this; }, json(b) { this.body = b; this.headersSent = true; return this; } });
   let r = res();
@@ -246,7 +248,9 @@ test('balance check: the newest balance after vs the current wallet', async () =
 });
 
 test('a missing index is named instead of crashing; whatever does not need it still loads', async () => {
-  seed('mike', 0, [{ type: 'shop', amountCents: 500, ago: 1000 }]);
+  // The handler goes through the real clock (no `now` to pass), so this entry is stamped with real time, not NOW: with NOW
+  // it fell out of the 24 h window once the calendar passed 2026-10-21.
+  seed('mike', 0, [{ type: 'shop', amountCents: 500, ts: Timestamp.fromMillis(Date.now() - 1000) }]);
   fake.write('users/mike', { username: 'mike', displayName: 'Mike', balanceCents: 500 });
   const failing = (pred) => {
     const err = Object.assign(new Error('9 FAILED_PRECONDITION: The query requires an index. You can create it here: https://console.firebase.google.com/v1/r/project/x/firestore/indexes?create_composite=abc'), { code: 9 });

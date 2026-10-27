@@ -101,7 +101,7 @@ async function runGame(game) {
       const el = document.querySelector('.table-status');
       const phase = [...(el?.classList ?? [])].find((c) => c.startsWith('phase-'))?.slice(6) ?? null;
       const labels = [...document.querySelectorAll('[aria-label*=" bet $"], [aria-label*="your bet $"]')].map((b) => b.getAttribute('aria-label'));
-      return { phase, text: el?.innerText.replace(/\s+/g, ' ').trim() ?? '', cards: document.querySelectorAll('.bj-felt .pcard, .bac-felt .pcard, .bac-hand .pcard').length, labels };
+      return { phase, text: el?.innerText.replace(/\s+/g, ' ').trim() ?? '', cards: document.querySelectorAll('.bjt-felt .pcard, .bact-felt .pcard').length, labels };
     });
 
   // Bet $10 and confirm.
