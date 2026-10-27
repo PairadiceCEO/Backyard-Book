@@ -1,6 +1,8 @@
 // Admin → Agents (0.21.0): one card per AI agent plus the admin's own row, to compare results.
-//   Balance · Profit (balance − adminAdjustCents: every admin adjustment, starting balance included) · Amount bet ·
-//   ROI ((returned − staked) ÷ staked) · Settled bets · Win rate (won ÷ (won + lost), as everywhere) · per league on tap.
+//   Sportsbook profit (stats.returnedCents − stats.stakedCents: the main number, rows sorted by it) · Amount bet · ROI
+//   ((returned − staked) ÷ staked) · Settled bets · Win rate (won ÷ (won + lost), as everywhere) · Balance · per league on tap.
+//   "Wallet change" (balance − adminAdjustCents: every admin adjustment, starting balance included) stays underneath in small text:
+//   it includes casino, shop and Battles money, so it is not comparable between players (0.21.2).
 // Reads: one users query (agent != null) and the admin's own users doc, on open and on Refresh. Also the one-time
 // "Rebuild stats" tool (dry run first), for bets settled before 0.21.0 kept the new totals.
 
@@ -40,7 +42,8 @@ export function agentRow(id, user, isAdmin = false) {
     username: user.username,
     agent: user.agent ?? null,
     balanceCents: Number(user.balanceCents) || 0,
-    profitCents: hasAdjust ? (Number(user.balanceCents) || 0) - Number(user.adminAdjustCents) : null,
+    sportsbookCents: returned - staked,
+    walletChangeCents: hasAdjust ? (Number(user.balanceCents) || 0) - Number(user.adminAdjustCents) : null,
     stakedCents: staked,
     returnedCents: returned,
     roi: roi(staked, returned),
@@ -61,13 +64,12 @@ function AgentCard({ row, open, onToggle }) {
           <strong>{row.name}</strong> {row.isAdmin ? <span className="badge">you</span> : <AgentBadge agent={row.agent} />}
           {row.agent ? <AgentLabel agent={row.agent} /> : <small className="agent-label muted">Person (admin)</small>}
         </span>
-        <span className="agent-card-balance">{formatMoney(row.balanceCents)}</span>
+        <span className={row.sportsbookCents > 0 ? 'agent-card-profit win' : row.sportsbookCents < 0 ? 'agent-card-profit lose' : 'agent-card-profit'}>
+          {signedMoney(row.sportsbookCents)}
+          <small>Sportsbook profit</small>
+        </span>
       </button>
       <dl className="agent-stats">
-        <div>
-          <dt>Profit</dt>
-          <dd className={row.profitCents > 0 ? 'win' : row.profitCents < 0 ? 'lose' : ''}>{row.profitCents === null ? '—' : signedMoney(row.profitCents)}</dd>
-        </div>
         <div>
           <dt>Bet</dt>
           <dd>{formatMoney(row.stakedCents)}</dd>
@@ -84,7 +86,12 @@ function AgentCard({ row, open, onToggle }) {
           <dt>Win rate</dt>
           <dd>{formatWinRate(row.stats)}</dd>
         </div>
+        <div>
+          <dt>Balance</dt>
+          <dd>{formatMoney(row.balanceCents)}</dd>
+        </div>
       </dl>
+      <p className="agent-wallet muted small">Wallet change {row.walletChangeCents === null ? '—' : signedMoney(row.walletChangeCents)}</p>
       {open ? (
         row.byLeague.length ? (
           <table className="table agent-leagues">
@@ -190,8 +197,9 @@ export default function AdminAgents() {
     Promise.all([getDocs(query(collection(db, 'users'), where('agent', '!=', null))), getDoc(doc(db, 'users', adminUid))])
       .then(([agents, me]) => {
         if (!live) return;
-        const list = agents.docs.map((d) => agentRow(d.id, d.data())).sort((a, b) => b.balanceCents - a.balanceCents);
+        const list = agents.docs.map((d) => agentRow(d.id, d.data())).slice();
         if (me.exists()) list.push(agentRow(me.id, me.data(), true));
+        list.sort((a, b) => b.sportsbookCents - a.sportsbookCents || b.balanceCents - a.balanceCents);
         setRows(list);
         setError('');
       })
@@ -205,18 +213,20 @@ export default function AdminAgents() {
 
   if (error) return <ErrorState title="Couldn't load the agents" message={error} onRetry={refresh} />;
   if (!rows) return <LoadingState label="Loading the agents…" rows={3} />;
+  const agentCount = rows.filter((r) => !r.isAdmin).length;
 
   return (
     <div className="agents-panel">
       <div className="row-actions agents-top">
         <p className="muted small">
-          {rows.length - 1} AI {rows.length - 1 === 1 ? 'agent' : 'agents'} and you. Tap a card for its leagues. Profit = balance − starting balance − admin adjustments.
+          {agentCount} AI {agentCount === 1 ? 'agent' : 'agents'} and you, best sportsbook profit first. Sportsbook profit = returned − bet on settled sportsbook bets. Wallet change
+          (balance − starting balance − admin adjustments) also counts casino, shop and Battles money, so it is not comparable. Tap a card for its leagues.
         </p>
         <button type="button" className="btn small" onClick={refresh}>
           Refresh
         </button>
       </div>
-      {rows.length === 1 ? <p className="muted">No AI agents yet: create them under Players with "AI agent" ticked.</p> : null}
+      {agentCount === 0 ? <p className="muted">No AI agents yet: create them under Players with "AI agent" ticked.</p> : null}
       <ul className="agent-list">
         {rows.map((row) => (
           <AgentCard key={row.id} row={row} open={open === row.id} onToggle={() => setOpen((v) => (v === row.id ? null : row.id))} />

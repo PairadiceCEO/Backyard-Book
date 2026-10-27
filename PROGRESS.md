@@ -5,6 +5,47 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.21.2 (Will, 2026-10-27 05:12 CT) — COMPLETE (2026-10-27), merged to main, ready for Will to test
+Spec: Will's message of 05:12 ("leaner agent runs (compact boards), one retry when a provider is busy, correct search count in
+the prompt, and Admin → Agents compares sportsbook results"). 0.21.1 was not done, so part 4 is included here. Agents only:
+nothing under server/, no house-rule change, no firestore.rules change, no index, /api still 7.
+First real run: claude-big 4 turns 29.5k in (passed); claude-small stopped "token cap reached (52457 in of 40000)"; openai 3 turns
+23k in; gemini skipped (503 high demand). Variables then: AGENT_MAX_INPUT_TOKENS 40000, OUTPUT 5000, SEARCHES 3.
+
+### Checklist
+- [x] 1 Compact tool results (agents/lib/tools.mjs): get_board, get_game, get_props, get_leagues; token counts per league in PROGRESS.
+- [x] 2 Budget check before each model turn (estimate of the next request vs AGENT_MAX_INPUT_TOKENS).
+- [x] 3 One retry after 60 s on 503 / 429 / overloaded / high demand / rate limit; never on other errors.
+- [x] 4 Prompt shows the run's real limits (searches, turns), filled in by the runner; Admin → Agents "Sportsbook profit" main
+      number (returned − staked, sorted by it) and "Wallet change" in small text; phone-check screen and notes.
+- [x] 5 Tests (compact shape + no-vig sums to 100%, pre-turn stop, retry rules, prompt limits); version 0.21.2; PROGRESS and
+      agents/README.md; all CLAUDE.md checks; merge wip to main.
+Token sizes of get_board on the test fixtures (test/agents/lean.test.mjs: NFL 14 games, NBA 10, MLB 15, NHL 10, NCAAF 40;
+chars / 4; a real tokenizer counts JSON more heavily, so expect the first real run to read higher):
+
+| League | Before (old shape) | After |
+|---|---|---|
+| NFL | 2,324 | 1,370 |
+| NBA | 1,677 | 1,021 |
+| MLB | 2,513 | 1,485 |
+| NHL | 1,681 | 1,025 |
+| NCAAF | 6,687 (40 games) | 2,892 (30 games, `more: 10`) |
+
+Decisions:
+- The old board result was already trimmed to picks, so the fixtures show about -40%, not -80%; the 10-15k Will saw per result is
+  probably the real tokenizer on JSON plus the sum over resent turns. The real numbers come from the next run's summary.
+- The board (`/api/board`) shows one price per market (DraftKings, else Kalshi), so a Kalshi probability next to a DraftKings
+  one can't be computed from it without calling get_game per game. get_board marks Kalshi-priced sides (`s: "k"`) and games that
+  have Kalshi (`k: 1`); get_game compares Kalshi's rows with DraftKings' main line (`d`, in points) and shows both fair %. Nothing
+  under server/ was touched, as asked.
+- The input budget is a total over the run (as set), so the pre-turn check adds the next request's estimated size (last input +
+  last output + new results at 3.5 chars/token) to the total used so far. Estimates are cautious; the real count is still what the
+  summary shows.
+- A retry waits 60 s once for 503 / 429 or a body with overloaded / high demand / rate limit (also on a 400 or 500 carrying
+  those words). A 429 that is really "out of credit" therefore costs one 60 s wait before the skip.
+- Admin → Agents sorts everyone, including your own row, by sportsbook profit; ties by balance.
+- tools: `TOOL_DEFS` is still exported (default wording); the runner uses `toolDefs(limits)` so the web_search description has the real count.
+
 ## Phase 0.21.0 (Will, 2026-10-27 03:16 CT) — COMPLETE (2026-10-27), merged to main, ready for Will to set up and test
 Spec: Will's attachment of 03:16 ("AI agent players (Claude ×2, OpenAI, Gemini) that bet from their own accounts once a
 day"). 0.20.0 merged first (main = 352b71f). Agents bet only through the existing /api with a normal Firebase login.

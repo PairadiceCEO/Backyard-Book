@@ -2,7 +2,8 @@
 //   turn(results)  → { calls: [{ id, name, args }], text, usage: { input, output } }
 //                    `results` = [{ id, name, output }] for the previous turn's calls ([] on the first turn)
 //   search(query)  → { summary, sources } with the provider's own search tool (one search), usage added to the run's
-// A non-2xx answer throws ProviderError (status, kind): the runner skips the rest of the run, never retries.
+// A non-2xx answer throws ProviderError (status, kind): the runner skips the rest of the run. Only a busy provider (HTTP 503 or
+// 429, or a body that says overloaded / high demand / rate limit) is retried, once, after 60 s (0.21.2); nothing else is retried.
 
 export class ProviderError extends Error {
   constructor(provider, status, body) {
@@ -16,7 +17,11 @@ export class ProviderError extends Error {
   }
 }
 
-async function postJson(provider, fetchImpl, url, headers, body) {
+export const BUSY_WAIT_MS = 60_000;
+const BUSY_TEXT = /overloaded|high demand|rate.?limit/i;
+const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function postOnce(provider, fetchImpl, url, headers, body) {
   let res;
   try {
     res = await fetchImpl(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
@@ -30,8 +35,28 @@ async function postJson(provider, fetchImpl, url, headers, body) {
   } catch {
     json = null;
   }
-  if (!res.ok) throw new ProviderError(provider, res.status, json);
+  if (!res.ok) {
+    const err = new ProviderError(provider, res.status, json);
+    err.busy = res.status === 503 || res.status === 429 || BUSY_TEXT.test(`${json?.error?.message ?? ''} ${json?.error?.status ?? ''} ${json?.error?.type ?? ''} ${json?.message ?? ''}`);
+    throw err;
+  }
   return json ?? {};
+}
+
+// net = { fetchImpl, sleep, waitMs, counter }: one retry after waitMs when the provider is busy, any other error at once.
+async function postJson(provider, net, url, headers, body) {
+  try {
+    return await postOnce(provider, net.fetchImpl, url, headers, body);
+  } catch (err) {
+    if (!(err instanceof ProviderError) || !err.busy) throw err;
+    net.counter.retries += 1;
+    await net.sleep(net.waitMs);
+    return postOnce(provider, net.fetchImpl, url, headers, body);
+  }
+}
+
+function makeNet({ fetchImpl = fetch, sleep = realSleep, retryWaitMs = BUSY_WAIT_MS }) {
+  return { fetchImpl, sleep, waitMs: retryWaitMs, counter: { retries: 0 } };
 }
 
 const toResultText = (output) => (typeof output === 'string' ? output : JSON.stringify(output));
@@ -39,7 +64,8 @@ const SEARCH_PROMPT = (q) =>
   `Search the web for: ${q}\nAnswer in at most 120 words with the facts that matter for a sports bet (injuries, lineups, weather, form, odds news), each with its date, then list up to 3 source URLs.`;
 
 // ---------- Anthropic (Messages API; web search = the web_search server tool, one use) ----------
-export function anthropicAdapter({ apiKey, model, system, tools, maxOutputPerTurn = 2048, fetchImpl = fetch }) {
+export function anthropicAdapter({ apiKey, model, system, tools, maxOutputPerTurn = 2048, fetchImpl = fetch, sleep, retryWaitMs }) {
+  const net = makeNet({ fetchImpl, sleep, retryWaitMs });
   const url = 'https://api.anthropic.com/v1/messages';
   const headers = { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' };
   const toolDefs = tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters }));
@@ -47,10 +73,13 @@ export function anthropicAdapter({ apiKey, model, system, tools, maxOutputPerTur
   return {
     provider: 'anthropic',
     model,
+    get retries() {
+      return net.counter.retries;
+    },
     async turn(results, firstText) {
       if (firstText) messages.push({ role: 'user', content: firstText });
       else messages.push({ role: 'user', content: results.map((r) => ({ type: 'tool_result', tool_use_id: r.id, content: toResultText(r.output) })) });
-      const json = await postJson('anthropic', fetchImpl, url, headers, { model, max_tokens: maxOutputPerTurn, system, tools: toolDefs, messages });
+      const json = await postJson('anthropic', net, url, headers, { model, max_tokens: maxOutputPerTurn, system, tools: toolDefs, messages });
       const content = Array.isArray(json.content) ? json.content : [];
       messages.push({ role: 'assistant', content });
       return {
@@ -60,7 +89,7 @@ export function anthropicAdapter({ apiKey, model, system, tools, maxOutputPerTur
       };
     },
     async search(query) {
-      const json = await postJson('anthropic', fetchImpl, url, headers, {
+      const json = await postJson('anthropic', net, url, headers, {
         model,
         max_tokens: 700,
         tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 1 }],
@@ -78,7 +107,8 @@ export function anthropicAdapter({ apiKey, model, system, tools, maxOutputPerTur
 }
 
 // ---------- OpenAI (Responses API; the conversation continues with previous_response_id; web search = web_search tool) ----------
-export function openaiAdapter({ apiKey, model, system, tools, maxOutputPerTurn = 4096, fetchImpl = fetch }) {
+export function openaiAdapter({ apiKey, model, system, tools, maxOutputPerTurn = 4096, fetchImpl = fetch, sleep, retryWaitMs }) {
+  const net = makeNet({ fetchImpl, sleep, retryWaitMs });
   const url = 'https://api.openai.com/v1/responses';
   const headers = { authorization: `Bearer ${apiKey}` };
   const toolDefs = tools.map((t) => ({ type: 'function', name: t.name, description: t.description, parameters: t.parameters, strict: false }));
@@ -103,9 +133,12 @@ export function openaiAdapter({ apiKey, model, system, tools, maxOutputPerTurn =
   return {
     provider: 'openai',
     model,
+    get retries() {
+      return net.counter.retries;
+    },
     async turn(results, firstText) {
       const input = firstText ? [{ role: 'user', content: firstText }] : results.map((r) => ({ type: 'function_call_output', call_id: r.id, output: toResultText(r.output) }));
-      const json = await postJson('openai', fetchImpl, url, headers, {
+      const json = await postJson('openai', net, url, headers, {
         model,
         instructions: system,
         input,
@@ -119,7 +152,7 @@ export function openaiAdapter({ apiKey, model, system, tools, maxOutputPerTurn =
       return { calls, text, usage };
     },
     async search(query) {
-      const json = await postJson('openai', fetchImpl, url, headers, { model, input: SEARCH_PROMPT(query), tools: [{ type: 'web_search' }], max_output_tokens: 900, reasoning: { effort: 'low' } });
+      const json = await postJson('openai', net, url, headers, { model, input: SEARCH_PROMPT(query), tools: [{ type: 'web_search' }], max_output_tokens: 900, reasoning: { effort: 'low' } });
       const { text, usage, sources } = parse(json);
       return { summary: text, sources: [...new Set(sources)].slice(0, 5), usage };
     },
@@ -140,7 +173,8 @@ function geminiSchema(schema) {
   return out;
 }
 
-export function geminiAdapter({ apiKey, model, system, tools, maxOutputPerTurn = 4096, fetchImpl = fetch }) {
+export function geminiAdapter({ apiKey, model, system, tools, maxOutputPerTurn = 4096, fetchImpl = fetch, sleep, retryWaitMs }) {
+  const net = makeNet({ fetchImpl, sleep, retryWaitMs });
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const headers = { 'x-goog-api-key': apiKey };
   const declarations = tools.map((t) => ({ name: t.name, description: t.description, parameters: geminiSchema(t.parameters) }));
@@ -151,10 +185,13 @@ export function geminiAdapter({ apiKey, model, system, tools, maxOutputPerTurn =
   return {
     provider: 'google',
     model,
+    get retries() {
+      return net.counter.retries;
+    },
     async turn(results, firstText) {
       if (firstText) contents.push({ role: 'user', parts: [{ text: firstText }] });
       else contents.push({ role: 'user', parts: results.map((r) => ({ functionResponse: { ...(r.providerId ? { id: r.providerId } : {}), name: r.name, response: { result: r.output } } })) });
-      const json = await postJson('google', fetchImpl, url, headers, {
+      const json = await postJson('google', net, url, headers, {
         systemInstruction: { parts: [{ text: system }] },
         contents,
         tools: [{ functionDeclarations: declarations }],
@@ -176,7 +213,7 @@ export function geminiAdapter({ apiKey, model, system, tools, maxOutputPerTurn =
         throw err;
       }
       try {
-        const json = await postJson('google', fetchImpl, url, headers, { contents: [{ role: 'user', parts: [{ text: SEARCH_PROMPT(query) }] }], tools: [{ googleSearch: {} }], generationConfig: { maxOutputTokens: 900 } });
+        const json = await postJson('google', net, url, headers, { contents: [{ role: 'user', parts: [{ text: SEARCH_PROMPT(query) }] }], tools: [{ googleSearch: {} }], generationConfig: { maxOutputTokens: 900 } });
         const cand = json.candidates?.[0];
         const sources = (cand?.groundingMetadata?.groundingChunks ?? []).map((c) => c.web?.uri).filter(Boolean).slice(0, 5);
         return { summary: (cand?.content?.parts ?? []).map((p) => p.text ?? '').join('').trim(), sources, usage: usageOf(json) };

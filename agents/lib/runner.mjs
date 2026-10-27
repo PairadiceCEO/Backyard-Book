@@ -1,13 +1,15 @@
 // One agent session (0.21.0): sign in → the model plays with the tools → a run summary. Budget per run, enforced here:
 // at most AGENT_MAX_TURNS model turns (25), AGENT_MAX_SEARCHES searches (5), AGENT_MAX_INPUT_TOKENS (150k) and
-// AGENT_MAX_OUTPUT_TOKENS (20k), summed over the run including searches. Hitting one stops the run and is logged. A provider
-// error (no credit, quota, rate limit, bad key, outage) ends that agent's run cleanly; nothing is retried.
+// AGENT_MAX_OUTPUT_TOKENS (20k), summed over the run including searches. Hitting one stops the run and is logged. The input
+// budget is checked before every model turn (0.21.2): when the next request would take the run over it, the run ends without
+// sending it. A provider error (no credit, quota, bad key, outage) ends that agent's run cleanly; only a busy provider (503 /
+// 429 / overloaded / rate limit) is retried, once, after 60 s (providers.mjs).
 // The summary never contains a password, token or key (redact() also scrubs every secret value it was given).
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { usernameToEmail } from '../../shared/constants.js';
-import { TOOL_DEFS, createTools } from './tools.mjs';
+import { createTools, estimateTokens, toolDefs } from './tools.mjs';
 import { ProviderError, makeAdapter } from './providers.mjs';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
@@ -26,6 +28,18 @@ export function limitsFrom(env) {
     return Number.isFinite(v) && v > 0 ? Math.floor(v) : d;
   };
   return { maxTurns: n('AGENT_MAX_TURNS', 25), maxSearches: n('AGENT_MAX_SEARCHES', 5), maxInput: n('AGENT_MAX_INPUT_TOKENS', 150_000), maxOutput: n('AGENT_MAX_OUTPUT_TOKENS', 20_000) };
+}
+
+// The prompt with this run's real limits filled in ({{MAX_SEARCHES}}, {{MAX_TURNS}}), so it never disagrees with the settings.
+export function renderPrompt(template, limits) {
+  return String(template).replaceAll('{{MAX_SEARCHES}}', String(limits.maxSearches)).replaceAll('{{MAX_TURNS}}', String(limits.maxTurns));
+}
+
+// What the next model request will add to the run's input total: the conversation so far (the last request's input plus the
+// reply it got) plus the new tool results. A deliberately cautious count (3.5 characters per token) for the new text.
+export function nextTurnEstimate({ lastInput, lastOutput, results }) {
+  const newText = results ? Math.ceil(JSON.stringify(results).length / 3.5) : 0;
+  return lastInput + lastOutput + newText;
 }
 
 export function redactor(secrets) {
@@ -103,6 +117,7 @@ export function formatSummary(s) {
   }
   lines.push(`Searches: ${s.searches} of ${s.limits.maxSearches}${s.searchFailures ? ` (${s.searchFailures} unavailable or failed)` : ''}`);
   lines.push(`Model turns: ${s.turns} of ${s.limits.maxTurns}`);
+  if (s.retries) lines.push(`Retries: ${s.retries} (provider was busy; waited 60 s and tried once more)`);
   lines.push(`Tokens: ${s.usage.input.toLocaleString('en-US')} in / ${s.usage.output.toLocaleString('en-US')} out`);
   lines.push(`Estimated cost: ${s.costUsd === null ? 'unknown (model not in agents/prices.json)' : `$${s.costUsd.toFixed(4)}`}`);
   if (s.finalText) lines.push(`Agent's note: ${s.finalText.replace(/\s+/g, ' ').slice(0, 600)}`);
@@ -111,7 +126,7 @@ export function formatSummary(s) {
 
 // Runs one session. Everything external is injectable for tests: fetchImpl (Firebase sign-in, our /api and the provider),
 // now, adapter (a ready provider adapter), prompt, prices.
-export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, now = () => new Date(), adapter = null, prompt = null, prices = null }) {
+export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, now = () => new Date(), adapter = null, prompt = null, prices = null, sleep, retryWaitMs }) {
   const cfg = AGENTS[agentId];
   if (!cfg) throw new Error(`Unknown agent "${agentId}". One of: ${Object.keys(AGENTS).join(', ')}.`);
   const limits = limitsFrom(env);
@@ -121,7 +136,7 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
   const password = env[`AGENT_${cfg.secret}_PASSWORD`] || env.AGENT_PASSWORD;
   const apiKey = env[cfg.keyVar];
   const redact = redactor([password, apiKey, env.VITE_FIREBASE_API_KEY, env.ANTHROPIC_API_KEY, env.OPENAI_API_KEY, env.GEMINI_API_KEY]);
-  const summary = { agentId, provider: cfg.provider, model, outcome: 'skipped', stopReason: '', bets: [], refusals: [], searches: 0, searchFailures: 0, turns: 0, usage: { input: 0, output: 0 }, costUsd: 0, balanceCents: null, finalText: '', limits };
+  const summary = { agentId, provider: cfg.provider, model, outcome: 'skipped', stopReason: '', retries: 0, bets: [], refusals: [], searches: 0, searchFailures: 0, turns: 0, usage: { input: 0, output: 0 }, costUsd: 0, balanceCents: null, finalText: '', limits };
   const finish = () => {
     summary.costUsd = estimateCost(prices ?? JSON.parse(readFileSync(here('../prices.json'), 'utf8')), cfg.provider, model, summary.usage, summary.searches);
     return { summary, text: redact(formatSummary(summary)) };
@@ -141,8 +156,8 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
     return finish();
   }
   const api = makeApi({ siteUrl: env.BB_SITE_URL, idToken, fetchImpl });
-  const system = prompt ?? readFileSync(here('../prompt.md'), 'utf8');
-  const ai = adapter ?? makeAdapter(cfg.provider, { apiKey, model, system, tools: TOOL_DEFS, fetchImpl });
+  const system = renderPrompt(prompt ?? readFileSync(here('../prompt.md'), 'utf8'), limits);
+  const ai = adapter ?? makeAdapter(cfg.provider, { apiKey, model, system, tools: toolDefs(limits), fetchImpl, sleep, retryWaitMs });
 
   const addUsage = (u) => {
     summary.usage.input += Number(u?.input) || 0;
@@ -173,6 +188,8 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
 
   summary.outcome = 'ran';
   let results = null;
+  let last = { input: 0, output: 0 }; // the previous request's own token counts (0 before the first turn)
+  const capLine = () => `token cap reached (${summary.usage.input} in of ${limits.maxInput}, ${summary.usage.output} out of ${limits.maxOutput})`;
   try {
     while (true) {
       if (summary.turns >= limits.maxTurns) {
@@ -180,12 +197,19 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
         break;
       }
       if (overTokens()) {
-        summary.stopReason = `token cap reached (${summary.usage.input} in of ${limits.maxInput}, ${summary.usage.output} out of ${limits.maxOutput})`;
+        summary.stopReason = capLine();
+        break;
+      }
+      // Before sending: would this request take the run's input total over its budget? Then end the run here.
+      const next = results ? nextTurnEstimate({ lastInput: last.input, lastOutput: last.output, results }) : estimateTokens(`${system}\n${opening}`);
+      if (summary.usage.input + next > limits.maxInput) {
+        summary.stopReason = `${capLine()}; the next turn would add about ${next} and was not sent`;
         break;
       }
       const step = await ai.turn(results ?? [], results ? null : opening);
       summary.turns += 1;
       addUsage(step.usage);
+      last = { input: Number(step.usage?.input) || 0, output: Number(step.usage?.output) || 0 };
       if (step.text) summary.finalText = step.text;
       if (!step.calls.length) break; // the model is done for the day
       results = [];
@@ -194,7 +218,7 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
         results.push({ id: call.id, providerId: call.providerId, name: call.name, output });
       }
       if (overTokens()) {
-        summary.stopReason = `token cap reached (${summary.usage.input} in of ${limits.maxInput}, ${summary.usage.output} out of ${limits.maxOutput})`;
+        summary.stopReason = capLine();
         break;
       }
     }
@@ -207,6 +231,7 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
       summary.stopReason = `runner error: ${err.message}`;
     }
   }
+  summary.retries = Number(ai.retries) || 0;
   summary.bets = tools.log.bets;
   summary.refusals = tools.log.refusals;
   summary.searches = tools.log.searches;

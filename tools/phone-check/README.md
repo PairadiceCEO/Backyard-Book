@@ -21,6 +21,10 @@ button; `interact.mjs` checks the paytable against PAYTABLE, every autospin stop
 is sent before the last one has landed), the win line / count-up / Big win, and the sound toggle persisting across reloads and games.
 Pages log the sounds they ask for to `window.__soundLog` when the harness puts an array there.
 
+Since 0.21.2: the `admin-agents` screen shows Sportsbook profit as the main number (sorted by it) with Wallet change in small text
+under each card (fixtures `agentUsers` have a balance that differs from their profit); `interact.mjs` checks the order, the numbers
+and that nothing scrolls sideways.
+
 1. Copy the repo somewhere temporary, then put `mocks/` there as `harness-mocks/` and
    `vite.harness.config.mjs` at its root; `npm install`.
 2. Start it: `VITE_FIREBASE_API_KEY=x VITE_FIREBASE_AUTH_DOMAIN=x VITE_FIREBASE_PROJECT_ID=x VITE_FIREBASE_APP_ID=x npx vite --config vite.harness.config.mjs` (port 5199).

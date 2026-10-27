@@ -3,10 +3,12 @@
 // this file builds exactly the legs the app's bet slip would send (src/components/BetSlip.jsx), so the model can't send a
 // malformed or invented market.
 //
-//   get_leagues()              which leagues have games starting today or tomorrow (Central), from each league's board
+//   get_leagues()              leagues with games not started yet: upcoming count, how many start within 36 h, how many have Kalshi
 //   get_board(league)          main lines (DraftKings, or Kalshi where DraftKings has none) for games not started yet
-//   get_game(league, gameId)   alternate spreads and totals (Kalshi)
+//   get_game(league, gameId)   alternate spreads and totals (Kalshi), compared with the DraftKings main line
 //   get_props(league, gameId)  player props (Kalshi, pre-game only)
+// 0.21.2: results are compact (short keys, no pretty-printing, no-vig fair probabilities worked out here) so a board costs about
+// 2-3k tokens instead of 10-15k. Keys are explained once in each result's "keys" note.
 //   get_my_bets()              balance, open bets, today's slips   (/api/bets action "mine")
 //   place_bet({ mode, legs: [{ pick, stakeCents }], stakeCents, why })   /api/bets place; LINE_CHANGED / ODDS_CHANGED come back
 //                              to the model with the new price (the catalog is updated, nothing is re-sent automatically)
@@ -17,26 +19,30 @@ import { randomUUID } from 'node:crypto';
 export const LEAGUES = ['nfl', 'nba', 'mlb', 'nhl', 'ncaaf'];
 const TOO_SOON_MS = 10 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_BOARD_GAMES = 30;
+const MAX_PROP_PLAYERS = 25;
+const hasKalshi = (g) => Boolean(g.kalshi);
 
-export const TOOL_DEFS = [
+export function toolDefs({ maxSearches } = {}) {
+  return [
   {
     name: 'get_leagues',
-    description: 'Which leagues have games that have not started yet, with how many start in the next 36 hours. Call this first.',
+    description: 'Which leagues have games that have not started yet: how many are upcoming, how many start within 36 hours and how many have a Kalshi price. Call this first.',
     parameters: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'get_board',
-    description: "One league's upcoming games with their main lines: moneyline, spread and total, each side with a pick id, American odds and the source (espn = DraftKings, kalshi = Kalshi). Games starting within 10 minutes are left out.",
+    description: "One league's upcoming games with their main lines: moneyline (ml), spread (sp) and total (tot), each side with a pick id, American odds, the no-vig fair probability and the line. Games starting within 10 minutes are left out.",
     parameters: { type: 'object', properties: { league: { type: 'string', enum: LEAGUES } }, required: ['league'] },
   },
   {
     name: 'get_game',
-    description: "One game's alternate spreads and totals (Kalshi prices), each with a pick id. Useful to compare with DraftKings' main line.",
+    description: "One game's alternate spreads and totals (Kalshi prices) as compact rows with pick ids and fair probabilities, plus DraftKings' main line and the gap to Kalshi at that line.",
     parameters: { type: 'object', properties: { league: { type: 'string', enum: LEAGUES }, gameId: { type: 'string' } }, required: ['league', 'gameId'] },
   },
   {
     name: 'get_props',
-    description: "One game's player props (Kalshi, pre-game only): for each player and stat, thresholds with yes / no picks.",
+    description: "One game's player props (Kalshi, pre-game only): for each stat and player, thresholds with yes / no picks, odds and fair probabilities.",
     parameters: { type: 'object', properties: { league: { type: 'string', enum: LEAGUES }, gameId: { type: 'string' } }, required: ['league', 'gameId'] },
   },
   {
@@ -64,10 +70,12 @@ export const TOOL_DEFS = [
   },
   {
     name: 'web_search',
-    description: 'Search the web (news, injuries, lineups, weather, form). At most 5 searches in a session; returns a short summary with sources.',
+    description: `Search the web (news, injuries, lineups, weather, form). ${Number.isFinite(maxSearches) ? `At most ${maxSearches} searches in a session` : 'A limited number of searches per session'}; returns a short summary with sources.`,
     parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
   },
-];
+  ];
+}
+export const TOOL_DEFS = toolDefs();
 
 const centralFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 export function centralTime(iso) {
@@ -75,12 +83,27 @@ export function centralTime(iso) {
   return Number.isNaN(d.getTime()) ? null : `${centralFmt.format(d)} CT`;
 }
 
-function pct(american) {
+const r1 = (x) => Math.round(x * 10) / 10;
+
+// Implied probability (0..1) of American odds, vig included.
+function impl(american) {
   const a = Number(american);
   if (!Number.isFinite(a) || a === 0) return null;
-  const p = a < 0 ? -a / (-a + 100) : 100 / (a + 100);
-  return Math.round(p * 1000) / 10;
+  return a < 0 ? -a / (-a + 100) : 100 / (a + 100);
 }
+
+// No-vig fair probabilities (percent, one decimal) of the two sides of one market: each side's implied probability divided by
+// their sum. The second is 100 minus the first, so the pair always adds up to exactly 100.0.
+export function fairPair(americanA, americanB) {
+  const pa = impl(americanA);
+  const pb = impl(americanB);
+  if (pa === null || pb === null) return [null, null];
+  const fa = r1((pa / (pa + pb)) * 100);
+  return [fa, r1(100 - fa)];
+}
+
+// A rough token count of a tool result or request text (about 4 characters per token).
+export const estimateTokens = (value) => Math.ceil((typeof value === 'string' ? value : JSON.stringify(value) ?? '').length / 4);
 
 // The tools' state and executor. api: { get(path), post(path, body) } that throw { code, message, status, details }.
 export function createTools({ api, now = () => new Date(), search, limits }) {
@@ -89,6 +112,7 @@ export function createTools({ api, now = () => new Date(), search, limits }) {
   const boards = new Map();
   const log = { bets: [], refusals: [], searches: 0, searchFailures: 0, toolErrors: 0 };
 
+  // Registers a pick and returns its id ("p7"), or null when the quote has no usable American price.
   function addPick(game, marketType, selection, quote, extra = {}) {
     if (!quote || !Number.isInteger(quote.american)) return null;
     const id = `p${nextPick++}`;
@@ -101,7 +125,25 @@ export function createTools({ api, now = () => new Date(), search, limits }) {
       league: game.league,
       start: game.startTime,
     });
-    return { pick: id, odds: quote.american, impliedPct: pct(quote.american), line: quote.line ?? null, source: quote.source };
+    return id;
+  }
+
+  // One side as the model sees it: { p pick id, o American odds, f no-vig fair %, l line, s "k" when the price is Kalshi's }.
+  const sideOut = (id, quote, fair, extra = {}) => {
+    if (!id) return null;
+    const out = { p: id, o: quote.american };
+    if (fair !== null && fair !== undefined) out.f = fair;
+    if (quote.line !== null && quote.line !== undefined) out.l = quote.line;
+    if (quote.source === 'kalshi') out.s = 'k';
+    return { ...out, ...extra };
+  };
+
+  // Two opposite sides of one market, each with its pick and the pair's no-vig fair probability.
+  function pairOut(game, marketType, selA, qa, selB, qb) {
+    const ida = addPick(game, marketType, selA, qa);
+    const idb = addPick(game, marketType, selB, qb);
+    const [fa, fb] = ida && idb ? fairPair(qa.american, qb.american) : [null, null];
+    return [sideOut(ida, qa, fa), sideOut(idb, qb, fb)];
   }
 
   function describePick(game, marketType, selection, line) {
@@ -127,7 +169,7 @@ export function createTools({ api, now = () => new Date(), search, limits }) {
           const b = await board(league);
           const games = upcoming(b.games ?? []);
           const soon = games.filter((g) => new Date(g.startTime).getTime() - now().getTime() < 1.5 * DAY_MS);
-          if (games.length) out.push({ league, upcomingGames: games.length, startingWithin36h: soon.length, firstStart: centralTime(games[0].startTime) });
+          if (games.length) out.push({ league, upcoming: games.length, within36h: soon.length, withKalshi: games.filter(hasKalshi).length, first: centralTime(games[0].startTime) });
         } catch (err) {
           out.push({ league, error: err.message });
         }
@@ -138,25 +180,33 @@ export function createTools({ api, now = () => new Date(), search, limits }) {
     async get_board({ league }) {
       if (!LEAGUES.includes(league)) return { error: `league must be one of ${LEAGUES.join(', ')}` };
       const b = await board(league);
-      const games = upcoming(b.games ?? []).slice(0, 40);
+      const all = upcoming(b.games ?? []);
+      const games = all.slice(0, MAX_BOARD_GAMES);
       return {
         league,
-        note: 'Picks are ids for place_bet. impliedPct includes the vig.',
+        keys: 'Per game: gameId, t start (CT), in minutes to start, a/h away/home abbreviation, an/hn names, k=1 when Kalshi prices it (see get_game). Markets ml moneyline, sp spread, tot total (o over, u under; h home, a away). Per side: p pick id for place_bet, o American odds, f no-vig fair % (both sides add to 100), l line, s "k" if the price is Kalshi (else DraftKings).',
         games: games.map((g) => {
           const m = g.markets ?? {};
-          return {
+          const [mlH, mlA] = pairOut(g, 'moneyline', 'home', m.moneyline?.home, 'away', m.moneyline?.away);
+          const [spH, spA] = pairOut(g, 'spread', 'home', m.spread?.home, 'away', m.spread?.away);
+          const [tO, tU] = pairOut(g, 'total', 'over', m.total?.over, 'under', m.total?.under);
+          if (tU) delete tU.l; // both sides share the line: it is on the over
+          const row = {
             gameId: g.id,
-            game: `${g.away?.shortName} @ ${g.home?.shortName}`,
-            away: g.away?.name ?? g.away?.shortName,
-            home: g.home?.name ?? g.home?.shortName,
-            start: centralTime(g.startTime),
-            minutesToStart: Math.round((new Date(g.startTime).getTime() - now().getTime()) / 60000),
-            moneyline: { home: addPick(g, 'moneyline', 'home', m.moneyline?.home), away: addPick(g, 'moneyline', 'away', m.moneyline?.away) },
-            spread: { home: addPick(g, 'spread', 'home', m.spread?.home), away: addPick(g, 'spread', 'away', m.spread?.away) },
-            total: { over: addPick(g, 'total', 'over', m.total?.over), under: addPick(g, 'total', 'under', m.total?.under) },
-            note: g.oddsNote ?? undefined,
+            t: centralTime(g.startTime),
+            in: Math.round((new Date(g.startTime).getTime() - now().getTime()) / 60000),
+            a: g.away?.abbr ?? g.away?.shortName,
+            an: g.away?.shortName,
+            h: g.home?.abbr ?? g.home?.shortName,
+            hn: g.home?.shortName,
           };
+          if (hasKalshi(g)) row.k = 1;
+          if (mlH || mlA) row.ml = { h: mlH, a: mlA };
+          if (spH || spA) row.sp = { h: spH, a: spA };
+          if (tO || tU) row.tot = { o: tO, u: tU };
+          return row;
         }),
+        ...(all.length > games.length ? { more: all.length - games.length } : {}),
       };
     },
 
@@ -165,16 +215,48 @@ export function createTools({ api, now = () => new Date(), search, limits }) {
       const g = { ...d.game, league };
       if (!upcoming([g]).length) return { error: 'This game has started or starts within 10 minutes: AI players bet pre-game only.' };
       const lad = d.ladders ?? { spreads: { home: [], away: [] }, totals: [] };
+      const m = g.markets ?? {};
+      // DraftKings' main line and its no-vig fair probabilities: the yardstick for Kalshi's alternate rows at the same line.
+      const dkOnly = (q) => (q && q.source === 'espn' ? q : null);
+      const [dkSpH, dkSpA] = dkOnly(m.spread?.home) && dkOnly(m.spread?.away) ? fairPair(m.spread.home.american, m.spread.away.american) : [null, null];
+      const [dkTotO, dkTotU] = dkOnly(m.total?.over) && dkOnly(m.total?.under) ? fairPair(m.total.over.american, m.total.under.american) : [null, null];
+      const dk = {};
+      if (dkSpH !== null) dk.sp = { h: { l: m.spread.home.line, o: m.spread.home.american, f: dkSpH }, a: { l: m.spread.away.line, o: m.spread.away.american, f: dkSpA } };
+      if (dkTotO !== null) dk.tot = { l: m.total.over.line, o: { o: m.total.over.american, f: dkTotO }, u: { o: m.total.under.american, f: dkTotU } };
+      if (dkOnly(m.moneyline?.home) && dkOnly(m.moneyline?.away)) {
+        const [fh, fa] = fairPair(m.moneyline.home.american, m.moneyline.away.american);
+        dk.ml = { h: { o: m.moneyline.home.american, f: fh }, a: { o: m.moneyline.away.american, f: fa } };
+      }
+      const gap = (k, base) => (k === null || k === undefined || base === null || base === undefined ? undefined : { d: r1(k - base) });
+
+      // Spread rows: home at line L pairs with away at -L (the two sides of one Kalshi market).
+      const awayByLine = new Map((lad.spreads?.away ?? []).map((q) => [q.line, q]));
+      const homeByLine = new Map((lad.spreads?.home ?? []).map((q) => [q.line, q]));
+      const spreadRows = (side, own, other, dkFair, dkLine) =>
+        own.map((q) => {
+          const id = addPick(g, 'spread', side, q);
+          const opp = other.get(-q.line);
+          const k = id && opp ? fairPair(q.american, opp.american)[0] : null;
+          return sideOut(id, q, k, q.line === dkLine ? gap(k, dkFair) : {});
+        }).filter(Boolean);
+      const totals = (lad.totals ?? []).map((row) => {
+        const idO = addPick(g, 'total', 'over', row.over);
+        const idU = addPick(g, 'total', 'under', row.under);
+        const [kO, kU] = idO && idU ? fairPair(row.over.american, row.under.american) : [null, null];
+        const same = dkTotO !== null && row.line === m.total.over.line;
+        return { l: row.line, o: sideOut(idO, { ...row.over, line: null }, kO, same ? gap(kO, dkTotO) : {}), u: sideOut(idU, { ...row.under, line: null }, kU, same ? gap(kU, dkTotU) : {}) };
+      }).filter((r) => r.o || r.u);
       return {
         gameId,
-        game: `${g.away?.shortName} @ ${g.home?.shortName}`,
-        start: centralTime(g.startTime),
-        alternateSpreads: {
-          home: (lad.spreads?.home ?? []).map((q) => addPick(g, 'spread', 'home', q)).filter(Boolean),
-          away: (lad.spreads?.away ?? []).map((q) => addPick(g, 'spread', 'away', q)).filter(Boolean),
+        game: `${g.away?.abbr ?? g.away?.shortName} @ ${g.home?.abbr ?? g.home?.shortName}`,
+        t: centralTime(g.startTime),
+        keys: 'dk = DraftKings main line (o odds, f no-vig fair %). alt = Kalshi alternate rows: sp.h / sp.a spreads by line l, tot rows by line l with o over / u under. Per side: p pick id, o American odds, f Kalshi no-vig fair % (when both sides exist), d = f minus the DraftKings fair % at the same line (points).',
+        dk,
+        alt: {
+          sp: { h: spreadRows('home', lad.spreads?.home ?? [], awayByLine, dkSpH, dkOnly(m.spread?.home)?.line), a: spreadRows('away', lad.spreads?.away ?? [], homeByLine, dkSpA, dkOnly(m.spread?.away)?.line) },
+          tot: totals,
         },
-        alternateTotals: (lad.totals ?? []).map((row) => ({ line: row.line, over: addPick(g, 'total', 'over', row.over), under: addPick(g, 'total', 'under', row.under) })),
-        hasProps: (d.propsCount ?? 0) > 0,
+        props: (d.propsCount ?? 0) > 0,
       };
     },
 
@@ -184,20 +266,26 @@ export function createTools({ api, now = () => new Date(), search, limits }) {
       if (!d.props?.open) return { open: false, reason: d.props?.reason ?? 'No props.' };
       return {
         gameId,
-        game: `${g.away?.shortName} @ ${g.home?.shortName}`,
+        game: `${g.away?.abbr ?? g.away?.shortName} @ ${g.home?.abbr ?? g.home?.shortName}`,
+        keys: 'Per stat: players (n name, t team) with rows by threshold at (the stat reaches at least that number): y yes (over) side, n no side. Per side: p pick id, o American odds, f no-vig fair % (when both sides exist).',
         props: (d.props.tabs ?? []).map((tab) => ({
           stat: tab.stat,
-          players: tab.players.slice(0, 25).map((p) => ({
-            player: p.name,
-            team: p.team,
-            thresholds: p.rows.map((row) => {
+          players: tab.players.slice(0, MAX_PROP_PLAYERS).map((p) => ({
+            n: p.name,
+            t: p.team,
+            r: p.rows.map((row) => {
               const make = (side) => {
                 const q = row[side];
                 if (!q) return null;
                 const prop = { series: tab.series, stat: tab.stat, anytime: tab.anytime, player: p.name, team: p.team, threshold: row.threshold };
-                return addPick(g, 'prop', side, { ...q, line: row.strike, ref: { ticker: row.ticker, side } }, { leg: { playerName: p.name }, label: `${p.name} ${side === 'yes' ? `${row.threshold}+` : `under ${row.threshold}`} ${tab.stat}`, prop });
+                const quote = { ...q, line: row.strike, ref: { ticker: row.ticker, side } };
+                return { id: addPick(g, 'prop', side, quote, { leg: { playerName: p.name }, label: `${p.name} ${side === 'yes' ? `${row.threshold}+` : `under ${row.threshold}`} ${tab.stat}`, prop }), q };
               };
-              return { atLeast: row.threshold, yes: make('yes'), no: make('no') };
+              const y = make('yes');
+              const n = make('no');
+              const [fy, fn] = y?.id && n?.id ? fairPair(y.q.american, n.q.american) : [null, null];
+              const side = (x, f) => (x?.id ? { p: x.id, o: x.q.american, ...(f !== null ? { f } : {}) } : undefined);
+              return { at: row.threshold, y: side(y, fy), n: side(n, fn) };
             }),
           })),
         })),
@@ -240,7 +328,7 @@ export function createTools({ api, now = () => new Date(), search, limits }) {
             if (v && c.quote) {
               const was = { line: v.leg.line, odds: v.leg.quotedAmerican };
               v.leg = { ...v.leg, line: c.quote.line ?? v.leg.line, quotedAmerican: c.quote.american };
-              moved.push({ pick: c.legId, was, now: { line: c.quote.line ?? null, odds: c.quote.american, impliedPct: pct(c.quote.american) } });
+              moved.push({ pick: c.legId, was, now: { line: c.quote.line ?? null, odds: c.quote.american, impliedPct: impl(c.quote.american) === null ? null : r1(impl(c.quote.american) * 100) } });
             }
           }
           log.refusals.push({ code: err.code, message: err.message });

@@ -2079,6 +2079,29 @@ await check('casino sound: on by default, the mute button is saved per phone and
   await context.close();
 });
 
+await check('admin agents: Sportsbook profit is the main number, rows sorted by it, Wallet change small underneath', async () => {
+  const { page, context } = await openChatPage('/admin', { uid: 'u0', admin: true, fs: { users: F.usersWithAgents() } });
+  await page.getByRole('tab', { name: 'Agents' }).click();
+  await page.waitForSelector('.agent-card');
+  const cards = await page.locator('.agent-card').evaluateAll((els) => els.map((el) => ({
+    name: el.querySelector('.agent-card-name strong')?.textContent,
+    main: el.querySelector('.agent-card-profit')?.firstChild?.textContent,
+    caption: el.querySelector('.agent-card-profit small')?.textContent,
+    wallet: el.querySelector('.agent-wallet')?.textContent,
+    labels: [...el.querySelectorAll('.agent-stats dt')].map((d) => d.textContent),
+  })));
+  // Claude Big +$12.40 (returned 8640 − bet 7400), Gemini $0.00, GPT −$6.90, Will −$16.00.
+  assert.deepEqual(cards.map((c) => c.name), ['Claude Big', 'Gemini Flash With A Very Long Name', 'GPT Luna', 'Will'], 'sorted by sportsbook profit');
+  assert.deepEqual(cards.map((c) => c.main), ['+$12.40', '$0.00', '−$6.90', '−$16.00']);
+  assert.ok(cards.every((c) => c.caption === 'Sportsbook profit'));
+  assert.equal(cards[0].wallet, 'Wallet change +$18.90', 'balance 118.90 − 100.00 adjustments: casino and other money count here, not in the main number');
+  assert.equal(cards[2].wallet, 'Wallet change −$6.90');
+  assert.ok(cards[0].labels.includes('Balance') && !cards[0].labels.includes('Profit'));
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  assert.ok(over <= 0, `no sideways scroll (${over})`);
+  await context.close();
+});
+
 await browser.close();
 console.log(results.join('\n'));
 if (results.some((r) => r.startsWith('FAIL'))) process.exit(1);
