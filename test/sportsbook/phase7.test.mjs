@@ -194,6 +194,9 @@ function seed() {
 }
 
 // ---------- grading ----------
+// The record (won / lost) only; 0.21.0's totals are checked in test/agents.
+const wl = (st) => ({ won: st?.won ?? 0, lost: st?.lost ?? 0 });
+
 test('grading: moneyline / spread (incl. alternates) / total, win-push-loss, any price source', () => {
   const final = (home, away) => ({ status: 'final', homeScore: home, awayScore: away, homeName: 'Guardians', awayName: 'Rays', statusText: 'Final' });
   const r = (o, res) => g.gradeLeg({ marketType: 'spread', selection: 'home', line: null, ...o }, res).result;
@@ -313,8 +316,8 @@ test('settlement pays, records leg results + scores, stats, ledger; flags 72 h r
   }
   assert.equal(store.get('users/u1').balanceCents, 10000 + paidTo('u1'));
   assert.equal(store.get('users/u2').balanceCents, 5000 + paidTo('u2'));
-  assert.deepEqual(store.get('users/u1').stats, { won: 3, lost: 3 }, 'b1,b2,b9 won; b3,b5,b8 lost; pushes not counted');
-  assert.deepEqual(store.get('users/u2').stats, { won: 5, lost: 1 }, 'b12,b13,b14 on top of 2-1');
+  assert.deepEqual(wl(store.get('users/u1').stats), { won: 3, lost: 3 }, 'b1,b2,b9 won; b3,b5,b8 lost; pushes not counted');
+  assert.deepEqual(wl(store.get('users/u2').stats), { won: 5, lost: 1 }, 'b12,b13,b14 on top of 2-1');
   const b8 = store.get('bets/b8');
   assert.deepEqual(b8.legs.map((l) => l.result), ['loss', 'pending'], 'lost parlay; NBA leg never guessed');
   assert.equal(store.get('bets/b1').legs[0].scoreText, 'Rays 2 @ Guardians 5 · Final/10');
@@ -336,7 +339,7 @@ test('PAY EXACTLY ONCE: many runs at once and again later never pay twice', asyn
   const u2 = store.get('users/u2').balanceCents;
   assert.equal(u1, 10000 + paidTo('u1'));
   assert.equal(u2, 5000 + paidTo('u2'));
-  assert.deepEqual(store.get('users/u1').stats, { won: 3, lost: 3 }, 'stats counted once');
+  assert.deepEqual(wl(store.get('users/u1').stats), { won: 3, lost: 3 }, 'stats counted once');
 
   for (let i = 0; i < 3; i += 1) await settleOpenBets({ trigger: 'cron', force: true, now: NOW, fetchImpl: espnFetch });
   assert.equal(store.get('users/u1').balanceCents, u1);

@@ -71,6 +71,9 @@ const parlay = (uid, legs, stake = 1000, now = T0) => placeBets(caller(uid), { m
 
 // ---------- rules ----------
 
+// The record (won / lost) only; 0.21.0's totals are checked in test/agents.
+const wl = (st) => ({ won: st?.won ?? 0, lost: st?.lost ?? 0 });
+
 test('posting rules: 2–6 outcomes with names and American odds, close 10 min – 60 days ahead', () => {
   const ok = { ...FIVE_K, closeMs: T0.getTime() + H };
   assert.deepEqual(C.challengeProblems(ok, T0.getTime()), []);
@@ -188,8 +191,8 @@ test("the poster bets on their own approved Challenge: accepted, posterBet true 
   assert.equal(bet(b.id).payoutCents, 2800);
   assert.equal(wallet('mike'), START - 1800 + 2800);
   assert.equal(bet(other.bets[0].id).status, 'lost');
-  assert.deepEqual(fake.get('users/mike').stats, { won: 1, lost: 0 }, 'Challenge bets count toward win rate');
-  assert.deepEqual(fake.get('users/dan').stats, { won: 0, lost: 1 });
+  assert.deepEqual(wl(fake.get('users/mike').stats), { won: 1, lost: 0 }, 'Challenge bets count toward win rate');
+  assert.deepEqual(wl(fake.get('users/dan').stats), { won: 0, lost: 1 });
   assert.equal(bet(b.id).legs[0].scoreText, 'Winner: No');
 });
 
@@ -235,7 +238,7 @@ test('settle: a preview shows every wallet change; void refunds every leg and le
   await S.voidChallenge({ challengeId: id2, confirm: true }, admin, { now: later(H) });
   assert.equal(bet(r.bets[0].id).status, 'void');
   assert.equal(wallet('will'), START - 1800, 'void stake back; only the other Challenge’s $18 still out');
-  assert.deepEqual(fake.get('users/will').stats, { won: 0, lost: 0 });
+  assert.deepEqual(wl(fake.get('users/will').stats), { won: 0, lost: 0 });
   assert.equal(challenge(id2).status, 'void');
   await err(S.voidChallenge({ challengeId: id2 }, admin, { now: T0 }), 'CHALLENGE_CLOSED');
   assert.ok(no);

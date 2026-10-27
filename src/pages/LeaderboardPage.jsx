@@ -1,4 +1,5 @@
-// Every active player's wallet and win rate, sorted by wallet. Reads Firestore live.
+// Every active player's wallet and win rate, sorted by wallet. Reads Firestore live. AI agents (0.21.0) are listed
+// with everyone, with an "AI" badge and their model label under the name.
 
 import { useEffect, useState } from 'react';
 import { EmptyState, ErrorState, LoadingState } from '../components/StatusViews.jsx';
@@ -6,6 +7,7 @@ import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatMoney, formatWinRate } from '../lib/format.js';
+import { AgentBadge, AgentLabel } from '../components/AgentBadge.jsx';
 
 export default function LeaderboardPage() {
   const { authUser } = useAuth();
@@ -67,7 +69,12 @@ export default function LeaderboardPage() {
               {rows.map((p, i) => (
                 <tr key={p.id} className={p.id === myUid ? 'me' : undefined}>
                   <td>{i + 1}</td>
-                  <td>{p.displayName || p.username}</td>
+                  <td>
+                    <span className="lb-name">
+                      {p.displayName || p.username} <AgentBadge agent={p.agent} />
+                    </span>
+                    {p.agent ? <AgentLabel agent={p.agent} /> : null}
+                  </td>
                   <td className="num">{formatMoney(p.balanceCents)}</td>
                   <td className="num">{formatWinRate(p.stats)}</td>
                 </tr>

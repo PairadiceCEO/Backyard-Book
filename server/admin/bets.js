@@ -15,10 +15,10 @@ import { HttpError } from '../http.js';
 import { decideBet } from '../grading.js';
 import { combinedDecimal, payoutCents } from '../../shared/betRules.js';
 import { decimalToAmerican, roundDecimal } from '../../shared/oddsMath.js';
+import { applyContribution, betContribution } from '../../shared/perfStats.js';
 
 const OUTCOMES = new Set(['win', 'lose', 'void']);
 const LEG_RESULTS = new Set(['win', 'loss', 'push', 'void']);
-const COUNTED = { won: 'won', lost: 'lost' };
 const STATUS_WORDS = { open: 'Open', won: 'Won', lost: 'Lost', push: 'Push', void: 'Void', cashed_out: 'Cashed out' };
 
 // A cashed-out bet is final: the player was paid its cash out value, so no regrade applies.
@@ -85,11 +85,11 @@ export function planLegOverride(bet, legIndex, result) {
   };
 }
 
-function statsAfter(stats, fromStatus, toStatus) {
-  const next = { won: Number(stats?.won) || 0, lost: Number(stats?.lost) || 0 };
-  if (COUNTED[fromStatus]) next[COUNTED[fromStatus]] = Math.max(0, next[COUNTED[fromStatus]] - 1);
-  if (COUNTED[toStatus]) next[COUNTED[toStatus]] += 1;
-  return next;
+// The record before → after a regrade: takes back what the bet counted as (if it was settled) and adds what it counts as
+// now, for won / lost and the 0.21.0 totals (staked, returned, settled bets, per league).
+function statsAfter(stats, bet, plan) {
+  const without = applyContribution(stats, betContribution(bet, bet.status, Number(bet.payoutCents) || 0), -1);
+  return applyContribution(without, betContribution(bet, plan.status, plan.payoutCents), 1);
 }
 
 function summarize(betId, bet, user, plan) {
@@ -110,7 +110,8 @@ function summarize(betId, bet, user, plan) {
     balanceBeforeCents,
     balanceAfterCents: balanceBeforeCents + deltaCents,
     statsBefore: { won: Number(user.stats?.won) || 0, lost: Number(user.stats?.lost) || 0 },
-    statsAfter: statsAfter(user.stats, bet.status, plan.status),
+    statsAfter: (() => { const s = statsAfter(user.stats, bet, plan); return { won: s.won, lost: s.lost }; })(),
+    fullStatsAfter: statsAfter(user.stats, bet, plan),
     legs: plan.legs.map((l) => ({ label: l.label, gameLabel: l.gameLabel, result: l.result || 'pending' })),
     noChange: deltaCents === 0 && bet.status === plan.status && JSON.stringify(plan.legs.map((l) => l.result)) === JSON.stringify(bet.legs.map((l) => l.result)),
   };
@@ -129,7 +130,8 @@ async function regrade(body, caller, makePlan) {
     refuseCashedOut(bet);
     const userSnap = await db.collection('users').doc(bet.uid).get();
     if (!userSnap.exists) throw new HttpError(404, 'USER_NOT_FOUND', "The bet's player no longer exists.");
-    return { preview: true, ...summarize(betId, bet, userSnap.data(), makePlan(bet)) };
+    const { fullStatsAfter: _full, ...preview } = summarize(betId, bet, userSnap.data(), makePlan(bet));
+    return { preview: true, ...preview };
   }
 
   if (!Number.isInteger(body.expectedVersion)) {
@@ -174,7 +176,8 @@ async function regrade(body, caller, makePlan) {
       adminNote: plan.describe,
     });
 
-    const userUpdate = { stats: summary.statsAfter };
+    const { fullStatsAfter, ...shown } = summary;
+    const userUpdate = { stats: fullStatsAfter };
     if (summary.deltaCents !== 0) {
       userUpdate.balanceCents = summary.balanceAfterCents; // may go below $0 if winnings are taken back
       tx.create(ledgerRef, {
@@ -189,7 +192,7 @@ async function regrade(body, caller, makePlan) {
       });
     }
     tx.update(userRef, userUpdate);
-    return { ok: true, ...summary, version: newVersion };
+    return { ok: true, ...shown, version: newVersion };
   });
 }
 

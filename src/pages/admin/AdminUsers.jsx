@@ -8,6 +8,8 @@ import { adminAction } from '../../lib/api.js';
 import { formatMoney, formatWinRate, parseDollarsToCents } from '../../lib/format.js';
 import MoneyConfirmModal from './MoneyConfirmModal.jsx';
 import { ErrorState, LoadingState } from '../../components/StatusViews.jsx';
+import { AgentBadge, AgentLabel } from '../../components/AgentBadge.jsx';
+import { AGENT_LABEL_MAX, AGENT_PROVIDERS, AGENT_PROVIDER_NAMES } from '../../../shared/agents.js';
 import {
   DISPLAY_NAME_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
@@ -21,6 +23,9 @@ function CreatePlayerForm({ onDone }) {
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [startingBalance, setStartingBalance] = useState('100');
+  const [isAgent, setIsAgent] = useState(false);
+  const [provider, setProvider] = useState(AGENT_PROVIDERS[0]);
+  const [label, setLabel] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -33,6 +38,7 @@ function CreatePlayerForm({ onDone }) {
     }
     const startingBalanceCents = startingBalance.trim() === '' ? 0 : parseDollarsToCents(startingBalance);
     if (startingBalanceCents === null) return setError('Starting balance must be a dollar amount like 100 or 25.50.');
+    if (isAgent && !label.trim()) return setError('Give the AI agent a model label, e.g. "Claude Sonnet".');
 
     setSubmitting(true);
     setError('');
@@ -42,12 +48,15 @@ function CreatePlayerForm({ onDone }) {
         displayName: displayName.trim(),
         password,
         startingBalanceCents,
+        ...(isAgent ? { agent: { provider, label: label.trim() } } : {}),
       });
       setUsername('');
       setDisplayName('');
       setPassword('');
       setStartingBalance('100');
-      onDone(`Created "${cleanUsername}". Share the username and password with them.`);
+      setIsAgent(false);
+      setLabel('');
+      onDone(isAgent ? `Created the AI agent "${cleanUsername}". Put its username and password in the GitHub secrets.` : `Created "${cleanUsername}". Share the username and password with them.`);
     } catch (err) {
       setError(err.message || 'Could not create the player.');
     } finally {
@@ -102,9 +111,32 @@ function CreatePlayerForm({ onDone }) {
           disabled={submitting}
         />
       </label>
+      <label className="field checkbox-field">
+        <input type="checkbox" checked={isAgent} onChange={(e) => setIsAgent(e.target.checked)} disabled={submitting} />
+        <span>AI agent (bets on its own from GitHub Actions, house rules apply)</span>
+      </label>
+      {isAgent ? (
+        <>
+          <label className="field">
+            <span>Provider</span>
+            <select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={submitting}>
+              {AGENT_PROVIDERS.map((p) => (
+                <option key={p} value={p}>
+                  {AGENT_PROVIDER_NAMES[p]} ({p})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Model label</span>
+            <input type="text" maxLength={AGENT_LABEL_MAX} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Claude Sonnet" disabled={submitting} />
+            <small className="muted">Shown under its name on the leaderboard.</small>
+          </label>
+        </>
+      ) : null}
       {error ? <p className="error-text" role="alert">{error}</p> : null}
       <button type="submit" className="btn btn-primary" disabled={submitting}>
-        {submitting ? 'Creating…' : 'Create player'}
+        {submitting ? 'Creating…' : isAgent ? 'Create AI agent' : 'Create player'}
       </button>
     </form>
   );
@@ -114,16 +146,21 @@ function CreatePlayerForm({ onDone }) {
 // without any effect copying props into state.
 function EditNameForm({ player, onDone, onCancel }) {
   const [displayName, setDisplayName] = useState(player.displayName || '');
+  const [isAgent, setIsAgent] = useState(Boolean(player.agent?.provider));
+  const [provider, setProvider] = useState(player.agent?.provider ?? AGENT_PROVIDERS[0]);
+  const [label, setLabel] = useState(player.agent?.label ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const canBeAgent = player.role !== 'admin';
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (isAgent && !label.trim()) return setError('Give the AI agent a model label.');
     setSaving(true);
     setError('');
     try {
-      await adminAction('updateUser', { uid: player.id, displayName: displayName.trim() });
-      onDone(`Updated ${player.username}'s display name.`);
+      await adminAction('updateUser', { uid: player.id, displayName: displayName.trim(), ...(canBeAgent ? { agent: isAgent ? { provider, label: label.trim() } : null } : {}) });
+      onDone(`Updated ${player.username}.`);
     } catch (err) {
       setError(err.message);
       setSaving(false);
@@ -142,6 +179,30 @@ function EditNameForm({ player, onDone, onCancel }) {
           disabled={saving}
         />
       </label>
+      {canBeAgent ? (
+        <label className="field checkbox-field">
+          <input type="checkbox" checked={isAgent} onChange={(e) => setIsAgent(e.target.checked)} disabled={saving} />
+          <span>AI agent</span>
+        </label>
+      ) : null}
+      {canBeAgent && isAgent ? (
+        <>
+          <label className="field">
+            <span>Provider</span>
+            <select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={saving}>
+              {AGENT_PROVIDERS.map((p) => (
+                <option key={p} value={p}>
+                  {AGENT_PROVIDER_NAMES[p]} ({p})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Model label</span>
+            <input type="text" maxLength={AGENT_LABEL_MAX} value={label} onChange={(e) => setLabel(e.target.value)} disabled={saving} />
+          </label>
+        </>
+      ) : null}
       {error ? <p className="error-text">{error}</p> : null}
       <div className="row-actions">
         <button type="submit" className="btn btn-primary small" disabled={saving}>
@@ -290,7 +351,14 @@ function PlayerRow({ player, isSelf, editingKind, onEdit, onDone, onCancel, onTo
         <div>
           <strong>{player.displayName || player.username}</strong>{' '}
           <span className="muted small">@{player.username}</span>
+          {player.agent ? (
+            <>
+              {' '}
+              <AgentLabel agent={player.agent} />
+            </>
+          ) : null}
           {player.role === 'admin' ? <span className="badge">admin</span> : null}
+          <AgentBadge agent={player.agent} />
           {player.disabled ? <span className="badge badge-danger">disabled</span> : null}
         </div>
         <div className="player-stats">
@@ -300,7 +368,7 @@ function PlayerRow({ player, isSelf, editingKind, onEdit, onDone, onCancel, onTo
       </div>
       <div className="row-actions">
         <button type="button" className="btn small" onClick={() => onEdit(player.id, 'name')}>
-          Edit name
+          Edit
         </button>
         <button type="button" className="btn small" onClick={() => onEdit(player.id, 'wallet')}>
           Adjust wallet

@@ -121,7 +121,8 @@ const place = (uid, username, legs, mode = 'singles', stakeCents) =>
   placeBets({ uid, token: {}, user: { username } }, { mode, clientRequestId: `req-${String(++reqN).padStart(6, '0')}`, stakeCents, legs }, { ctx: ctx() });
 const L = (gameId, marketType, selection, line, quotedAmerican, stakeCents) => ({ league: 'nfl', gameId, marketType, selection, line, quotedAmerican, stakeCents });
 const bal = (uid) => store.get(`users/${uid}`).balanceCents;
-const stats = (uid) => store.get(`users/${uid}`).stats;
+// won / lost (the record); 0.21.0's totals are checked in test/agents.
+const stats = (uid) => { const s = store.get(`users/${uid}`).stats ?? {}; return { won: s.won ?? 0, lost: s.lost ?? 0 }; };
 const dump = () => JSON.stringify([...store].filter(([k]) => !k.startsWith('cache/')));
 function recount(uid) {
   const bets = [...store].filter(([k, v]) => k.startsWith('bets/') && v.uid === uid).map(([, v]) => v);

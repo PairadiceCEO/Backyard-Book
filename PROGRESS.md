@@ -5,6 +5,40 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.21.0 (Will, 2026-10-27 03:16 CT) — IN PROGRESS
+Spec: Will's attachment of 03:16 ("AI agent players (Claude ×2, OpenAI, Gemini) that bet from their own accounts once a
+day"). 0.20.0 merged first (main = 352b71f). Agents bet only through the existing /api with a normal Firebase login.
+/api count stays 7 of 12 (no new function). No firestore.rules change (agentDaily is covered by the server-only catch-all);
+no new index (mine = two equality filters; rebuildStats and the prune use single-field queries; Agents tab = agent != null).
+
+### Checklist
+- [ ] 1 Agent accounts: createUser / updateUser take agent { provider, label } (shared/agents.js cleanAgentProfile); Admin →
+      Players: "AI agent" option, Provider, Model label; edit can change or clear it (never the admin's own account).
+- [ ] 2 House rules in server/placeBet.js (AGENT_NO_CRYPTO, AGENT_NOT_ALLOWED for Challenge legs, AGENT_PREGAME_ONLY,
+      AGENT_STAKE_CAP 5% floor, AGENT_DAILY_LIMIT 10 / Central day in agentDaily inside the transaction); AGENT_NO_CASHOUT;
+      /api/battles (Battles + Challenge posting) 403 AGENT_NOT_ALLOWED; agentWhy (clean, 280); settle cron prunes agentDaily > 3 days.
+- [ ] 3 /api/bets action "mine" (server/agentMine.js).
+- [ ] 4 stats.stakedCents / returnedCents / settledBets / byLeague kept by settlement, cash out and admin regrades
+      (shared/perfStats.js); adminAdjustCents kept by createUser / adjustWallet; admin action rebuildStats (dry run first).
+- [ ] 5 UI: leaderboard AI badge + label; agentWhy on bet cards (My Bets, Admin → Bets); Admin → Agents tab (cards, per league
+      on tap, Rebuild stats).
+- [ ] 6 agents/ runner: run.mjs, prompt.md, tools, provider adapters (anthropic, openai, google), budgets, run summary, prices.json.
+- [ ] 7 .github/workflows/agents.yml (cron 0 16 * * *, workflow_dispatch with an agent choice, matrix of 4, fail-fast off).
+- [ ] 8 Tests: test/agents/agents.test.mjs (house rules, stats, mine, rebuild) and test/agents/runner.test.mjs (mocked providers
+      and /api: tool loop, LINE_CHANGED, caps, provider error, no secrets in logs).
+- [ ] 9 Version 0.21.0, README "AI agents", CLAUDE.md (agent house rules, /api still 7), all checks, merge to main.
+Decisions so far:
+- A "bet slip" for the 5% cap and the 10-a-day limit is one bet doc: a parlay is one, each single in a singles request is
+  one (so 3 singles in one request count 3 and each must be within 5%).
+- `why` longer than 280 characters is cut, not refused (an explanation never costs a bet).
+- Agents can't bet Challenge legs either (403 AGENT_NOT_ALLOWED), with Battles and Challenge posting refused.
+- Parlays across leagues count under byLeague.mixed.
+- Profit = balance − adminAdjustCents (every admin_adjust incl. the starting balance), kept on the user doc so the Agents
+  tab needs no ledger reads; rebuildStats backfills it from the ledger.
+- Gemini: Google Search grounding is "Not available" on the free tier for every current Flash model (pricing page,
+  2026-10-27); a paid key includes 5,000 searches / month. The Gemini agent asks for search; if the key refuses it, the run
+  goes on without search and the summary says so.
+
 ## Phase 0.20.0 (Will, 2026-10-27 02:57 CT) — COMPLETE (2026-10-27), merged to main, ready for Will to test
 Spec: Will's message of 02:57 ("Slots paytable, win line and big wins, autospin, casino sounds"). 0.19.0 merged first
 (main = 284cb79). Client only: no server, rules or money change; every spin is the normal /api/casino spin call.

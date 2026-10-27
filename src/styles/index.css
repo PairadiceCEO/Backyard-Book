@@ -415,6 +415,144 @@ h3 {
   vertical-align: middle;
 }
 
+/* 0.21.0: AI agent players */
+.agent-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.agent-card.me {
+  border-color: var(--accent);
+}
+
+.agent-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-card-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-card-balance {
+  font-weight: 800;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.agent-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 0.4rem 0.6rem;
+  margin: 0.5rem 0 0;
+}
+
+.agent-stats div {
+  min-width: 0;
+}
+
+.agent-stats dt {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.agent-stats dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-stats dd.win {
+  color: var(--accent);
+}
+
+.agent-stats dd.lose {
+  color: var(--danger);
+}
+
+.agent-leagues {
+  margin-top: 0.5rem;
+}
+
+.agents-top {
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.agents-top p {
+  margin: 0;
+  flex: 1 1 200px;
+}
+
+.rebuild-list {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.badge-ai {
+  background: rgba(110, 168, 255, 0.18);
+  color: #9cc2ff;
+  border: 1px solid rgba(110, 168, 255, 0.45);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.agent-label {
+  display: block;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.lb-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.checkbox-field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 44px;
+}
+
+.checkbox-field input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+
+.agent-why {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
 .badge-danger {
   border-color: var(--danger);
   color: var(--danger);

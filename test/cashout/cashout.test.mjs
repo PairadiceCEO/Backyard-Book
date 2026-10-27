@@ -262,7 +262,11 @@ test('pre-game single: stake × 0.9, estimate then cash out pays it once with a 
   assert.equal(ledger.amountCents, 900);
   assert.equal(ledger.balanceAfterCents, 5900);
   assert.equal(ledger.betId, 'b1');
-  assert.deepEqual(fake.get('users/u1').stats, { won: 2, lost: 1 }, 'win rate untouched (neither won nor lost)');
+  const stats = fake.get('users/u1').stats;
+  assert.deepEqual({ won: stats.won, lost: stats.lost }, { won: 2, lost: 1 }, 'win rate untouched (neither won nor lost)');
+  // 0.21.0 totals: a cash out returns its cash-out amount.
+  assert.deepEqual({ staked: stats.stakedCents, returned: stats.returnedCents, settled: stats.settledBets }, { staked: bet.stakeCents, returned: 900, settled: 1 });
+  assert.deepEqual(stats.byLeague.nfl, { staked: bet.stakeCents, returned: 900, won: 0, lost: 0 });
 });
 
 test('pre-game parlay: stake × 0.9 rounded down, whatever the odds', async () => {
@@ -519,7 +523,8 @@ test('cash out first: settlement skips the cashed-out bet', async () => {
   assert.equal(fake.get('bets/r2').status, 'cashed_out');
   assert.equal(fake.get('ledger/payout_r2'), undefined);
   assert.equal(balance(), 5000 + value);
-  assert.deepEqual(fake.get('users/u1').stats, { won: 2, lost: 1 });
+  const stats = fake.get('users/u1').stats;
+  assert.deepEqual({ won: stats.won, lost: stats.lost, settled: stats.settledBets, returned: stats.returnedCents }, { won: 2, lost: 1, settled: 1, returned: value }, 'counted once, as the cash out');
 });
 
 test('cash out vs settlement at the same moment, many times: exactly one wins, never both', async () => {

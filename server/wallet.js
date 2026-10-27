@@ -7,7 +7,9 @@ import { HttpError } from './http.js';
 // Applies deltaCents to users/{uid}.balanceCents and writes ledger/{ledgerId}.
 // If ledger/{ledgerId} already exists, nothing changes and the earlier result is returned,
 // which makes a repeated request (double-click, retry) harmless.
-export async function applyWalletChange({ uid, deltaCents, ledgerId, type, note = '', by, allowNegative = false }) {
+// trackAdminAdjust (0.21.0): also add deltaCents to users/{uid}.adminAdjustCents (every admin_adjust, starting balance
+// included), so profit = balance − adminAdjustCents needs no ledger reads. Same single user write.
+export async function applyWalletChange({ uid, deltaCents, ledgerId, type, note = '', by, allowNegative = false, trackAdminAdjust = false }) {
   if (!Number.isInteger(deltaCents) || deltaCents === 0) {
     throw new HttpError(400, 'BAD_AMOUNT', 'The amount must be a non-zero whole number of cents.');
   }
@@ -38,7 +40,9 @@ export async function applyWalletChange({ uid, deltaCents, ledgerId, type, note 
       );
     }
 
-    tx.update(userRef, { balanceCents: newBalance });
+    const update = { balanceCents: newBalance };
+    if (trackAdminAdjust) update.adminAdjustCents = (Number(userSnap.data().adminAdjustCents) || 0) + deltaCents;
+    tx.update(userRef, update);
     tx.create(ledgerRef, {
       uid,
       type,
