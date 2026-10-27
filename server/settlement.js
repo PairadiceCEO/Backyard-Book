@@ -13,6 +13,8 @@ import { gameKey, loadGameResults } from './gameResults.js';
 import { gradeBet } from './grading.js';
 import { sweepExpiredBattles } from './battles.js';
 import { pruneCasinoChat } from './casinoChatPrune.js';
+import { applyContribution, betContribution } from '../shared/perfStats.js';
+import { AGENT_DAILY_KEEP_DAYS, centralDayMinus } from '../shared/agents.js';
 
 export const THROTTLE_MS = 60 * 1000;
 export const REVIEW_AFTER_MS = 72 * 60 * 60 * 1000;
@@ -79,6 +81,17 @@ export function payoutLedgerId(betId, newVersion) {
   return newVersion <= 1 ? `payout_${betId}` : `payout_${betId}_v${newVersion}`;
 }
 
+// agentDaily/{uid}_{day} docs whose Central day is more than AGENT_DAILY_KEEP_DAYS days before today's.
+export async function pruneAgentDaily(db, now) {
+  const cutoff = centralDayMinus(now, AGENT_DAILY_KEEP_DAYS);
+  const snap = await db.collection('agentDaily').where('day', '<', cutoff).limit(400).get();
+  if (snap.empty) return 0;
+  const batch = db.batch();
+  snap.docs.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+  return snap.size;
+}
+
 // Settles one bet. Returns 'settled' | 'already' | 'open'.
 export async function settleBet(db, betId, resultFor, now) {
   const betRef = db.collection('bets').doc(betId);
@@ -122,13 +135,8 @@ export async function settleBet(db, betId, resultFor, now) {
       reviewReason: null,
     });
 
-    const userUpdate = {};
-    if (decision.status === 'won' || decision.status === 'lost') {
-      const stats = { won: Number(user.stats?.won) || 0, lost: Number(user.stats?.lost) || 0 };
-      if (decision.status === 'won') stats.won += 1;
-      else stats.lost += 1;
-      userUpdate.stats = stats;
-    }
+    // won / lost plus the 0.21.0 performance totals (staked, returned, settled bets, per league): one user write, as before.
+    const userUpdate = { stats: applyContribution(user.stats, betContribution(bet, decision.status, decision.payoutCents), 1) };
     if (deltaCents !== 0) {
       const balanceAfter = (Number(user.balanceCents) || 0) + deltaCents;
       userUpdate.balanceCents = balanceAfter;
@@ -143,7 +151,7 @@ export async function settleBet(db, betId, resultFor, now) {
         createdAt: settledAt,
       });
     }
-    if (Object.keys(userUpdate).length > 0) tx.update(userRef, userUpdate);
+    tx.update(userRef, userUpdate);
     return 'settled';
   });
 }
@@ -305,6 +313,16 @@ export async function settleOpenBets({
   } catch (err) {
     summary.errors += 1;
     console.error('settlement: Battle expiry sweep failed:', err.message);
+  }
+
+  // AI agents' daily slip counters: the daily cron deletes those older than 3 days.
+  if (trigger === 'cron') {
+    try {
+      summary.agentDailyPruned = await pruneAgentDaily(db, now);
+    } catch (err) {
+      summary.errors += 1;
+      console.error('settlement: agentDaily prune failed:', err.message);
+    }
   }
 
   // Casino chat keeps 24 hours: the daily cron always prunes, any other run at most once an hour.

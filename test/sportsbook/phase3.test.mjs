@@ -137,6 +137,9 @@ store.set('users/admin1', { username: 'will', displayName: 'Will', role: 'admin'
 const asAdmin = () => { caller = { uid: 'admin1', token: { admin: true }, user: store.get('users/admin1') }; };
 const asPlayer = (uid) => { caller = { uid, token: {}, user: store.get(`users/${uid}`) }; };
 
+// The record (won / lost) only; 0.21.0's totals are checked in test/agents.
+const wl = (st) => ({ won: st?.won ?? 0, lost: st?.lost ?? 0 });
+
 test('admin: non-admin is refused, unknown and prototype actions rejected', async () => {
   caller = { uid: 'x', token: {}, user: {} };
   let r = await admin({ action: 'createUser' });
@@ -168,7 +171,7 @@ test('createUser: validation, success with starting balance ledger, duplicate us
   const user = store.get(`users/${uid}`);
   assert.equal(user.role, 'player');
   assert.equal(user.balanceCents, 10000);
-  assert.deepEqual(user.stats, { won: 0, lost: 0 });
+  assert.deepEqual(wl(user.stats), { won: 0, lost: 0 });
   const start = store.get(`ledger/start_${uid}`);
   assert.equal(start.amountCents, 10000);
   assert.equal(start.balanceAfterCents, 10000);

@@ -1,0 +1,16 @@
+{
+  "_note": "USD per 1M tokens and per 1,000 web searches, used only for the run summary's cost estimate. Check each provider's pricing page and edit these when prices change. OpenAI and Gemini prices are from their pricing pages on 2026-10-27; the Claude rows are estimates to verify on the Anthropic pricing page.",
+  "anthropic": {
+    "claude-haiku-5-5": { "input": 1.0, "output": 5.0 },
+    "claude-sonnet-5-5": { "input": 3.0, "output": 15.0 },
+    "_search_per_1000": 10.0
+  },
+  "openai": {
+    "gpt-6-luna": { "input": 0.1, "output": 0.5 },
+    "_search_per_1000": 10.0
+  },
+  "google": {
+    "gemini-3.8-flash": { "input": 0.0, "output": 0.0, "_paid_input": 0.75, "_paid_output": 3.75 },
+    "_search_per_1000": 0.0
+  }
+}

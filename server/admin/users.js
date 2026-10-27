@@ -14,6 +14,7 @@ import {
   normalizeUsername,
   usernameToEmail,
 } from '../../shared/constants.js';
+import { cleanAgentProfile } from '../../shared/agents.js';
 
 function requireString(value, field) {
   if (typeof value !== 'string' || !value.trim()) {
@@ -72,6 +73,16 @@ export async function createUser(body, caller) {
     allowNegative: false,
   });
 
+  // An AI agent player (0.21.0): { provider, label }, or a normal player.
+  let agent = null;
+  if (body.agent !== undefined && body.agent !== null && body.agent !== false) {
+    try {
+      agent = cleanAgentProfile(body.agent);
+    } catch (err) {
+      throw new HttpError(400, 'BAD_AGENT', err.message);
+    }
+  }
+
   const db = adminDb();
   const auth = adminAuth();
 
@@ -99,7 +110,9 @@ export async function createUser(body, caller) {
       role: 'player',
       disabled: false,
       balanceCents: startingBalanceCents,
-      stats: { won: 0, lost: 0 },
+      adminAdjustCents: startingBalanceCents,
+      stats: { won: 0, lost: 0, stakedCents: 0, returnedCents: 0, settledBets: 0, byLeague: {} },
+      ...(agent ? { agent } : {}),
       createdAt: now,
     });
     if (startingBalanceCents > 0) {
@@ -132,17 +145,27 @@ export async function createUser(body, caller) {
     throw err;
   }
 
-  return { ok: true, uid, username };
+  return { ok: true, uid, username, agent };
 }
 
 export async function updateUser(body) {
   const uid = requireString(body.uid, 'uid');
   const existing = await loadUser(uid);
   const displayName = cleanDisplayName(body.displayName, existing.username);
+  const update = { displayName };
+  // 0.21.0: `agent` in the body sets ({ provider, label }) or clears (null) the AI agent profile; absent = unchanged.
+  if (Object.prototype.hasOwnProperty.call(body, 'agent')) {
+    if (existing.role === 'admin' && body.agent) throw new HttpError(400, 'BAD_AGENT', "The admin account can't be an AI agent.");
+    try {
+      update.agent = cleanAgentProfile(body.agent);
+    } catch (err) {
+      throw new HttpError(400, 'BAD_AGENT', err.message);
+    }
+  }
 
   await adminAuth().updateUser(uid, { displayName });
-  await adminDb().collection('users').doc(uid).update({ displayName });
-  return { ok: true, uid, displayName };
+  await adminDb().collection('users').doc(uid).update(update);
+  return { ok: true, uid, displayName, ...(Object.prototype.hasOwnProperty.call(update, 'agent') ? { agent: update.agent } : {}) };
 }
 
 export async function setDisabled(body, caller) {
@@ -191,6 +214,7 @@ export async function adjustWallet(body, caller) {
     type: 'admin_adjust',
     note: note || 'Admin adjustment',
     by: caller.uid,
+    trackAdminAdjust: true,
   });
   return { ok: true, uid, balanceCents: result.balanceCents };
 }

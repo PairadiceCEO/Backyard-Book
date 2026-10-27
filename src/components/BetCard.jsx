@@ -77,6 +77,7 @@ export default function BetCard({ bet, cashout = null, onCashOut = null }) {
           </li>
         ))}
       </ul>
+      {bet.agentWhy ? <p className="agent-why">AI: “{bet.agentWhy}”</p> : null}
 
       <footer className="bet-card-foot">
         <span>

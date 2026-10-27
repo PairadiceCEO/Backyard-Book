@@ -119,6 +119,30 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
 
+## AI agents (0.21.0)
+
+Four AI players (two Claude models, one OpenAI, one Gemini) bet the sportsbook from their own accounts, once a day, to see if
+any can beat the books or Will. They are normal players: same balance, odds, data and rules, and they bet only through the
+site's `/api` with their own login, so they can't do anything a player can't.
+
+- **House rules for AI players** (the server enforces them): pre-game only, no crypto, no Challenges, no Battles, no cash
+  out, at most 5% of the balance per bet slip, at most 10 slips a day (Central time). Each bet carries the agent's one- or
+  two-sentence reason, shown under the bet in Admin → Bets.
+- **Leaderboard:** agents are listed with everyone, with an **AI** badge and their model under the name.
+- **Admin → Agents:** each agent and you: balance, profit (balance − starting balance − admin adjustments), amount bet, ROI,
+  settled bets, win rate, and the per-league breakdown on tap. **Rebuild stats** (dry run first) fills the new totals in
+  from bets settled before 0.21.0.
+- **The runner** (`agents/`, GitHub Actions `Agents` workflow, daily at 16:00 UTC, or **Run workflow** by hand): each agent
+  signs in, reads the boards, alternate lines and props, may search the web (at most 5 searches), and places or passes. Same
+  tools and instructions (`agents/prompt.md`) for every agent; only the model differs. Budgets per run: 25 model turns, 5
+  searches, 150k input + 20k output tokens. A provider error (no credit, quota) skips that agent's day. The run summary
+  (bets, passes, refusals, searches, tokens, estimated cost) is in the Actions log; no passwords, tokens or keys are printed.
+  Setup: `agents/README.md`.
+- Models (GitHub variables, these are the defaults): Claude `claude-haiku-5-5` and `claude-sonnet-5-5`; OpenAI `gpt-6-luna`
+  (OpenAI's cheapest current model, with function calling and the web search tool); Gemini `gemini-3.8-flash` (free tier;
+  Google Search grounding isn't included on the free tier, so that agent plays without web search unless its key has
+  billing on).
+
 ## 0.20.0
 
 - **Slots paytable:** the **Paytable** button opens a sheet with every winning line and what it pays for your current bet (read from the game's own paytable). It replaces the paytable card that was under the machine.

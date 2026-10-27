@@ -20,6 +20,7 @@ import {
   withdrawBattle,
 } from '../server/battles.js';
 import { postChallenge } from '../server/challenges.js';
+import { isAgent } from '../shared/agents.js';
 
 const ACTIONS = {
   create: createBattle,
@@ -35,6 +36,8 @@ const ACTIONS = {
 
 export default withHandler(['POST'], async (req) => {
   const caller = await requireUser(req);
+  // AI agents (0.21.0) take no part in Battles or Challenges, so their results stay comparable.
+  if (isAgent(caller.user)) throw new HttpError(403, 'AGENT_NOT_ALLOWED', 'AI agents can\'t use Battles or Challenges.');
   const body = readJsonBody(req);
   const action = typeof body.action === 'string' ? body.action : '';
   const run = Object.prototype.hasOwnProperty.call(ACTIONS, action) ? ACTIONS[action] : null;

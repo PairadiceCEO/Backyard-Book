@@ -18,6 +18,8 @@
 // (cashOutBet) always re-prices with fresh ESPN and Kalshi data, and pays in one transaction with a
 // deterministic ledger id (cashout_{betId}) so a double-tap or retry can only pay once.
 
+import { isAgent } from '../shared/agents.js';
+import { applyContribution, betContribution } from '../shared/perfStats.js';
 import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from './firebaseAdmin.js';
 import { HttpError } from './http.js';
@@ -543,6 +545,8 @@ export function cashoutLedgerId(betId) {
 // 409 CASHOUT_CHANGED { valueCents } when the fresh value isn't the one the player confirmed;
 // 409 CASHOUT_UNAVAILABLE { reason } when cash out isn't possible (lost, settling, no Kalshi bid, settled first…).
 export async function cashOutBet(caller, body, { now = new Date(), fetchImpl = fetch, makeContext = createCashoutContext } = {}) {
+  // AI agents never cash out (0.21.0), so their results stay comparable.
+  if (isAgent(caller.user)) throw new HttpError(409, 'AGENT_NO_CASHOUT', 'AI agents can\'t cash out.');
   const betId = typeof body.betId === 'string' ? body.betId : '';
   if (!betId || betId.length > 200 || betId.includes('/')) throw new HttpError(400, 'BAD_REQUEST', 'Missing bet id.');
   const expectedCents = Number(body.expectedCents);
@@ -608,7 +612,9 @@ export async function cashOutBet(caller, body, { now = new Date(), fetchImpl = f
       reviewReason: null,
     };
     tx.update(betRef, update);
-    tx.update(userRef, { balanceCents: balanceAfter });
+    // 0.21.0 performance totals: a cash out returns its cash-out amount (same user write as before).
+    const stats = applyContribution(userSnap.data().stats, betContribution(current, 'cashed_out', valueCents), 1);
+    tx.update(userRef, { balanceCents: balanceAfter, stats });
     tx.create(ledgerRef, {
       uid: caller.uid,
       type: 'cashout',

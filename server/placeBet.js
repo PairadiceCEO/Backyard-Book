@@ -6,6 +6,16 @@
 // Challenge legs: the transaction re-checks the Challenge is still open, counts the bet on it, and when
 // the bettor is the Challenge's poster, sets `posterBet: true` on the bet (decided here, never by the
 // browser) and lists the bet in the Challenge's public `posterBets`.
+//
+// AI agents (0.21.0: the caller's profile has `agent`), house rules checked here and nowhere else:
+//   AGENT_NO_CRYPTO (409) / AGENT_NOT_ALLOWED (403, Challenge legs)  before anything is fetched
+//   AGENT_PREGAME_ONLY (409)  any leg whose game has started (after pricing, before LINE_CHANGED / ODDS_CHANGED)
+//   AGENT_STAKE_CAP (409)     a bet slip's stake (a parlay counts once, each single is a slip) over 5% of the balance
+//                             at the time of the bet, rounded down to the cent; read inside the transaction
+//   AGENT_DAILY_LIMIT (409)   more than 10 slips in the Central calendar day: agentDaily/{uid}_{YYYY-MM-DD}, read and
+//                             written (create or increment) inside the same transaction, so a retried clientRequestId
+//                             (which stops at "already placed" before any write) never counts twice
+// `why` (agents only) is cleaned like chat text, cut to 280 characters and stored on each bet as agentWhy.
 
 import { Timestamp } from 'firebase-admin/firestore';
 import { adminDb } from './firebaseAdmin.js';
@@ -31,6 +41,7 @@ import { needsOddsConfirm, roundDecimal } from '../shared/oddsMath.js';
 import { CHALLENGE_LEAGUE, CHALLENGE_MARKET, challengeDocId, isChallengeLeg } from '../shared/challenges.js';
 import { CRYPTO_LEAGUE, CRYPTO_MARKET, CRYPTO_PREFIX } from '../shared/crypto/coins.js';
 import { PROP_MARKET } from '../shared/props.js';
+import { AGENT_DAILY_LIMIT, AGENT_STAKE_PERCENT, agentDailyId, agentStakeCapCents, centralDay, cleanAgentWhy, isAgent } from '../shared/agents.js';
 
 const KALSHI_TICKER_PATTERN = /^[A-Z0-9][A-Z0-9._-]{3,100}$/;
 
@@ -111,6 +122,26 @@ function parseRequest(body) {
   if (problems.length > 0) throw bad(problems[0], { problems });
 
   return { mode, legs, stakeCents, requestId: body.clientRequestId };
+}
+
+function startMs(value) {
+  if (!value) return null;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+// A priced leg's game has started (or isn't a pre-game market any more).
+export function legHasStarted(game, now) {
+  if (!game) return true;
+  if (game.state && game.state !== 'pre') return true;
+  if (game.bettingClosed === true) return true;
+  const ms = startMs(game.startTime);
+  return ms !== null && ms <= now.getTime();
+}
+
+function agentRefusal(status, code, message) {
+  return new HttpError(status, code, message);
 }
 
 function betIds(uid, requestId, mode, legCount) {
@@ -221,6 +252,16 @@ function storedLeg(request, priced) {
 
 export async function placeBets(caller, body, { now = new Date(), fetchImpl = fetch, ctx = null } = {}) {
   const request = parseRequest(body);
+  const agent = isAgent(caller.user);
+  if (agent) {
+    if (request.legs.some((l) => l.league === CRYPTO_LEAGUE || l.marketType === CRYPTO_MARKET)) {
+      throw agentRefusal(409, 'AGENT_NO_CRYPTO', 'AI agents bet pre-game only, so crypto markets are not allowed.');
+    }
+    if (request.legs.some((l) => isChallengeLeg(l))) {
+      throw agentRefusal(403, 'AGENT_NOT_ALLOWED', 'AI agents can\'t bet on Challenges.');
+    }
+  }
+  const agentWhy = agent ? cleanAgentWhy(body.why) : '';
   const db = adminDb();
   const ids = betIds(caller.uid, request.requestId, request.mode, request.legs.length);
 
@@ -256,6 +297,13 @@ export async function placeBets(caller, body, { now = new Date(), fetchImpl = fe
       closedLegs,
       lineChanges,
     });
+  }
+  // Agents: pre-game only. Checked before a line or price change, so an agent is never asked to re-submit a started game.
+  if (agent) {
+    const started = results.map((r, i) => (legHasStarted(r.game, now) ? request.legs[i].legId : null)).filter(Boolean);
+    if (started.length > 0) {
+      throw new HttpError(409, 'AGENT_PREGAME_ONLY', 'AI agents bet pre-game only, and a game on this slip has started.', { startedLegs: started });
+    }
   }
   if (lineChanges.length > 0) {
     throw new HttpError(409, 'LINE_CHANGED', 'A line moved. Accept the new line or remove the pick, then submit again.', {
@@ -297,6 +345,7 @@ export async function placeBets(caller, body, { now = new Date(), fetchImpl = fe
     version: 0,
     placedAt,
     requestId: request.requestId,
+    ...(agentWhy ? { agentWhy } : {}),
   };
 
   // Challenges this player posted: their bets on them are flagged by the server.
@@ -352,17 +401,20 @@ export async function placeBets(caller, body, { now = new Date(), fetchImpl = fe
   });
   const challengeIds = [...challengeBets.keys()];
   const challengeRefs = challengeIds.map((docId) => db.collection('challenges').doc(docId));
+  const day = centralDay(now);
+  const dailyRef = agent ? db.collection('agentDaily').doc(agentDailyId(caller.uid, day)) : null;
 
   const outcome = await db.runTransaction(async (tx) => {
-    const [userSnap, firstBetSnap, ...docSnaps] = await Promise.all([
+    const [userSnap, firstBetSnap, dailySnap, ...docSnaps] = await Promise.all([
       tx.get(userRef),
       tx.get(betRefs[0]),
+      dailyRef ? tx.get(dailyRef) : Promise.resolve(null),
       ...customRefs.map((r) => tx.get(r)),
       ...challengeRefs.map((r) => tx.get(r)),
     ]);
     const customSnaps = docSnaps.slice(0, customRefs.length);
     const challengeSnaps = docSnaps.slice(customRefs.length);
-    if (firstBetSnap.exists) return { duplicate: true };
+    if (firstBetSnap.exists) return { duplicate: true }; // a retry: nothing below runs, so nothing counts twice
     if (!userSnap.exists) throw new HttpError(403, 'NO_PROFILE', 'No player profile exists for this login.');
     if (customSnaps.some((s) => !s.exists)) {
       throw new HttpError(409, 'MARKET_CLOSED', 'A custom game on this slip was just removed.', { closedLegs: [], lineChanges: [] });
@@ -379,6 +431,18 @@ export async function placeBets(caller, body, { now = new Date(), fetchImpl = fe
     const balance = Number(userSnap.data().balanceCents) || 0;
     if (total > balance) {
       throw new HttpError(409, 'INSUFFICIENT_BALANCE', `Your wallet has $${(balance / 100).toFixed(2)}; this slip needs $${(total / 100).toFixed(2)}.`);
+    }
+    let dailyCount = 0;
+    if (agent) {
+      const cap = agentStakeCapCents(balance);
+      const over = bets.find((bet) => bet.stakeCents > cap);
+      if (over) {
+        throw new HttpError(409, 'AGENT_STAKE_CAP', `AI agents can stake at most ${AGENT_STAKE_PERCENT}% of the balance per slip: $${(cap / 100).toFixed(2)} now.`, { capCents: cap, balanceCents: balance });
+      }
+      dailyCount = dailySnap?.exists ? Number(dailySnap.data().count) || 0 : 0;
+      if (dailyCount + bets.length > AGENT_DAILY_LIMIT) {
+        throw new HttpError(409, 'AGENT_DAILY_LIMIT', `AI agents can place at most ${AGENT_DAILY_LIMIT} bet slips a day (Central time); ${dailyCount} placed today.`, { slips: dailyCount, limit: AGENT_DAILY_LIMIT });
+      }
     }
 
     let running = balance;
@@ -397,6 +461,11 @@ export async function placeBets(caller, body, { now = new Date(), fetchImpl = fe
       });
     });
     tx.update(userRef, { balanceCents: running });
+    if (agent) {
+      const counter = { uid: caller.uid, day, count: dailyCount + bets.length, updatedAt: placedAt };
+      if (dailySnap?.exists) tx.update(dailyRef, counter);
+      else tx.create(dailyRef, counter);
+    }
     customRefs.forEach((ref, i) => {
       const count = Number(customSnaps[i].data().betCount) || 0;
       tx.update(ref, { betCount: count + customBetCounts.get(ref.id ?? ref.path.split('/').pop()) });
