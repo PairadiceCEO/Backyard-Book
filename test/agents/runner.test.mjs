@@ -94,7 +94,9 @@ function scripted(steps, { usage = { input: 1000, output: 100 }, searchImpl } = 
 const call = (name, args = {}, id = `c${Math.random().toString(36).slice(2, 8)}`) => ({ id, name, args });
 const findPick = (results, gameId, market, side) => {
   const board = results.find((r) => r.name === 'get_board').output;
-  return board.games.find((g) => g.gameId === gameId)[market][side].pick;
+  const m = { moneyline: 'ml', spread: 'sp', total: 'tot' }[market];
+  const k = { home: 'h', away: 'a', over: 'o', under: 'u' }[side];
+  return board.games.find((g) => g.gameId === gameId)[m][k].p;
 };
 
 test('the tool loop: leagues → board (started and too-soon games left out) → a bet with its why → done', async () => {
@@ -103,14 +105,14 @@ test('the tool loop: leagues → board (started and too-soon games left out) →
     { calls: [call('get_leagues')] },
     (results) => {
       const nfl = results[0].output.leagues.find((l) => l.league === 'nfl');
-      assert.equal(nfl.upcomingGames, 1, 'the game in 5 minutes and the game in progress are not offered');
+      assert.equal(nfl.upcoming, 1, 'the game in 5 minutes and the game in progress are not offered');
       return { calls: [call('get_board', { league: 'nfl' })] };
     },
     (results) => {
       const board = results[0].output;
       assert.deepEqual(board.games.map((g) => g.gameId), ['401']);
-      assert.equal(board.games[0].moneyline.home.impliedPct, 60);
-      return { calls: [call('place_bet', { mode: 'singles', legs: [{ pick: board.games[0].moneyline.home.pick, stakeCents: 300 }], why: 'Texans ML: 64% vs 60% fair.' })] };
+      assert.deepEqual(board.games[0].ml.h, { p: board.games[0].ml.h.p, o: -150, f: 58 }, 'odds and the no-vig fair probability');
+      return { calls: [call('place_bet', { mode: 'singles', legs: [{ pick: board.games[0].ml.h.p, stakeCents: 300 }], why: 'Texans ML: 64% vs 60% fair.' })] };
     },
     (results) => {
       assert.equal(results[0].output.placed.length, 1);
@@ -118,7 +120,7 @@ test('the tool loop: leagues → board (started and too-soon games left out) →
     },
   ]);
   const { summary, text } = await runAgent({ agentId: 'claude-big', env: ENV, fetchImpl: w.fetchImpl, now: () => NOW, adapter: model, prompt: 'test prompt', prices: PRICES });
-  assert.equal(summary.outcome, 'ran');
+  assert.equal(summary.outcome, 'ran', summary.stopReason);
   assert.equal(w.places.length, 1);
   const sent = w.places[0];
   assert.equal(sent.mode, 'singles');
@@ -226,8 +228,8 @@ test('caps: 25 turns by default, 5 searches, and the token budget each stop the 
   w = world();
   model = scripted([{ calls: [call('get_my_bets')] }], { usage: { input: 80000, output: 500 } });
   r = await runAgent({ agentId: 'claude-big', env: ENV, fetchImpl: w.fetchImpl, now: () => NOW, adapter: model, prompt: 'p', prices: PRICES });
-  assert.equal(r.summary.turns, 2);
-  assert.match(r.summary.stopReason, /token cap reached \(160000 in of 150000/);
+  assert.equal(r.summary.turns, 1, 'the second request would take the run past 150000, so it is not sent');
+  assert.match(r.summary.stopReason, /token cap reached \(80000 in of 150000.*not sent/);
 
   w = world();
   model = scripted([{ calls: [call('get_my_bets')] }], { usage: { input: 100, output: 11000 } });

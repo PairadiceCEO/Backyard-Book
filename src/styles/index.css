@@ -450,11 +450,34 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-.agent-card-balance {
+.agent-card-profit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   font-weight: 800;
   font-size: 1.1rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.agent-card-profit small {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.agent-card-profit.win {
+  color: var(--accent);
+}
+
+.agent-card-profit.lose {
+  color: var(--danger);
+}
+
+.agent-wallet {
+  margin: 0.4rem 0 0;
 }
 
 .agent-stats {

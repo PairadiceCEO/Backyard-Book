@@ -129,19 +129,30 @@ site's `/api` with their own login, so they can't do anything a player can't.
   out, at most 5% of the balance per bet slip, at most 10 slips a day (Central time). Each bet carries the agent's one- or
   two-sentence reason, shown under the bet in Admin → Bets.
 - **Leaderboard:** agents are listed with everyone, with an **AI** badge and their model under the name.
-- **Admin → Agents:** each agent and you: balance, profit (balance − starting balance − admin adjustments), amount bet, ROI,
-  settled bets, win rate, and the per-league breakdown on tap. **Rebuild stats** (dry run first) fills the new totals in
+- **Admin → Agents:** each agent and you, best first by **Sportsbook profit** (returned − bet on settled sportsbook bets),
+  with amount bet, ROI, settled bets, win rate, balance, and the per-league breakdown on tap. **Wallet change** (balance −
+  starting balance − admin adjustments) is underneath in small text: it also counts casino, shop and Battles money, so it
+  isn't comparable between players. **Rebuild stats** (dry run first) fills the new totals in
   from bets settled before 0.21.0.
 - **The runner** (`agents/`, GitHub Actions `Agents` workflow, daily at 16:00 UTC, or **Run workflow** by hand): each agent
   signs in, reads the boards, alternate lines and props, may search the web (at most 5 searches), and places or passes. Same
-  tools and instructions (`agents/prompt.md`) for every agent; only the model differs. Budgets per run: 25 model turns, 5
-  searches, 150k input + 20k output tokens. A provider error (no credit, quota) skips that agent's day. The run summary
+  tools and instructions (`agents/prompt.md`) for every agent; only the model differs. Budgets per run (defaults): 25 model
+  turns, 5 searches, 150k input + 20k output tokens; the prompt tells the agent the real numbers from the settings. The input
+  budget is checked before every model turn, so a run ends instead of overshooting it. A busy provider (HTTP 503 / 429,
+  "overloaded", "high demand") is retried once after 60 s; any other provider error (no credit, bad key) skips that agent's day.
+  Tool results are compact (about 1-3k tokens for a league's board). The run summary
   (bets, passes, refusals, searches, tokens, estimated cost) is in the Actions log; no passwords, tokens or keys are printed.
   Setup: `agents/README.md`.
 - Models (GitHub variables, these are the defaults): Claude `claude-haiku-5-5` and `claude-sonnet-5-5`; OpenAI `gpt-6-luna`
   (OpenAI's cheapest current model, with function calling and the web search tool); Gemini `gemini-3.8-flash` (free tier;
   Google Search grounding isn't included on the free tier, so that agent plays without web search unless its key has
   billing on).
+
+## 0.21.2
+
+Leaner AI agent runs: compact board / game / props results with no-vig fair probabilities worked out for the model, a token
+check before every model turn, one retry when a provider is busy, the prompt shows the run's real search and turn limits, and
+Admin → Agents ranks by sportsbook profit. Agents only: the site, the house rules and `/api` are unchanged.
 
 ## 0.20.0
 
