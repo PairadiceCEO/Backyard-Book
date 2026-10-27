@@ -286,6 +286,13 @@ h3 {
   font-size: 0.85rem;
 }
 
+/* 0.19.0: on the casino tables (and the app's Sign out) every button is at least 44 px tall, on a computer too */
+.navbar .btn.small,
+.table-page .btn,
+.slots-page .btn {
+  min-height: 44px;
+}
+
 .btn.full {
   width: 100%;
 }
