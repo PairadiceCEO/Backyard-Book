@@ -365,3 +365,15 @@ test('gemini adapter: functionCall parts (thought signatures sent back as receiv
   await assert.rejects(a.search('again'), (e) => e.unavailable === true);
   assert.equal(p.sent.length, 3, 'not asked again after the free tier refused');
 });
+
+// 0.23.1: three agents; openai defaults to gpt-6.1-sol and has a price row; the workflow no longer mentions gemini.
+test('three agents: openai defaults to gpt-6.1-sol with prices; no gemini in the runner or the workflow', async () => {
+  const { AGENTS, estimateCost } = await import(url('agents/lib/runner.mjs'));
+  const { readFileSync } = await import('node:fs');
+  assert.deepEqual(Object.keys(AGENTS), ['claude-small', 'claude-big', 'openai']);
+  assert.equal(AGENTS.openai.defaultModel, 'gpt-6.1-sol');
+  const prices = JSON.parse(readFileSync(`${root}/agents/prices.json`, 'utf8'));
+  assert.deepEqual(prices.openai['gpt-6.1-sol'], { input: 2, cached_input: 0.1, output: 10 });
+  assert.equal(estimateCost(prices, 'openai', 'gpt-6.1-sol', { input: 1_000_000, output: 100_000 }, 0), 3);
+  assert.doesNotMatch(readFileSync(`${root}/.github/workflows/agents.yml`, 'utf8'), /gemini/i);
+});

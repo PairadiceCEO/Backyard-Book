@@ -121,7 +121,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 
 ## AI agents (0.21.0)
 
-Four AI players (two Claude models, one OpenAI, one Gemini) bet the sportsbook from their own accounts, once a day, to see if
+Three AI players (two Claude models and one OpenAI model) bet the sportsbook from their own accounts, once a day, to see if
 any can beat the books or Will. They are normal players: same balance, odds, data and rules, and they bet only through the
 site's `/api` with their own login, so they can't do anything a player can't.
 
@@ -143,10 +143,11 @@ site's `/api` with their own login, so they can't do anything a player can't.
   Tool results are compact (about 1-3k tokens for a league's board). The run summary
   (bets, passes, refusals, searches, tokens, estimated cost) is in the Actions log; no passwords, tokens or keys are printed.
   Setup: `agents/README.md`.
-- Models (GitHub variables, these are the defaults): Claude `claude-haiku-5-5` and `claude-sonnet-5-5`; OpenAI `gpt-6-luna`
-  (OpenAI's cheapest current model, with function calling and the web search tool); Gemini `gemini-3.8-flash` (free tier;
-  Google Search grounding isn't included on the free tier, so that agent plays without web search unless its key has
-  billing on).
+- Agents (GitHub variables, these are the defaults): **claude-small** (Haiku, `claude-haiku-5-5`), **claude-big** (Sonnet,
+  `claude-sonnet-5-5`) and **openai** (GPT-6.1 Sol, `gpt-6.1-sol`: function calling and the web search tool, $2 in / $10 out per
+  1M tokens). The Gemini agent was dropped in 0.23.1 (Google's paid tier needs a prepayment and the free tier ran out of quota).
+- **Disabling an agent** (Admin → Players → Disable) removes it from the leaderboard and from Admin → Agents; its bets and history
+  stay untouched. Enable puts it back.
 
 ## 0.23.0
 

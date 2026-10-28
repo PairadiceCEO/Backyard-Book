@@ -5,6 +5,21 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.23.1 (Will, 2026-10-28 12:55 CT; his message says "0.22.1", but 0.23.0 is already merged, so 0.23.1) — COMPLETE (2026-10-28), merged to main
+Spec: "remove the Gemini agent, add GPT-6.1 Sol prices". Will set AGENT_OPENAI_MODEL = gpt-6.1-sol and deleted the Gemini secrets.
+- [x] 1 agents.yml: gemini out of the matrix, the dispatch choices, the secrets / variables lines and the header comment. The runner's
+      AGENTS table and run.mjs no longer list it either. Google adapter (agents/lib/providers.mjs) and its tests kept, marked unused
+      in agents/README.md.
+- [x] 2 agents/prices.json: gpt-6.1-sol $2.00 in / $0.10 cached in / $10.00 out per 1M (developers.openai.com/api/docs/pricing,
+      2026-10-28, cited in the note). Default AGENT_OPENAI_MODEL now gpt-6.1-sol. Model page (developers.openai.com/api/docs/models/
+      gpt-6.1-sol): function calling, web_search (Responses API) supported; reasoning.effort low/medium/high/xhigh/max, so the adapter
+      (`reasoning: { effort: 'low' }`) is unchanged. The summary's cost uses the plain input rate for all input (cached input makes it
+      a slight overestimate); the cached price is stored for later.
+- [x] 3 Disable already existed (Admin → Players → Disable, `setDisabled`; the leaderboard already hides disabled players). Admin →
+      Agents now hides disabled agents too (AdminAgents.jsx). Bets and history untouched. No server, rules or index change.
+- [x] 4 README "AI agents", agents/README.md, CLAUDE.md: three agents (claude-small Haiku, claude-big Sonnet, openai GPT-6.1 Sol).
+Checks: see the line added below when they finished.
+
 ## Phase 0.23.0 (Will, 2026-10-28 01:16 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: Will's message of 01:16 ("craps Place bets before the point, every chip tap counts, Max bet, $1,000 and $10,000 chips,
 sportsbook per-bet limit $10,000,000, Blackjack seats show their cards").
@@ -970,7 +985,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.23.0 is merged; next steps come from Will's testing. (0.17.1, Slots chat removal / clearer chat errors, was
+Nothing queued: 0.23.1 is merged; next steps come from Will's testing. (0.17.1, Slots chat removal / clearer chat errors, was
 never started here and needs its spec re-sent.)
 
 ## Open questions

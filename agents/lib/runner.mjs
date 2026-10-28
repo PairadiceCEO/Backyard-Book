@@ -21,8 +21,7 @@ const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 export const AGENTS = {
   'claude-small': { provider: 'anthropic', secret: 'CLAUDE_SMALL', modelVar: 'AGENT_CLAUDE_SMALL_MODEL', defaultModel: 'claude-haiku-5-5', keyVar: 'ANTHROPIC_API_KEY' },
   'claude-big': { provider: 'anthropic', secret: 'CLAUDE_BIG', modelVar: 'AGENT_CLAUDE_BIG_MODEL', defaultModel: 'claude-sonnet-5-5', keyVar: 'ANTHROPIC_API_KEY' },
-  openai: { provider: 'openai', secret: 'OPENAI', modelVar: 'AGENT_OPENAI_MODEL', defaultModel: 'gpt-6-luna', keyVar: 'OPENAI_API_KEY' },
-  gemini: { provider: 'google', secret: 'GEMINI', modelVar: 'AGENT_GEMINI_MODEL', defaultModel: 'gemini-3.8-flash', keyVar: 'GEMINI_API_KEY' },
+  openai: { provider: 'openai', secret: 'OPENAI', modelVar: 'AGENT_OPENAI_MODEL', defaultModel: 'gpt-6.1-sol', keyVar: 'OPENAI_API_KEY' },
 };
 
 export function limitsFrom(env) {

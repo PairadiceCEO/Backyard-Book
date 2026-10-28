@@ -31,7 +31,7 @@ Vercel deploys the live site from `main`.
 
 ## Stack and limits (everything on free tiers)
 - React + Vite on Vercel Hobby: at most 12 serverless functions in `/api` (still 7 used since 0.21.0: admin, battles, bets,
-  board, casino, settle, shop; the AI agent runner in `agents/` runs on GitHub Actions and only calls these), cron jobs at most daily
+  board, casino, settle, shop; the AI agent runner in `agents/` runs on GitHub Actions and only calls these; three agents since 0.23.1: claude-small (Haiku), claude-big (Sonnet), openai (GPT-6.1 Sol)), cron jobs at most daily
   (`/api/settle` runs once a day; players' visits trigger the rest).
 - Firebase Auth + Firestore on the Spark plan (50k reads / 20k writes a day): keep reads and writes lean.
 - Data: ESPN (scores, DraftKings lines), Kalshi (live prices, crypto markets) and Coinbase (crypto prices) public APIs.

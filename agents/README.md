@@ -1,6 +1,6 @@
 # AI agent players (0.21.0, leaner since 0.21.2, cached and traced since 0.21.3, researching since 0.22.0)
 
-`node agents/run.mjs <claude-small | claude-big | openai | gemini>` plays one session for that agent and exits. It runs on
+`node agents/run.mjs <claude-small | claude-big | openai>` plays one session for that agent and exits. It runs on
 GitHub Actions (`.github/workflows/agents.yml`): daily at 16:00 UTC, or Actions → Agents → Run workflow. Nothing here is
 deployed or bundled by Vite; it only calls the live site's `/api`, as that agent's player account.
 
@@ -48,8 +48,8 @@ deployed or bundled by Vite; it only calls the live site's `/api`, as that agent
     "Research calls: N" and when research closed; the turn trace lists each research tool's result size.
 - Adapters (Anthropic requests use prompt caching since 0.21.3: cache breakpoints on the system prompt and on the last block of the
   conversation, so what is re-sent each turn is a cache read at 0.1x and only the new text is a cache write at 1.25x; usage is
-  reported as billed-equivalent input tokens, which is what the budget and the cost estimate use): Anthropic Messages, OpenAI Responses, Gemini generateContent, plain fetch. web_search is one request
-  to the provider's own search (Anthropic web_search tool, OpenAI web_search tool, Gemini Google Search grounding).
+  reported as billed-equivalent input tokens, which is what the budget and the cost estimate use): Anthropic Messages, OpenAI Responses, plain fetch (and a Gemini generateContent adapter, **unused since 0.23.1**: no agent runs it any more; the code and its tests stay). web_search is one request
+  to the provider's own search (Anthropic web_search tool, OpenAI web_search tool).
 - `lib/runner.mjs`: sign-in (Firebase Auth REST), the turn loop and the budget: 25 turns, 5 searches, 150k input + 20k
   output tokens per run (env AGENT_MAX_TURNS, AGENT_MAX_SEARCHES, AGENT_MAX_INPUT_TOKENS, AGENT_MAX_OUTPUT_TOKENS). The input
   budget is a total over the run (every request re-sends the conversation). Before each model turn the runner estimates the
@@ -67,13 +67,13 @@ deployed or bundled by Vite; it only calls the live site's `/api`, as that agent
 |---|---|---|---|
 | claude-small | AGENT_CLAUDE_SMALL_MODEL | claude-haiku-5-5 | |
 | claude-big | AGENT_CLAUDE_BIG_MODEL | claude-sonnet-5-5 | |
-| openai | AGENT_OPENAI_MODEL | gpt-6-luna | OpenAI's cheapest current text model ($0.10 in / $0.50 out per 1M tokens); Responses API, function calling and the web_search tool ($10 per 1,000 searches) |
-| gemini | AGENT_GEMINI_MODEL | gemini-3.8-flash | On the free tier (limits are per project, see aistudio.google.com/rate-limit; roughly 10 requests a minute). Free-tier prompts may be used by Google to improve its products. Grounding with Google Search is **not available on the free tier**; with billing on, 5,000 searches a month are included, then $14 per 1,000. Without it this agent plays without web search (the summary says so). |
+| openai | AGENT_OPENAI_MODEL | gpt-6.1-sol | GPT-6.1 Sol ($2.00 in / $0.10 cached in / $10.00 out per 1M tokens, developers.openai.com/api/docs/pricing, 2026-10-28). Its model page lists function calling and the web_search tool (Responses API) as supported and `reasoning.effort` low / medium / high / xhigh / max, so the adapter's `reasoning: { effort: 'low' }` stays. Web search $10 per 1,000 calls. |
+| ~~gemini~~ | ~~AGENT_GEMINI_MODEL~~ | | Dropped in 0.23.1: Google's paid tier needs a $30 prepayment and the free tier ran out of quota mid-run. Not in the workflow or the runner; the adapter in `lib/providers.mjs` is unused. |
 
 ## Secrets (repo Settings → Secrets and variables → Actions)
 
 AGENT_CLAUDE_SMALL_USERNAME / _PASSWORD, AGENT_CLAUDE_BIG_USERNAME / _PASSWORD, AGENT_OPENAI_USERNAME / _PASSWORD,
-AGENT_GEMINI_USERNAME / _PASSWORD, ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, BB_SITE_URL (the live site, e.g.
+ANTHROPIC_API_KEY, OPENAI_API_KEY, BB_SITE_URL (the live site, e.g.
 https://your-site.vercel.app) and VITE_FIREBASE_API_KEY (the same public web API key as in Vercel). Each job gets only its own
 agent's login and its own provider's key. The logs are public (public repo) and never contain secrets.
 

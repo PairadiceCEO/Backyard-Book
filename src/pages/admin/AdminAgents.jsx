@@ -197,7 +197,8 @@ export default function AdminAgents() {
     Promise.all([getDocs(query(collection(db, 'users'), where('agent', '!=', null))), getDoc(doc(db, 'users', adminUid))])
       .then(([agents, me]) => {
         if (!live) return;
-        const list = agents.docs.map((d) => agentRow(d.id, d.data())).slice();
+        // 0.23.1: a disabled agent is off the list (its bets and history stay as they are).
+        const list = agents.docs.filter((d) => d.data().disabled !== true).map((d) => agentRow(d.id, d.data()));
         if (me.exists()) list.push(agentRow(me.id, me.data(), true));
         list.sort((a, b) => b.sportsbookCents - a.sportsbookCents || b.balanceCents - a.balanceCents);
         setRows(list);
