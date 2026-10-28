@@ -2,6 +2,9 @@
 //
 //   Seats     a player may hold several; each seat has its own bets, confirm and result.
 //   Betting   no timer until the first bet, then 15 s; closes early once every seat has confirmed.
+//             0.24.0: six side-bet spots too (Dragon Bonus Player / Banker, Fortune 7, Heavenly 9, Golden 8, Blazing 7s;
+//             shared/casino/sideBets.js), on the same `bets`, charged by the same `bet` and paid with the coup; a side bet
+//             needs a main bet on that seat.
 //             `bet` sets a seat's three spots (each $0 or whole dollars ≥ $1, no maximum); a change charges or refunds the
 //             difference. `confirm` locks the seat's bets.
 //   Deal      when betting closes, in the same transaction: draw from the private shoe, play the coup,
@@ -18,6 +21,7 @@ import { drawCard, reshuffleIfDue } from './shoe.js';
 import { freeGoneSeats } from './seats.js';
 import { formatDollars, requireBetAmount } from './money.js';
 import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
+import { SIDE_BET_KEEPS_MAIN, SIDE_BET_NEEDS_MAIN } from '../../shared/casino/sideBets.js';
 import {
   CASINO_SEATS,
   RESULTS_MS,
@@ -27,8 +31,11 @@ import {
   BACCARAT_DECKS,
   BACCARAT_MAX_SHOE_RESULTS,
   BACCARAT_RESHUFFLE_AT,
+  BACCARAT_ALL_SPOTS,
   BACCARAT_SPOTS,
   SPOT_LABELS,
+  mainBetCents,
+  sideBetCents,
   emptyBets,
   playCoup,
   coupRevealMs,
@@ -87,17 +94,17 @@ function everyoneReady(state) {
 }
 
 function describeBets(bets) {
-  const parts = BACCARAT_SPOTS.filter((spot) => bets[spot] > 0).map((spot) => `${SPOT_LABELS[spot]} ${formatDollars(bets[spot])}`);
+  const parts = BACCARAT_ALL_SPOTS.filter((spot) => bets[spot] > 0).map((spot) => `${SPOT_LABELS[spot]} ${formatDollars(bets[spot])}`);
   return parts.length ? parts.join(' · ') : 'no bets';
 }
 
 function parseBets(body) {
   const bets = {};
-  for (const spot of BACCARAT_SPOTS) {
+  for (const spot of BACCARAT_ALL_SPOTS) {
     const dollars = body[spot] ?? 0;
     // $0 clears the spot; otherwise whole dollars ≥ $1 under the sanity ceiling (no maximum; the wallet is the cap).
     if (dollars !== 0) requireBetAmount(dollars);
-    bets[spot] = dollars * 100;
+    if (dollars !== 0 || BACCARAT_SPOTS.includes(spot)) bets[spot] = dollars * 100; // side spots only while they hold chips
   }
   if (typeof body.requestId !== 'string' || !REQUEST_ID_PATTERN.test(body.requestId)) {
     throw new HttpError(400, 'BAD_REQUEST_ID', 'Missing or invalid requestId.');
@@ -115,6 +122,11 @@ async function bet(ctx, body) {
   requirePhase(ctx, 'betting', 'Betting is closed for this hand. Bet again when the next one opens.');
   if (seat.leaving) throw new HttpError(409, 'LEAVING', "You're leaving this table.");
   if (seat.ready) throw new HttpError(409, 'CONFIRMED', 'Your bets are confirmed for this hand.');
+
+  // 0.24.0: a side bet needs a main bet (Player, Banker or Tie) on the same seat.
+  if (sideBetCents(bets) > 0 && mainBetCents(bets) === 0) {
+    throw new HttpError(409, 'SIDE_NEEDS_MAIN', mainBetCents(seat.bets) > 0 ? SIDE_BET_KEEPS_MAIN : SIDE_BET_NEEDS_MAIN);
+  }
 
   const uid = ctx.caller.uid;
   const roundNo = ctx.state.roundNo;
@@ -192,7 +204,7 @@ async function closeBetting(ctx) {
       seat.result = null;
       continue;
     }
-    const settled = settleBaccaratBets(seat.bets, coup.winner);
+    const settled = settleBaccaratBets(seat.bets, coup); // main bets and side bets, one payout entry per seat
     seat.result = settled;
     if (settled.returnCents > 0) {
       ctx.addMoney(seat.uid, {

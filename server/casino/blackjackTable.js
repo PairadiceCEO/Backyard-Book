@@ -15,6 +15,11 @@
 //   Dealer     turns the hole card over; draws only if a live hand remains; hits soft 17.
 //   Results    5 s after the last card turns over on the phones, then the next hand opens.
 //
+// 21+3 (0.24.0): an optional side bet per seat (seat.sideCents), set by the same `bet` action (`side`, whole dollars; it
+//              needs a main bet), charged with it, and settled as soon as the opening cards are out (the seat's first two cards +
+//              the dealer's up card, before insurance or play): seat.side = { cards, hand, stakeCents, returnCents }, paid as
+//              cpay_blackjack_{round}_{uid}_s{n}_213 (shared/casino/sideBets.js has the paytable and its source).
+//
 // Shoe: 6 decks, reshuffled before a hand once 281 cards are dealt. If it runs dry mid-hand, a fresh
 // shoe is built from every card not on the table.
 
@@ -26,6 +31,7 @@ import { formatDollars, requireBetAmount } from './money.js';
 import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
 import { buildShoe, cardRank } from '../../shared/casino/cards.js';
 import { CASINO_SEATS, RESULTS_MS, TURN_SECONDS } from '../../shared/casino/constants.js';
+import { SIDE_BET_KEEPS_MAIN, SIDE_BET_NEEDS_MAIN, twentyOne3Hand, twentyOne3Label, twentyOne3ReturnCents } from '../../shared/casino/sideBets.js';
 import {
   BLACKJACK_INITIAL_GAP_MS,
   BLACKJACK_LATER_GAP_MS,
@@ -80,6 +86,8 @@ function createTable(now) {
 function freshSeatRound(seat) {
   seat.ready = false;
   seat.betCents = 0;
+  seat.sideCents = 0; // 21+3 (0.24.0)
+  seat.side = null; // its result once the opening cards are out
   seat.stakeCents = 0;
   seat.returnCents = 0;
   seat.insurance = null;
@@ -242,6 +250,17 @@ async function deal(ctx) {
     if (isBlackjack(hand.cards)) hand.status = 'blackjack';
   }
 
+  // 21+3: settled now, on the seat's first two cards and the dealer's up card.
+  for (const i of players) {
+    const seat = state.seats[i];
+    if (!(seat.sideCents > 0)) continue;
+    const cards = [seat.hands[0].cards[0], seat.hands[0].cards[1], state.dealer.cards[0]];
+    const hand = twentyOne3Hand(cards);
+    const returnCents = twentyOne3ReturnCents(seat.sideCents, cards);
+    seat.side = { cards, hand, stakeCents: seat.sideCents, returnCents };
+    pay(ctx, seat, '213', returnCents, `21+3 ${twentyOne3Label(hand)}`);
+  }
+
   if (offersInsurance(state.dealer.cards[0])) {
     state.phase = 'insurance';
     for (const i of players) state.seats[i].insurance = null;
@@ -392,6 +411,9 @@ async function bet(ctx, body) {
   const seat = ctx.state.seats[index];
   const amount = body.amount;
   if (amount !== 0) requireBetAmount(amount);
+  // 21+3 (0.24.0): `side` sets it ($0 clears it); left out, it stays as it is.
+  const side = body.side === undefined || body.side === null ? (seat.sideCents || 0) / 100 : body.side;
+  if (side !== 0) requireBetAmount(side);
   if (typeof body.requestId !== 'string' || !REQUEST_ID_PATTERN.test(body.requestId)) {
     throw new HttpError(400, 'BAD_REQUEST_ID', 'Missing or invalid requestId.');
   }
@@ -400,27 +422,31 @@ async function bet(ctx, body) {
   if (seat.leaving) throw new HttpError(409, 'LEAVING', "You're leaving this table.");
   if (seat.ready) throw new HttpError(409, 'CONFIRMED', 'Your bet is locked in for this hand.');
   const cents = amount * 100;
-  const diff = cents - seat.betCents;
+  const sideCents = side * 100;
+  if (sideCents > 0 && cents === 0) throw new HttpError(409, 'SIDE_NEEDS_MAIN', seat.betCents > 0 ? SIDE_BET_KEEPS_MAIN : SIDE_BET_NEEDS_MAIN);
+  const diff = cents + sideCents - seat.betCents - (seat.sideCents || 0);
+  const what = sideCents ? `bet now ${formatDollars(cents)} + 21+3 ${formatDollars(sideCents)}` : `bet now ${formatDollars(cents)}`;
   const id = `cbet_${ctx.caller.uid}_${body.requestId}`;
   if (diff > 0) {
     if (await ctx.ledgerExists(id)) return { duplicate: true };
     await requireFunds(ctx, seat, diff, 'that bet');
-    charge(ctx, seat, id, diff, `bet now ${formatDollars(cents)}`);
+    charge(ctx, seat, id, diff, what);
   } else if (diff < 0) {
     ctx.addMoney(seat.uid, {
       id: `cref_blackjack_${ctx.state.roundId}_${seat.uid}_${body.requestId}`,
       type: 'casino_refund',
       amountCents: -diff,
       roundId: ctx.state.roundId,
-      note: `Blackjack hand ${ctx.state.roundNo}, seat ${index + 1}: bet lowered to ${formatDollars(cents)}`,
+      note: `Blackjack hand ${ctx.state.roundNo}, seat ${index + 1}: lowered to ${what.replace('bet now ', '')}`,
     });
     seat.stakeCents += diff;
   }
   seat.betCents = cents;
+  seat.sideCents = sideCents;
   seat.reqs = [...(seat.reqs ?? []), body.requestId].slice(-RECENT_REQUESTS);
   if (anyBets(ctx.state) && !ctx.state.deadline) ctx.state.deadline = ctx.now + TURN_MS;
   ctx.changed = true;
-  return { betCents: cents };
+  return { betCents: cents, sideCents };
 }
 
 async function confirm(ctx, body) {
