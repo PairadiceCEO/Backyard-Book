@@ -76,6 +76,8 @@ export function anthropicUsage(u) {
   const read = Number(u?.cache_read_input_tokens) || 0;
   return { input: Math.round(plain + write * CACHE_WRITE_WEIGHT + read * CACHE_READ_WEIGHT), output: Number(u?.output_tokens) || 0, raw: plain + write + read, cacheRead: read, cacheWrite: write };
 }
+// What a cached or uncached token weighs against the run's input budget, per provider: the runner's pre-turn estimate uses these.
+export const ANTHROPIC_CACHE_WEIGHTS = { read: CACHE_READ_WEIGHT, write: CACHE_WRITE_WEIGHT };
 const CACHE = { type: 'ephemeral' };
 function withBreakpoint(messages) {
   const last = messages.length - 1;
@@ -95,6 +97,7 @@ export function anthropicAdapter({ apiKey, model, system, tools, maxOutputPerTur
   return {
     provider: 'anthropic',
     model,
+    cacheWeights: ANTHROPIC_CACHE_WEIGHTS,
     get retries() {
       return net.counter.retries;
     },
@@ -129,7 +132,21 @@ export function anthropicAdapter({ apiKey, model, system, tools, maxOutputPerTur
 }
 
 // ---------- OpenAI (Responses API; the conversation continues with previous_response_id; web search = web_search tool) ----------
-export function openaiAdapter({ apiKey, model, system, tools, maxOutputPerTurn = 4096, fetchImpl = fetch, sleep, retryWaitMs }) {
+// Cached input (0.25.1): usage.input_tokens counts every input token, cached ones included (usage.input_tokens_details.cached_tokens),
+// but cached input is billed at a fraction of the plain price. Like Anthropic's, usage.input is billed-equivalent: uncached tokens
+// at 1x, cached at `cachedWeight` (the model's cached_input ÷ input price in agents/prices.json, never hard-coded; 1 when the price
+// table has no cached price, i.e. counted in full as before); usage.raw is the real size. New text is never cheaper, so write = 1.
+export function openaiCachedWeight(prices, model) {
+  const row = prices?.openai?.[model];
+  const w = Number(row?.cached_input) / Number(row?.input);
+  return Number.isFinite(w) && w > 0 && w <= 1 ? w : 1;
+}
+export function openaiUsage(u, cachedWeight = 1) {
+  const total = Number(u?.input_tokens) || 0;
+  const cached = Math.min(total, Math.max(0, Number(u?.input_tokens_details?.cached_tokens) || 0));
+  return { input: Math.round(total - cached + cached * cachedWeight), output: Number(u?.output_tokens) || 0, raw: total, cacheRead: cached, cacheWrite: 0 };
+}
+export function openaiAdapter({ apiKey, model, system, tools, maxOutputPerTurn = 4096, fetchImpl = fetch, sleep, retryWaitMs, cachedWeight = 1 }) {
   const net = makeNet({ fetchImpl, sleep, retryWaitMs });
   const url = 'https://api.openai.com/v1/responses';
   const headers = { authorization: `Bearer ${apiKey}` };
@@ -148,13 +165,14 @@ export function openaiAdapter({ apiKey, model, system, tools, maxOutputPerTurn =
         return { id: o.call_id, name: o.name, args };
       }),
       text: output.filter((o) => o.type === 'message').flatMap((o) => (o.content ?? []).filter((c) => c.type === 'output_text').map((c) => c.text)).join('\n').trim(),
-      usage: { input: Number(json.usage?.input_tokens) || 0, output: Number(json.usage?.output_tokens) || 0 },
+      usage: openaiUsage(json.usage, cachedWeight),
       sources: output.filter((o) => o.type === 'message').flatMap((o) => (o.content ?? []).flatMap((c) => (c.annotations ?? []).filter((a) => a.type === 'url_citation').map((a) => a.url))),
     };
   };
   return {
     provider: 'openai',
     model,
+    cacheWeights: { read: cachedWeight, write: 1 },
     get retries() {
       return net.counter.retries;
     },

@@ -1,13 +1,19 @@
 # AI agent players (0.21.0, leaner since 0.21.2, cached and traced since 0.21.3, researching since 0.22.0)
 
 `node agents/run.mjs <claude-small | claude-big | openai>` plays one session for that agent and exits. It runs on
-GitHub Actions (`.github/workflows/agents.yml`): daily at 16:00 UTC, or Actions → Agents → Run workflow. Nothing here is
+GitHub Actions (`.github/workflows/agents.yml`): daily at **14:23 UTC** (9:23 AM Central in daylight time, 8:23 AM in standard time), or
+Actions → Agents → Run workflow. The minute is off the hour on purpose (0.25.1): GitHub delays scheduled runs at busy times, worst at the
+top of the hour (the old 16:00 run started 4 h 40 min late), so a run at :23 starts earlier, and even a late start lands before Sunday's
+noon-Central NFL games. GitHub may still start a scheduled run late; that is GitHub's, not a bug here. Nothing here is
 deployed or bundled by Vite; it only calls the live site's `/api`, as that agent's player account.
 
 - `prompt.md`: the instructions (since 0.22.0 a daily routine: get_my_history, 2-3 leagues, a shortlist of 6-10, research, estimate vs the
   no-vig fair probability, bet at an edge of 2+ points (3 for props and parlays), quarter-Kelly 0.5-3%, 2-6 bets on a normal day, `why`
   = estimated vs fair probability plus the strongest reasons), the same for every agent. `{{MAX_SEARCHES}}` and `{{MAX_TURNS}}` are filled in by the runner
-  from the run's settings (`renderPrompt` in `lib/runner.mjs`), so the prompt never disagrees with them.
+  from the run's settings (`renderPrompt` in `lib/runner.mjs`), so the prompt never disagrees with them. Since 0.25.1 it also lists the
+  bet slip rules the server enforces (one pick per game and market type per slip and per parlay, no moneyline + spread of one game in a
+  parlay, at most one leg per player per stat, pre-game only, 5% per slip, 10 slips a day) and tells the model to re-check its edge at the new
+  price after ODDS_CHANGED / LINE_CHANGED before re-submitting.
 - `lib/tools.mjs`: the tools (get_leagues, get_board, get_game, get_props, get_my_bets, place_bet, web_search). Picks get short
   ids; place_bet builds the exact legs the app's bet slip sends. LINE_CHANGED / ODDS_CHANGED go back to the model with the new
   price; it must re-submit itself (never auto-accepted). Results are compact (0.21.2): short keys, no pretty-printing, no logos,
@@ -48,7 +54,7 @@ deployed or bundled by Vite; it only calls the live site's `/api`, as that agent
     "Research calls: N" and when research closed; the turn trace lists each research tool's result size.
 - Adapters (Anthropic requests use prompt caching since 0.21.3: cache breakpoints on the system prompt and on the last block of the
   conversation, so what is re-sent each turn is a cache read at 0.1x and only the new text is a cache write at 1.25x; usage is
-  reported as billed-equivalent input tokens, which is what the budget and the cost estimate use): Anthropic Messages, OpenAI Responses, plain fetch (and a Gemini generateContent adapter, **unused since 0.23.1**: no agent runs it any more; the code and its tests stay). web_search is one request
+  reported as billed-equivalent input tokens, which is what the budget and the cost estimate use): Anthropic Messages, OpenAI Responses, plain fetch (OpenAI cached input counts like Anthropic's since 0.25.1: the Responses API's `usage.input_tokens_details.cached_tokens` are weighted at `cached_input ÷ input` from `prices.json` (0.05x for gpt-6.1-sol: $0.10 vs $2.00; 1x when a model has no cached price), uncached input at 1x, new text never cheaper, so the budget, the pre-turn estimate, the summary line "input is billed-equivalent: N cached at 0.05x" and the cost estimate all use billed-equivalent input; before, all OpenAI input counted in full and a run stopped on "token cap reached (176054 in of 200000)"), and a Gemini generateContent adapter, **unused since 0.23.1**: no agent runs it any more; the code and its tests stay). web_search is one request
   to the provider's own search (Anthropic web_search tool, OpenAI web_search tool).
 - `lib/runner.mjs`: sign-in (Firebase Auth REST), the turn loop and the budget: 25 turns, 5 searches, 150k input + 20k
   output tokens per run (env AGENT_MAX_TURNS, AGENT_MAX_SEARCHES, AGENT_MAX_INPUT_TOKENS, AGENT_MAX_OUTPUT_TOKENS). The input
