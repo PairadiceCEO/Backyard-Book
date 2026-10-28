@@ -8,6 +8,11 @@
 //
 // The dealer's face-down card is never in the doc: it shows as a card back until the server turns it
 // over. Moves carry the hand's index and actionSeq, so a double tap can't play a hand twice.
+//
+// 0.24.0: 21+3, a side bet per seat: a small circle beside the seat's betting spot, on the same chips (validation, Undo,
+// batching; it needs a main bet). The server settles it on the first two cards and the dealer's up card as soon as they're
+// dealt; the panel and the felt show its result once those three cards are face up. Rebet repeats it; Max stays on the main
+// bet and leaves 21+3 as it is.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChipRack, ChipStack } from '../../components/casino/Chips.jsx';
@@ -15,6 +20,9 @@ import { Link } from 'react-router-dom';
 import PlayingCard from '../../components/casino/PlayingCard.jsx';
 import BlackjackFelt from '../../components/casino/BlackjackFelt.jsx';
 import MaxBet from '../../components/casino/MaxBet.jsx';
+import RulesSheet, { RulesButton } from '../../components/casino/RulesSheet.jsx';
+import { blackjackRuleSections } from '../../lib/casinoRules.js';
+import { SIDE_BET_NEEDS_MAIN, TWENTY_ONE_3_NAME, twentyOne3Label } from '../../../shared/casino/sideBets.js';
 import { ErrorState, LoadingState, friendlyError } from '../../components/StatusViews.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useWalletDisplay } from '../../context/WalletDisplayContext.jsx';
@@ -134,11 +142,14 @@ function SeatPanel({
   setChip,
   onPending,
   onLocalBet,
+  onLocalSide,
+  sideShown,
   onError,
 }) {
   const [busy, setBusy] = useState('');
   // Rebet (0.19.0): the bet this seat had the last time cards were dealt to it, kept in memory only (a reload forgets it).
   const [lastBet, setLastBet] = useState(0);
+  const [lastSide, setLastSide] = useState(0); // 0.24.0: and its 21+3
   const rebetBusy = useRef(false);
   const hands = seat.hands ?? [];
   const myTurn = phase === 'playing' && turn?.seat === index;
@@ -146,53 +157,76 @@ function SeatPanel({
   const canMove = myTurn && activeHand?.status === 'playing' && !revealing && !busy;
 
   const canBet = phase === 'betting' && !seat.ready && !seat.leaving;
-  const serverSpots = useMemo(() => ({ bet: seat.betCents || 0 }), [seat.betCents]);
+  // Two spots: the bet and 21+3 ('side').
+  const serverSpots = useMemo(() => ({ bet: seat.betCents || 0, side: seat.sideCents || 0 }), [seat.betCents, seat.sideCents]);
   const validate = useCallback(
-    (_spot, cents) => {
+    (spot, cents, after) => {
       const tooBig = betCeilingProblem(cents); // only the $1,000,000 sanity ceiling: no maximum bet
       if (tooBig) return tooBig;
-      if (cents - (seat.betCents || 0) > balanceCents) return `Not enough in your wallet (${formatMoney(balanceCents)}).`;
+      if (spot === 'side' && !((after.bet ?? 0) > 0)) return SIDE_BET_NEEDS_MAIN;
+      const extra = (after.bet ?? 0) + (after.side ?? 0) - (seat.betCents || 0) - (seat.sideCents || 0);
+      if (extra > balanceCents) return `Not enough in your wallet (${formatMoney(balanceCents)}).`;
       return '';
     },
-    [seat.betCents, balanceCents],
+    [seat.betCents, seat.sideCents, balanceCents],
   );
   // Sends the seat's new total; resolves with what the server holds now, so the next batch builds on it.
   const sendChips = useCallback(
     async (_changes, totals) => {
-      const reply = await call('bet', { seat: index, amount: (totals.bet ?? 0) / 100, requestId: newRequestId() });
+      const reply = await call('bet', { seat: index, amount: (totals.bet ?? 0) / 100, side: (totals.side ?? 0) / 100, requestId: newRequestId() });
       const held = reply?.table?.seats?.[index]?.betCents ?? reply?.betCents;
-      return Number.isInteger(held) ? { bet: held } : null;
+      const heldSide = reply?.table?.seats?.[index]?.sideCents ?? reply?.sideCents ?? 0;
+      return Number.isInteger(held) ? { bet: held, side: Number.isInteger(heldSide) ? heldSide : 0 } : null;
     },
     [call, index],
   );
   const chips = useChipBetting({ spots: serverSpots, roundKey: roundId, validate, send: sendChips, onPending, enabled: canBet });
   const myBetCents = chips.spots.bet ?? 0;
+  const mySideCents = chips.spots.side ?? 0;
   // Max (0.23.0): the wallet left for this seat = the balance minus every chip not confirmed yet, on any of my seats.
   const { displayCents, heldCents, pendingCents } = useWalletDisplay();
   const walletLeft = heldCents === null ? displayCents(balanceCents) : balanceCents - pendingCents;
 
   // Cards are dealt to this seat: remember its bet (the server's seat bet, not a doubled or split hand's).
   const dealtBet = hands.length ? seat.betCents || 0 : 0;
+  const dealtSide = hands.length ? seat.sideCents || 0 : 0;
   useEffect(() => {
-    if (phase !== 'betting' && dealtBet > 0) setLastBet(dealtBet);
-  }, [phase, dealtBet]);
+    if (phase !== 'betting' && dealtBet > 0) {
+      setLastBet(dealtBet);
+      setLastSide(dealtSide);
+    }
+  }, [phase, dealtBet, dealtSide]);
 
   // Rebet / Rebet x2: the same chips as tapping them: one chips.place, so batching, validation (wallet) and Undo all apply.
   // The ref stops a double tap from placing twice before the chips show.
-  const showRebet = canBet && lastBet > 0 && myBetCents === 0;
+  const showRebet = canBet && lastBet > 0 && myBetCents === 0 && mySideCents === 0;
+  const lastTotal = lastBet + lastSide;
   useEffect(() => {
     rebetBusy.current = false;
   }, [myBetCents, roundId]);
+  // The bet first, then its 21+3 (which needs the bet). The whole thing or nothing.
   function rebet(times) {
     if (rebetBusy.current || myBetCents > 0) return;
+    if (lastTotal * times > balanceCents) {
+      chips.setError(`Not enough in your wallet (${formatMoney(balanceCents)}).`);
+      return;
+    }
     rebetBusy.current = true;
-    if (!chips.place('bet', lastBet * times)) rebetBusy.current = false; // refused (wallet): nothing placed, the message shows
+    if (!chips.place('bet', lastBet * times)) {
+      rebetBusy.current = false; // refused: nothing placed, the message shows
+      return;
+    }
+    if (lastSide && !chips.place('side', lastSide * times)) chips.clear();
   }
 
   // The seat tile shows chips the moment they go down, before the server answers.
   useEffect(() => {
     onLocalBet(myBetCents);
   }, [myBetCents, onLocalBet]);
+  useEffect(() => {
+    onLocalSide(mySideCents);
+  }, [mySideCents, onLocalSide]);
+  const side = seat.side && sideShown ? seat.side : null; // 21+3's result, once its three cards are face up
 
   async function run(kind, action, fields = {}) {
     setBusy(kind);
@@ -244,19 +278,31 @@ function SeatPanel({
 
       {phase === 'betting' && !seat.leaving ? (
         <>
-          <button
-            type="button"
-            className={myBetCents ? 'bj-bet-spot has-bet' : 'bj-bet-spot'}
-            onClick={() => chips.place('bet', chip * 100)}
-            disabled={!canBet}
-            aria-label={`Seat ${index + 1} bet ${formatMoney(myBetCents)}. Tap to add a $${chip} chip.`}
-          >
-            <span className="bj-bet-label">{seat.ready ? 'Bet locked in' : 'Tap to bet'}</span>
-            <span className="spot-chips">
-              <ChipStack cents={myBetCents} />
-              <strong>{myBetCents ? formatMoney(myBetCents) : '—'}</strong>
-            </span>
-          </button>
+          <div className="bj-bet-row">
+            <button
+              type="button"
+              className={myBetCents ? 'bj-bet-spot has-bet' : 'bj-bet-spot'}
+              onClick={() => chips.place('bet', chip * 100)}
+              disabled={!canBet}
+              aria-label={`Seat ${index + 1} bet ${formatMoney(myBetCents)}. Tap to add a $${chip} chip.`}
+            >
+              <span className="bj-bet-label">{seat.ready ? 'Bet locked in' : 'Tap to bet'}</span>
+              <span className="spot-chips">
+                <ChipStack cents={myBetCents} />
+                <strong>{myBetCents ? formatMoney(myBetCents) : '—'}</strong>
+              </span>
+            </button>
+            <button
+              type="button"
+              className={mySideCents ? 'bj-side-spot has-bet' : 'bj-side-spot'}
+              onClick={() => chips.place('side', chip * 100)}
+              disabled={!canBet}
+              aria-label={`Seat ${index + 1} 21+3 side bet ${formatMoney(mySideCents)}. Tap to add a $${chip} chip.`}
+            >
+              <span className="bj-side-name">{TWENTY_ONE_3_NAME}</span>
+              {mySideCents ? <ChipStack cents={mySideCents} /> : <span className="bj-side-empty">side bet</span>}
+            </button>
+          </div>
           <ChipRack
             chip={chip}
             onChip={setChip}
@@ -270,10 +316,10 @@ function SeatPanel({
                   {showRebet ? (
                     <>
                       <button type="button" className="rebet-btn" onClick={() => rebet(1)}>
-                        Rebet {formatMoney(lastBet)}
+                        Rebet {formatMoney(lastTotal)}
                       </button>
                       <button type="button" className="rebet-btn" onClick={() => rebet(2)}>
-                        Rebet ×2 {formatMoney(lastBet * 2)}
+                        Rebet ×2 {formatMoney(lastTotal * 2)}
                       </button>
                     </>
                   ) : null}
@@ -290,7 +336,7 @@ function SeatPanel({
             }
             extra={
               <button type="button" className="btn btn-primary" onClick={confirmBet} disabled={!canBet || !myBetCents || busy === 'confirm'}>
-                {seat.ready ? 'Confirmed ✓' : busy === 'confirm' ? 'Confirming…' : `Deal me in ${myBetCents ? formatMoney(myBetCents) : ''}`.trim()}
+                {seat.ready ? 'Confirmed ✓' : busy === 'confirm' ? 'Confirming…' : `Deal me in ${myBetCents ? formatMoney(myBetCents + mySideCents) : ''}`.trim()}
               </button>
             }
           />
@@ -300,10 +346,16 @@ function SeatPanel({
             ) : seat.ready ? (
               'Locked in. Cards come out when every seat confirms or the clock runs out.'
             ) : (
-              `Pick a chip and tap the spot; each tap adds a chip. ${BET_HELP_TEXT}`
+              `Pick a chip and tap the spot; each tap adds a chip. 21+3 (beside it) needs a bet. ${BET_HELP_TEXT}`
             )}
           </p>
         </>
+      ) : null}
+
+      {side ? (
+        <p className={`bj-note bj-side-result ${side.returnCents > 0 ? 'win' : 'lose'}`} data-side-result="">
+          21+3: {side.hand ? twentyOne3Label(side.hand) : 'no hand'} {side.returnCents > 0 ? signedMoney(side.returnCents - side.stakeCents) : `−${formatMoney(side.stakeCents)}`}
+        </p>
       ) : null}
 
       {phase === 'insurance' && !revealing && seat.betCents > 0 ? (
@@ -444,6 +496,16 @@ export default function BlackjackPage() {
   const pendingFor = usePendingTotal(setPendingCents);
   const [localBets, setLocalBets] = useState({});
   const localBetCallbacks = useRef(new Map());
+  const [localSides, setLocalSides] = useState({}); // 0.24.0: my 21+3 chips, the same way
+  const localSideCallbacks = useRef(new Map());
+  const localSideFor = useCallback((i) => {
+    if (!localSideCallbacks.current.has(i)) {
+      localSideCallbacks.current.set(i, (cents) => setLocalSides((prev) => (prev[i] === cents ? prev : { ...prev, [i]: cents })));
+    }
+    return localSideCallbacks.current.get(i);
+  }, []);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const closeRules = useCallback(() => setRulesOpen(false), []);
   const localBetFor = useCallback((i) => {
     if (!localBetCallbacks.current.has(i)) {
       localBetCallbacks.current.set(i, (cents) => setLocalBets((prev) => (prev[i] === cents ? prev : { ...prev, [i]: cents })));
@@ -540,6 +602,21 @@ export default function BlackjackPage() {
     return seat.uid === myUid ? localBets[i] ?? seat.betCents ?? 0 : seat.betCents ?? 0;
   }
 
+  // 21+3's three cards (the seat's first two, the dealer's up card) are face up: its result can show.
+  function sideShownFor(i) {
+    return hiddenFrom(`${i}-0`, 2) >= 2 && hiddenFrom('d', 1) >= 1;
+  }
+
+  // The small 21+3 circle beside each seat's circle on the felt: its chips, and once settled and face up, won or lost.
+  function sideFor(seat, i) {
+    if (seat.side) {
+      const known = sideShownFor(i);
+      return { cents: seat.side.stakeCents, tone: known ? (seat.side.returnCents > 0 ? 'win' : 'lose') : '', text: known ? (seat.side.returnCents > 0 ? 'WIN' : ' ') : '' };
+    }
+    const cents = seat.hands?.length ? seat.sideCents ?? 0 : seat.uid === myUid ? localSides[i] ?? seat.sideCents ?? 0 : seat.sideCents ?? 0;
+    return cents > 0 ? { cents, tone: '', text: '' } : null;
+  }
+
   // Someone else's turn: show their hand below the felt so everyone can follow.
   const spotlight = phase === 'playing' && activeSeat && !mySeats.includes(turn.seat) ? { seat: activeSeat, index: turn.seat } : null;
 
@@ -590,6 +667,7 @@ export default function BlackjackPage() {
         detail={seatDetail}
         betFor={circleBet}
         handsFor={handsFor}
+        sideFor={sideFor}
         results={results}
         roundKey={table?.roundId ?? 'r'}
         dealer={<HandView label="Dealer" cards={dealer.cards} hiddenFrom={dealerHidden} holeDown={dealer.holeDown} fromSplit={false} handKey="d" dealAtFor={dealAtFor} />}
@@ -657,6 +735,8 @@ export default function BlackjackPage() {
               setChip={setChip}
               onPending={pendingFor(i)}
               onLocalBet={localBetFor(i)}
+              onLocalSide={localSideFor(i)}
+              sideShown={sideShownFor(i)}
               onError={setActionError}
             />
           ))}
@@ -685,8 +765,10 @@ export default function BlackjackPage() {
       <p className="muted small table-rules">
         6 decks. Blackjack pays 3:2; insurance up to half your bet pays 2:1. Dealer hits soft 17 and peeks with an Ace or 10. One
         split per hand (split Aces get one card), double on any first two cards, also after a split. 15 s per hand; time out = stand.
-        {BET_HELP_TEXT} Each seat bets on its own; sit in as many seats as you like.
+        {BET_HELP_TEXT} Each seat bets on its own; sit in as many seats as you like. 21+3 side bet: three-card poker on your
+        first two cards and the dealer's up card. <RulesButton onClick={() => setRulesOpen(true)} />
       </p>
+      <RulesSheet open={rulesOpen} onClose={closeRules} title="Blackjack rules" sections={blackjackRuleSections()} />
       <ChatDrawer chat={chat} />
     </section>
   );

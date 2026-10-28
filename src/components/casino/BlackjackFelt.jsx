@@ -10,6 +10,9 @@
 // Every seat circle, mine and everyone else's, shows its cards as small overlapping card faces just above the circle, each
 // hand of a split side by side, with its total pill. The dealer's hole card is the dealer's HandView's business (it stays a
 // card back until the server turns it).
+// 0.24.0: sideFor(seat, i) → { cents, tone ('win' | 'lose' | ''), text } or null: a small printed 21+3 circle at the lower
+// outside edge of every seat's circle with that seat's side-bet chip, outlined green or dimmed once it's settled and face up.
+// Look only (you bet 21+3 on the seat panel's spot, a 44 px+ button).
 
 import '../../styles/tablefelt.css';
 import { CASINO_SEATS } from '../../../shared/casino/constants.js';
@@ -67,7 +70,7 @@ function SeatHands({ hands }) {
   );
 }
 
-export default function BlackjackFelt({ seats, myUid, mySeats, focus, onFocus, sitting, onSit, detail, betFor, handsFor = null, dealer, results, roundKey }) {
+export default function BlackjackFelt({ seats, myUid, mySeats, focus, onFocus, sitting, onSit, detail, betFor, handsFor = null, sideFor = null, dealer, results, roundKey }) {
   const multi = mySeats.length > 1;
   return (
     <div className="tfelt-rail bjt-rail">
@@ -109,7 +112,8 @@ export default function BlackjackFelt({ seats, myUid, mySeats, focus, onFocus, s
             const mine = seat.uid === myUid;
             const info = detail(seat, i);
             const cents = betFor(seat, i);
-            const label = `Seat ${i + 1}: ${seat.name}${mine ? ' (you)' : ''}`;
+            const side = sideFor ? sideFor(seat, i) : null;
+            const label = `Seat ${i + 1}: ${seat.name}${mine ? ' (you)' : ''}${side ? `, 21+3 ${(side.cents / 100).toFixed(0)} dollars${side.tone ? (side.tone === 'win' ? ', won' : ', lost') : ''}` : ''}`;
             const classes = ['bjt-seat', mine ? 'mine' : 'other', seat.leaving ? 'leaving' : '', focus === i && multi ? 'focused' : '', info?.tone ?? ''].filter(Boolean).join(' ');
             const inner = cents > 0 ? <FeltChip cents={cents} className="spot-chip" /> : <span className="bjt-num">{i + 1}</span>;
             return (
@@ -125,6 +129,12 @@ export default function BlackjackFelt({ seats, myUid, mySeats, focus, onFocus, s
                       {inner}
                     </span>
                   )}
+                  {side ? (
+                    <span className={['bjt-side', i >= 3 ? 'pos-right' : 'pos-left', side.tone].filter(Boolean).join(' ')} data-side-marker="" aria-hidden="true">
+                      <FeltChip cents={side.cents} className="bjt-side-chip" />
+                      {side.text === ' ' ? null : <span className="bjt-side-tag">{side.text || '21+3'}</span>}
+                    </span>
+                  ) : null}
                   {mine && seat.hands?.length && seat.result ? (
                     <ResultFx show={results} netCents={seat.result.netCents} stakeCents={cents} roundKey={`${roundKey}-${i}`} />
                   ) : null}

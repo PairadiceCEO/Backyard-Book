@@ -5,6 +5,32 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.24.0 (Will, 2026-10-28 13:37 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
+Spec: "Blackjack 21+3 side bet; Baccarat side bets Dragon Bonus, Fortune 7, Heavenly 9, Golden 8, Blazing 7s".
+Files: shared/casino/sideBets.js, shared/casino/baccarat.js, server/casino/{blackjack,baccarat}Table.js, BlackjackPage / BaccaratPage,
+BlackjackFelt / BaccaratFelt, RulesSheet.jsx, src/lib/casinoRules.js, tablefelt.css / index.css, test/sideBets.test.js,
+test/sideBetMath.js, test/casino/casino9.test.mjs, tools/phone-check/{interact,shoot}.mjs. Details in docs/CASINO_PROGRESS.md.
+Sources (cited in shared/casino/sideBets.js):
+- 21+3: Will's paytable = Wizard of Odds "21+3 Version 7" (6.39% 4 decks, 3.70% 8 decks; our exact calculation matches both;
+  6 decks = 4.62%). Dragon Bonus, Fortune 7: Will's paytables, edges from Wizard of Odds' Baccarat side bets appendix.
+- Heavenly 9, Golden 8, Blazing 7s: Nevada GCB approved rules "Commission Free 5 Treasures Baccarat – Version 2" (gaming.nv.gov),
+  which publishes the house edges (8 decks: Fortune 7 7.61%, Golden 8 10.19%, Heavenly 9 9.31%, Blazing 7s 16.75%). New Jersey
+  N.J.A.C. 13:69F-3.3(m) agrees on Fortune 7 / Golden 8 / Heavenly 9 but has other Blazing 7's tables (400; or 200 + 2-card 50);
+  Pennsylvania 58 Pa. Code §631c.3 lists the same wagers but its site blocks automated reading, so it wasn't used.
+Decisions:
+- All five Baccarat side bets and 21+3 are built (a published paytable was found for each).
+- House edges: exact enumeration matches every published figure to 0.01 points (this also confirmed Nevada's Blazing 7s reading).
+  The 1M-round simulation can't resolve ±0.3 points for long shots (standard error 0.23-1.04 points), so it must land within the
+  wider of ±0.3 or 3 standard errors of the exact edge.
+- Side bets need a main bet on the seat (server SIDE_NEEDS_MAIN; the page says so before sending). Baccarat side spots are stored
+  on seat.bets only while > 0. Blackjack `bet` without `side` keeps 21+3 as it is.
+- Max stays on the main spot (Baccarat: the main spot last tapped) and leaves side bets as they are; Rebet repeats side bets.
+- Blackjack's tappable 21+3 circle is beside the seat panel's betting spot (72 px); the felt (51 px circles about 3 px apart at
+  320 px) gets a look-only 21+3 marker on every seat's circle, green "WIN" or dimmed once settled and face up.
+- No floating +$ on the small Baccarat side spots (it piled up at 320 px); each says "Win 30 to 1" / "Push" / "Lose" and glows.
+Checks: test:all 419 pass, lint clean (scratch flat config), build ok, /api = 7, interact 84/84, dealcheck 8/8, tapcheck 14/14,
+shoot 163 screens clean. No firestore.rules change, no index.
+
 ## Phase 0.23.1 (Will, 2026-10-28 12:55 CT; his message says "0.22.1", but 0.23.0 is already merged, so 0.23.1) — COMPLETE (2026-10-28), merged to main
 Spec: "remove the Gemini agent, add GPT-6.1 Sol prices". Will set AGENT_OPENAI_MODEL = gpt-6.1-sol and deleted the Gemini secrets.
 - [x] 1 agents.yml: gemini out of the matrix, the dispatch choices, the secrets / variables lines and the header comment. The runner's
@@ -986,7 +1012,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.23.1 is merged; next steps come from Will's testing. (0.17.1, Slots chat removal / clearer chat errors, was
+Nothing queued: 0.24.0 is merged; next steps come from Will's testing. (0.17.1, Slots chat removal / clearer chat errors, was
 never started here and needs its spec re-sent.)
 
 ## Open questions

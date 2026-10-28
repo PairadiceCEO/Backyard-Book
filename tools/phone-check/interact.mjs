@@ -62,8 +62,13 @@ function chipRig(game) {
       return json(route, 400, { error: { code: 'BAD_BET', message: 'Bets are whole dollars, at least $1.' } });
     }
     const t = structuredClone(rig.table);
-    if (game === 'blackjack') t.seats[1].betCents = body.amount * 100;
-    else t.seats[1].bets = { player: body.player * 100, banker: body.banker * 100, tie: body.tie * 100 };
+    if (game === 'blackjack') {
+      t.seats[1].betCents = body.amount * 100;
+      t.seats[1].sideCents = (body.side ?? 0) * 100; // 0.24.0: 21+3
+    } else {
+      t.seats[1].bets = { player: body.player * 100, banker: body.banker * 100, tie: body.tie * 100 };
+      for (const k of ['dragonPlayer', 'dragonBanker', 'fortune7', 'heavenly9', 'golden8', 'blazing7']) if (body[k]) t.seats[1].bets[k] = body[k] * 100; // 0.24.0
+    }
     t.version += 1;
     t.updatedAt = now();
     rig.table = t;
@@ -1687,6 +1692,72 @@ for (const game of ['blackjack', 'baccarat']) {
     await page.waitForTimeout(BET_REPLY_MS + 700);
     assert.match((await page.locator('.error-text').allInnerTexts()).join(' '), /Not enough in your wallet/);
     assert.equal(rig.sent.length, 0, 'nothing sent');
+    await context.close();
+  });
+}
+
+// ---------- 0.24.0: side bets (Blackjack 21+3, Baccarat's six) ----------
+// A side spot takes chips like the main spot (one batch, Undo), refuses without a main bet (nothing sent), is at least
+// 44 × 44 at 320 px, and Rebet puts last hand's side bets back with the main bet in the same request.
+for (const game of ['blackjack', 'baccarat']) {
+  const sideBtn = (page, spot) => (game === 'blackjack' ? page.locator('.bj-side-spot').first() : page.locator(`.bact-sides [data-side="${spot}"]`));
+  const mainBtn = (page) => (game === 'blackjack' ? page.locator('.bj-bet-spot').first() : page.getByRole('button', { name: /Player, pays/ }));
+  const sideHeld = (rig, spot) => (game === 'blackjack' ? rig.table.seats[1].sideCents ?? 0 : rig.table.seats[1].bets[spot] ?? 0);
+
+  await check(`${game}: side bets: refused without a main bet (nothing sent); then chips go on with the main bet; Undo takes the last one; 44 px at 320`, async () => {
+    const rig = chipRig(game);
+    const { page, context } = await openPage(`/casino/${game}`, [rig.table], rig.handler);
+    rig.page = page;
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.waitForTimeout(300);
+    const spots = game === 'blackjack' ? ['side213'] : ['dragonPlayer', 'dragonBanker', 'fortune7', 'heavenly9', 'golden8', 'blazing7'];
+    for (const spot of spots) {
+      const r = await sideBtn(page, spot).boundingBox();
+      assert.ok(r && r.width >= 43.5 && r.height >= 43.5, `${spot}: ${r?.width}x${r?.height}`);
+      assert.ok(r.x >= 0 && r.x + r.width <= 320.5, `${spot} inside 320 px`);
+    }
+    const target = game === 'blackjack' ? 'side213' : 'golden8';
+    await page.getByRole('radio', { name: '$5 chip' }).first().click();
+    await sideBtn(page, target).click();
+    await page.waitForTimeout(600);
+    assert.equal(rig.sent.length, 0, 'nothing sent without a main bet');
+    assert.match((await page.locator('.error-text').allInnerTexts()).join(' '), /side bet needs a main bet/);
+    await mainBtn(page).click();
+    await sideBtn(page, target).click();
+    await sideBtn(page, target).click();
+    await sideBtn(page, target).click();
+    await page.getByRole('button', { name: 'Undo' }).first().click();
+    await page.waitForTimeout(BET_REPLY_MS * 2 + 900);
+    assert.equal(rig.sent.length, 1, `one batch (${JSON.stringify(rig.sent)})`);
+    assert.equal(game === 'blackjack' ? rig.table.seats[1].betCents : rig.table.seats[1].bets.player, 500);
+    assert.equal(sideHeld(rig, target), 1000, '$5 three times, one undone: $10 on the side bet');
+    assert.deepEqual(rig.refused, []);
+    await context.close();
+  });
+
+  await check(`${game}: Rebet puts last hand's side bets back with the main bet, in one request`, async () => {
+    const rig = chipRig(game);
+    const { page, context } = await openPage(`/casino/${game}`, [rig.table], rig.handler);
+    rig.page = page;
+    const { done, next } = nextRound(rig, game, game === 'blackjack' ? 1000 : { player: 500, banker: 0, tie: 0, heavenly9: 200 });
+    if (game === 'blackjack') {
+      done.seats[1].sideCents = 300;
+      done.seats[1].side = { cards: ['TS0', '9H0', 'TH0'], hand: null, stakeCents: 300, returnCents: 0 };
+      next.seats[1].sideCents = 0;
+      next.seats[1].side = null;
+    }
+    await push(page, done);
+    await page.waitForTimeout(900);
+    rig.table = next;
+    await push(page, next);
+    await page.waitForTimeout(400);
+    const btn = page.getByRole('button', { name: /^Rebet \$/ });
+    assert.equal(await btn.innerText(), game === 'blackjack' ? 'Rebet $13.00' : 'Rebet $7.00');
+    await btn.click();
+    await page.waitForTimeout(BET_REPLY_MS + 900);
+    assert.equal(rig.sent.length, 1, `one request (${JSON.stringify(rig.sent)})`);
+    if (game === 'blackjack') assert.deepEqual([rig.table.seats[1].betCents, rig.table.seats[1].sideCents], [1000, 300]);
+    else assert.deepEqual([rig.table.seats[1].bets.player, rig.table.seats[1].bets.heavenly9], [500, 200]);
     await context.close();
   });
 }

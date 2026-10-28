@@ -870,3 +870,189 @@ button.bjt-circle:disabled {
     max-width: 440px;
   }
 }
+
+/* ---------- 0.24.0: side bets ---------- */
+/* Blackjack: the small printed 21+3 circle on the upper outside edge of every seat's circle (look only). Sized from the circle
+   (36% of it), so it clears the next seat's circle and the cards above at 320 px. */
+.bjt-side {
+  position: absolute;
+  top: -6%;
+  width: 36%;
+  aspect-ratio: 1;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  background: #134029;
+  pointer-events: none;
+}
+
+.bjt-side.pos-left {
+  left: -6%;
+}
+
+.bjt-side.pos-right {
+  right: -6%;
+}
+
+.bjt-felt .bjt-side .bjt-side-chip {
+  --chip-size: clamp(14px, 5.3cqw, 30px); /* the felt is a container: 88% of the marker */
+}
+
+.bjt-side .fchip-face {
+  display: none; /* too small to print the amount: the seat panel and the aria-label say it */
+}
+
+.bjt-side-tag {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 1px;
+  padding: 0 2px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 0.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: #fff;
+}
+
+.bjt-side.win {
+  border-color: #8ff0b0;
+  box-shadow: 0 0 0 2px rgba(143, 240, 176, 0.5), 0 0 8px rgba(143, 240, 176, 0.6);
+}
+
+.bjt-side.win .bjt-side-tag {
+  color: #8ff0b0;
+}
+
+.bjt-side.lose {
+  opacity: 0.45;
+}
+
+/* Baccarat: the row of six smaller printed side-bet areas above Player / Banker / Tie. Three across on phones (each about
+   90 × 48 px at 320), six across on wider screens; every one is at least 44 × 44. */
+.bact-sides {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(44px, 1fr));
+  gap: 6px;
+  min-width: 0;
+  margin-bottom: 8px;
+}
+
+.bact-sides:empty {
+  display: none;
+}
+
+@media (min-width: 600px) {
+  .bact-sides {
+    grid-template-columns: repeat(6, minmax(44px, 1fr));
+  }
+}
+
+.bac-side {
+  --print: #f5d27a;
+  position: relative;
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: 48px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  padding: 3px 6px;
+  border-radius: 9px;
+  border: 1.5px solid var(--print);
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--print);
+  font-family: var(--felt-font);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.bac-side.dragonPlayer {
+  --print: #6bb6ff;
+}
+
+.bac-side.dragonBanker {
+  --print: #ff8f8f;
+}
+
+.bac-side:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.bac-side.has-bet {
+  box-shadow: 0 0 0 2px var(--gold);
+}
+
+.bac-side.won {
+  box-shadow: 0 0 0 3px var(--gold), 0 0 12px rgba(245, 196, 81, 0.6);
+}
+
+.bac-side.lost {
+  opacity: 0.55;
+}
+
+.bac-side-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.bac-side-name > span:last-child {
+  font-size: 0.8rem;
+}
+
+/* The chip is a badge on the top-right corner, so the printed name keeps the whole width at 320 px. */
+.bac-side .chip-stack {
+  position: absolute;
+  top: -7px;
+  right: -5px;
+  min-height: 0;
+  z-index: 2;
+}
+
+.bac-side .spot-chip {
+  --chip-size: 24px;
+}
+
+.bac-side .spot-chip .fchip-face {
+  font-size: 9px;
+}
+
+.bac-side-result {
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  transform: translateX(-50%);
+  padding: 0 4px;
+  border-radius: 5px;
+  background: #0d2a1b;
+  color: #fff;
+  font-size: 0.55rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.bac-side.won .bac-side-result {
+  color: var(--gold);
+}
+
+.bac-side-name > span:last-child {
+  text-transform: none; /* "7s", "Player" */
+}
