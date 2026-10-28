@@ -69,7 +69,7 @@ test('Place: pays with cent rounding ($5 Place 6 wins $5.83), stays up, off on c
   assert.equal(place(CRAPS, 4, 500, 4, 8).returnCents, 900, '9:5');
   assert.equal(place(CRAPS, 5, 500, 5, 8).returnCents, 700, '7:5');
   assert.equal(place(CRAPS, 6, 300, 6, 8).returnCents, 350, '$3 at 7:6 = $3.50');
-  assert.equal(place(CRAPS, 8, 100, 8, 6).returnCents, 117, '$1 at 7:6 = $1.1667 → $1.17');
+  assert.equal(place(CRAPS, 8, 100, 8, 6).returnCents, 116, '$1 at 7:6 = $1.1667 → $1.16 (rounded down to the cent, 0.25.0)');
   assert.equal(place(CRAPLESS, 2, 200, 2, 6).returnCents, 900, 'Crapless Place 2 at 9:2');
   assert.equal(place(CRAPLESS, 11, 400, 11, 6).returnCents, 1100, 'Crapless Place 11 at 11:4');
   assert.equal(place(CRAPS, 6, 500, 6, 6).returnCents, 583, 'a Place bet on the point number wins when the point is made');

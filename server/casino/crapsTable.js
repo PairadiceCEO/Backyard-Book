@@ -22,6 +22,10 @@
 //              shooter taps Roll. 2+ → 1 clears the clock; 1 → 2+ with a point on starts a 30 s clock then (on
 //              a come-out it starts at the next bet). One exception keeps a clock: a shooter who left with
 //              bets still in play can't tap Roll, so their dice still roll themselves.
+//   Working    0.25.0: working { kind: 'place' | 'hard', number, on } or { all: true, on }, requestId: switches this seat's
+//              Place bets / Hard ways ON (or back OFF) for come-out rolls. Only while no point is set; moves no money,
+//              writes no ledger entry, never touches the clock. Every new come-out (a point made, a seven-out, a new
+//              shooter) starts with them all OFF again (shared/casino/dice.js settleRoll + resetWorking here).
 //   Seven-out  the dice go to the next occupied seat, clockwise.
 //   Seats      one per player. After every roll, a seat whose player left or has been gone 60 s:
 //              line bets, Come bets and every Odds keep working until they resolve; once none are left
@@ -46,6 +50,7 @@ import {
   refundableCents,
   removeBlocker,
   rollKind,
+  setWorking,
   settleRoll,
   spotAmount,
   totalOnFelt,
@@ -71,6 +76,11 @@ function nextShooter(state, from) {
     if (seat && !seat.leaving) return i;
   }
   return null;
+}
+
+// A new shooter's come-out: every seat's Place bets and Hard ways go back to OFF.
+function resetWorking(state) {
+  for (const seat of state.seats) if (seat?.bets?.working) seat.bets = cloneBets({ ...seat.bets, working: null });
 }
 
 // Players at the table: seated seats whose player is not leaving.
@@ -164,8 +174,10 @@ export function makeDiceEngine(variantId) {
     }
     const current = state.shooter === null ? null : state.seats[state.shooter];
     if (!current || (current.leaving && !hasLineAction(current.bets))) {
+      const before = state.shooter;
       state.shooter = nextShooter(state, state.shooter ?? -1);
       state.lap = 0;
+      if (state.shooter !== before && state.point === null) resetWorking(state); // a new shooter's come-out
     }
     const on = clocksOn(state);
     if (!on) {
@@ -343,6 +355,23 @@ export function makeDiceEngine(variantId) {
     return { refundedCents: back };
   }
 
+  // 0.25.0: switch come-out working flags. No money, no ledger, no clock change.
+  async function working(ctx, body) {
+    const index = requireSeat(ctx, body);
+    const { state } = ctx;
+    const seat = state.seats[index];
+    if (typeof body.requestId !== 'string' || !REQUEST_ID_PATTERN.test(body.requestId)) throw new HttpError(400, 'BAD_REQUEST_ID', 'Missing or invalid requestId.');
+    if (seat.reqs?.includes(body.requestId)) return { duplicate: true, bets: cloneBets(seat.bets) };
+    if (typeof body.on !== 'boolean') throw new HttpError(400, 'BAD_WORKING', 'Say on: true or on: false.');
+    const change = body.all === true ? { all: true, on: body.on } : { kind: body.kind, number: body.number, on: body.on };
+    const result = setWorking(variant, state.point, seat.bets, change);
+    if (result.problem) throw new HttpError(409, 'WORKING_NOT_ALLOWED', result.problem);
+    seat.bets = result.bets;
+    seat.reqs = [...(seat.reqs ?? []), body.requestId].slice(-RECENT_REQUESTS);
+    ctx.changed = true;
+    return { bets: result.bets };
+  }
+
   async function roll(ctx, body) {
     const index = requireSeat(ctx, body);
     const { state } = ctx;
@@ -443,8 +472,9 @@ export function makeDiceEngine(variantId) {
       await doRoll(ctx); // time's up: the server rolls for the shooter
       return;
     }
-    // Come-out, and the shooter has no line bet: the dice move on.
+    // Come-out, and the shooter has no line bet: the dice move on (a new shooter: every bet OFF again).
     state.shooter = nextShooter(state, state.shooter);
+    resetWorking(state);
     state.lap = (Number(state.lap) || 0) + 1;
     if (state.shooter === null || state.lap >= seatedCount(state)) {
       state.waiting = true; // a full lap with nobody willing: wait for a line bet, no clock
@@ -465,7 +495,7 @@ export function makeDiceEngine(variantId) {
     onDeadline,
     afterSeatsChanged,
     beforeFree,
-    actions: { bet, bets, removeBet, roll },
+    actions: { bet, bets, removeBet, roll, working },
   };
 }
 

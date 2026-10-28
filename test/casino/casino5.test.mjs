@@ -358,7 +358,7 @@ test("Odds pay true odds to the cent; Don't Pass Odds pay the inverse", () => {
   assert.equal(lay(5, 300), 300 + 200, '5 at 2:3');
   assert.equal(lay(9, 1500), 1500 + 1000);
   assert.equal(lay(6, 1200), 1200 + 1000, '6 at 5:6');
-  assert.equal(lay(8, 500), 500 + 417, '$5 at 5:6 = $4.17 (to the nearest cent)');
+  assert.equal(lay(8, 500), 500 + 416, '$5 at 5:6 = $4.1667 → $4.16 (rounded down to the cent, 0.25.0)');
   const made = roll(CR, 6, { dontPass: 1000, dontOdds: 1200 }, 2, 4);
   assert.deepEqual([made.returnCents, made.lostCents], [0, 2200], 'point made: Don\'t Pass and its Odds lose');
   // Crapless Odds on the extra points.

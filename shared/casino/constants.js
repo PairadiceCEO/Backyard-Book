@@ -67,9 +67,10 @@ export function betAmountProblem(dollars) {
   return betCeilingProblem(dollars * 100);
 }
 
-// Winnings rounded to the nearest cent (stake × num / den), e.g. $5 at 7:6 → 583.
+// Winnings rounded down to the cent (stake × num / den), e.g. $5 at 7:6 → 583, $1 at 7:6 → 116 (0.25.0: it rounded to the
+// nearest cent before, which paid $1.17 there; CLAUDE.md: payouts round down to the cent).
 export function winningsCents(stakeCents, num, den) {
-  return Math.round((stakeCents * num) / den);
+  return Math.floor((stakeCents * num) / den);
 }
 
 // "$5" or "$5.50": dollars for messages shared by the server and the phone.
