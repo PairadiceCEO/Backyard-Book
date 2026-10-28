@@ -367,7 +367,7 @@ const FELT_SIZES = [
 // (1280 × 800; scrolling is allowed everywhere).
 const TABLE_SCREEN = /^(bj-|bac-)/;
 const TABLE_SIZES = [
-  { w: 320, h: 640, shot: false }, { w: 375, h: 800, shot: true }, { w: 414, h: 896, shot: false },
+  { w: 320, h: 640, shot: true }, { w: 375, h: 800, shot: true }, { w: 414, h: 896, shot: false },
   { w: 844, h: 390, shot: true }, { w: 1280, h: 800, shot: true },
 ];
 const PHONE_SIZES = [320, 375, 414].map((w) => ({ w, h: 800, shot: w === 375 }));

@@ -29,7 +29,11 @@ sportsbook per-bet limit $10,000,000, Blackjack seats show their cards").
       slipProblems (browser + /api/bets) for singles and parlay stakes; message "That bet is over the sportsbook limit of
       $10,000,000 per bet."; an unsafe payout now says PAYOUT_TOO_LARGE_MESSAGE. Casino, Slots and Battles keep $1,000,000 and
       "That bet is larger than the table allows.". CLAUDE.md lines updated.
-- [ ] 6 Blackjack seats show their cards
+- [x] 6 Blackjack seats show their cards: BlackjackFelt `handsFor(seat, i)` (BlackjackPage: the face-up cards of each hand by
+      the same hiddenFrom timing as the hands below the felt) → SeatHands: small overlapping card faces (.mcard, sized from the
+      felt with container units) just above every circle, a split's hands side by side, a total pill on each, the hand being
+      played outlined in gold; every seat, not only mine. The line under a circle now shows the seat's bet while cards are out.
+      The dealer's hole card is untouched (a card back until the server turns it).
 - [ ] 7 Version 0.23.0, docs, CLAUDE.md, all checks, merge
 Decisions:
 - **Lost taps, cause 1 (iPhone, every game but the craps felt):** the bet spots, chips, Undo / Clear and the Slots bet had no

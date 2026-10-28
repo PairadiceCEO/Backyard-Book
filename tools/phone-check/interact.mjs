@@ -1759,6 +1759,48 @@ const bjHand = (cards, extra = {}) => ({ cards, betCents: 1000, status: 'stood',
 const bjTbl = (over, seatExtra) => ({ id: 'blackjack', game: 'blackjack', epoch: 'p', roundNo: 9, roundId: 'p-9', phase: 'playing', deadline: now() + 9000, turn: { seat: 3, hand: 0 }, dealer: { cards: ['KH0', '7D0'], holeDown: false }, lastDeal: { at: now() - 60000, cards: [] }, shoe: { remaining: 240, total: 312, shuffles: 0 }, version: 20, updatedAt: now() - 5000, seats: [null, bjSeatFull(seatExtra), null, bjSeatFull({ uid: 'u3', name: 'Dan', hands: [bjHand(['5S0', '2C0'], { status: 'playing' })] }), null], ...over });
 const noCasino = async (route) => json(route, 200, { ok: true, serverNow: now() });
 
+// ---------- 0.23.0: every seat circle shows its cards ----------
+await check('blackjack: every seat circle shows its own cards and total (other players too), a split side by side; the dealer\'s hole card stays a card back', async () => {
+  const mineSplit = { hands: [bjHand(['8C0', '3D1', 'TS2'], { status: 'stood', fromSplit: true }), bjHand(['8D0', '9S1'], { status: 'playing', fromSplit: true })] };
+  const t = bjTbl({ turn: { seat: 1, hand: 1 }, dealer: { cards: ['6H0'], holeDown: true } }, mineSplit);
+  const { page, context } = await openPage('/casino/blackjack', [t], noCasino);
+  await page.waitForTimeout(400);
+  const hands = (n) => page.locator(`.bjt-seat:nth-child(${n}) .bjt-hands`);
+  assert.equal(await hands(2).getAttribute('aria-label'), 'Hand 1: 8 of clubs, 3 of diamonds, 10 of spades, 21; Hand 2: 8 of diamonds, 9 of spades, 17');
+  assert.equal(await hands(2).locator('.bjt-mini-hand').count(), 2, 'a split: two hands side by side');
+  assert.equal(await hands(2).locator('.bjt-mini-hand.active .bjt-mini-total').innerText(), '17', 'the hand being played is marked');
+  assert.equal(await hands(4).getAttribute('aria-label'), '5 of spades, 2 of clubs, 7', "another player's seat shows their cards");
+  assert.equal(await hands(4).locator('.mcard').count(), 2);
+  const boxes = await hands(2).locator('.bjt-mini-hand').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().left));
+  assert.ok(boxes[1] > boxes[0], 'hand 2 to the right of hand 1');
+  assert.equal(await page.locator('.bjt-dealer .pcard.back').count(), 1, 'the dealer hole card is a card back');
+  assert.equal(await page.locator('.bjt-seat .bjt-hands [aria-label*="hole"], .bjt-seat .pcard.back').count(), 0);
+  for (const w of [320, 375, 414]) {
+    await page.setViewportSize({ width: w, height: 760 });
+    await page.waitForTimeout(150);
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    assert.ok(over <= 0, `${w} px: no sideways scroll (${over})`);
+    const out = await page.locator('.bjt-hands').evaluateAll((els) => {
+      const felt = document.querySelector('.bjt-felt').getBoundingClientRect();
+      return els.filter((e) => { const r = e.getBoundingClientRect(); return r.left < felt.left - 1 || r.right > felt.right + 1; }).length;
+    });
+    assert.equal(out, 0, `${w} px: every seat's cards stay on the felt`);
+  }
+  await context.close();
+});
+
+await check('blackjack: a seat circle only shows cards once they are face up (dealt one by one)', async () => {
+  const at = now();
+  const t = bjTbl({ turn: { seat: 3, hand: 0 }, lastDeal: { at, cards: [{ to: '1-0', i: 0, t: 0 }, { to: '3-0', i: 0, t: 1000 }, { to: 'd', i: 0, t: 2000 }, { to: '1-0', i: 1, t: 3000 }, { to: '3-0', i: 1, t: 4000 }] }, dealer: { cards: ['KH0'], holeDown: true } }, { hands: [bjHand(['9C0', '7D0'], { status: 'playing' })] });
+  const { page, context } = await openPage('/casino/blackjack', [t], noCasino);
+  const count = (n) => page.locator(`.bjt-seat:nth-child(${n}) .mcard`).count();
+  const early = [await count(2), await count(4)];
+  assert.ok(early[0] <= 1 && early[1] <= 1, `before the second round of cards: ${early}`);
+  await page.waitForTimeout(Math.max(0, at + 4300 - now()));
+  assert.deepEqual([await count(2), await count(4)], [2, 2]);
+  await context.close();
+});
+
 await check('blackjack: a total pill beside every hand and the dealer (17, soft 17, BJ, bust)', async () => {
   const { page, context } = await openPage('/casino/blackjack', [bjTbl({}, { hands: [bjHand(['AH0', '6C0'])] })], noCasino);
   const pills = async () => (await page.locator('.bj-total').allInnerTexts()).map((t) => t.trim());

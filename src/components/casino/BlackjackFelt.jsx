@@ -6,9 +6,14 @@
 // Props: seats; myUid; mySeats (my seat numbers); focus (the seat whose panel shows); onFocus(i); sitting/onSit(i);
 // detail(seat, i) → { text, tone } for the line under a circle; betFor(seat, i) → cents to draw; dealer (the dealer's
 // HandView); results (cards that decide it are face up); roundKey (changes each hand).
+// 0.23.0: handsFor(seat, i) → [{ cards, total, bust, active }] for every hand the seat holds (cards = the ones face up now).
+// Every seat circle, mine and everyone else's, shows its cards as small overlapping card faces just above the circle, each
+// hand of a split side by side, with its total pill. The dealer's hole card is the dealer's HandView's business (it stays a
+// card back until the server turns it).
 
 import '../../styles/tablefelt.css';
 import { CASINO_SEATS } from '../../../shared/casino/constants.js';
+import { cardFace, cardName, isRedCard } from '../../../shared/casino/cards.js';
 import { FeltChip } from './FeltChip.jsx';
 import ResultFx from './ResultFx.jsx';
 import Shoe from './Shoe.jsx';
@@ -33,7 +38,36 @@ export const FELT_LINES = [
   ['INSURANCE PAYS 2 TO 1', 146, ''],
 ];
 
-export default function BlackjackFelt({ seats, myUid, mySeats, focus, onFocus, sitting, onSit, detail, betFor, dealer, results, roundKey }) {
+// A seat's hands as small card faces (look only; the label reads them out).
+function SeatHands({ hands }) {
+  const shown = hands.filter((h) => h.cards.length);
+  if (!shown.length) return null;
+  const label = shown.map((h, j) => `${shown.length > 1 ? `Hand ${j + 1}: ` : ''}${h.cards.map(cardName).join(', ')}, ${h.total}`).join('; ');
+  return (
+    <div className={shown.length > 1 ? 'bjt-hands split' : 'bjt-hands'} role="img" aria-label={label}>
+      {shown.map((h, j) => (
+        <div key={j} className={['bjt-mini-hand', h.active ? 'active' : '', h.bust ? 'bust' : ''].filter(Boolean).join(' ')}>
+          <span className="bjt-mini-cards" aria-hidden="true">
+            {h.cards.map((card) => {
+              const face = cardFace(card);
+              return (
+                <span key={card} className={['mcard', isRedCard(card) ? 'red' : '', face.rank.length > 1 ? 'ten' : ''].filter(Boolean).join(' ')}>
+                  <span className="mcard-rank">{face.rank}</span>
+                  <span className="mcard-suit">{face.suit}</span>
+                </span>
+              );
+            })}
+          </span>
+          <span className={h.bust ? 'bjt-mini-total bust' : 'bjt-mini-total'} aria-hidden="true">
+            {h.total}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function BlackjackFelt({ seats, myUid, mySeats, focus, onFocus, sitting, onSit, detail, betFor, handsFor = null, dealer, results, roundKey }) {
   const multi = mySeats.length > 1;
   return (
     <div className="tfelt-rail bjt-rail">
@@ -81,6 +115,7 @@ export default function BlackjackFelt({ seats, myUid, mySeats, focus, onFocus, s
             return (
               <li key={i} className={classes} style={style} aria-label={label}>
                 <div className="bjt-circle-wrap">
+                  {handsFor ? <SeatHands hands={handsFor(seat, i)} /> : null}
                   {mine && multi ? (
                     <button type="button" className="bjt-circle" onClick={() => onFocus(i)} aria-label={`${label}. Show this seat's controls.`}>
                       {inner}

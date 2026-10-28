@@ -513,13 +513,24 @@ export default function BlackjackPage() {
       const cents = seat.uid === myUid ? localBets[i] ?? seat.betCents : seat.betCents;
       return { text: cents ? `${formatMoney(cents)}${seat.ready ? ' ✓' : ''}` : '—', tone: seat.ready ? 'ready' : '' };
     }
-    const labels = seat.hands.map((h, j) => {
+    // 0.23.0: the cards and their totals sit on the circle (handsFor); the line under it shows what the seat has bet.
+    const bet = seat.hands.reduce((sum, h) => sum + (h.betCents || 0), 0);
+    return { text: bet ? formatMoney(bet) : '', tone: turn?.seat === i && phase === 'playing' ? 'active' : '' };
+  }
+
+  // Every seat's hands for its circle (mine and everyone else's): only the cards face up right now, each with its total.
+  function handsFor(seat, i) {
+    return (seat.hands ?? []).map((h, j) => {
       const visible = h.cards.slice(0, hiddenFrom(`${i}-${j}`, h.cards.length));
-      if (isBlackjack(visible, h.fromSplit)) return 'BJ';
-      const t = handValue(visible).total;
-      return t > 21 ? 'bust' : String(t);
+      const value = handValue(visible);
+      let total = '';
+      if (visible.length) {
+        if (isBlackjack(visible, h.fromSplit)) total = 'BJ';
+        else if (value.total > 21) total = `bust ${value.total}`;
+        else total = value.soft && value.total < 21 ? `soft ${value.total}` : String(value.total);
+      }
+      return { cards: visible, total, bust: value.total > 21, active: phase === 'playing' && turn?.seat === i && turn.hand === j && !revealing };
     });
-    return { text: labels.join(' · '), tone: turn?.seat === i && phase === 'playing' ? 'active' : '' };
   }
 
   // The chips drawn in a seat's circle: the bet (mine: the chips as I put them down, before the server answers), or the
@@ -578,6 +589,7 @@ export default function BlackjackPage() {
         onSit={sit}
         detail={seatDetail}
         betFor={circleBet}
+        handsFor={handsFor}
         results={results}
         roundKey={table?.roundId ?? 'r'}
         dealer={<HandView label="Dealer" cards={dealer.cards} hiddenFrom={dealerHidden} holeDown={dealer.holeDown} fromSplit={false} handKey="d" dealAtFor={dealAtFor} />}
