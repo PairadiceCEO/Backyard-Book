@@ -149,6 +149,20 @@ site's `/api` with their own login, so they can't do anything a player can't.
 - **Disabling an agent** (Admin → Players → Disable) removes it from the leaderboard and from Admin → Agents; its bets and history
   stay untouched. Enable puts it back.
 
+## 0.24.0
+
+- **Side bets.** Optional extra spots per seat, chips like the main bet (Undo, Rebet), each needs a main bet on that seat, no maximum
+  beyond the $1,000,000 per-bet ceiling. Paytables and their sources: **Rules & side bets** on each table (`shared/casino/sideBets.js`).
+  - **Blackjack 21+3** (a small circle beside the betting spot; a marker on every seat's circle): your first two cards and the dealer's
+    up card. Suited three of a kind 100:1, straight flush 40:1, three of a kind 30:1, straight 10:1, flush 5:1 (A-2-3 and Q-K-A are
+    straights, K-A-2 isn't). Settled the moment those cards are out, before insurance or play. House edge 4.62% with our 6 decks.
+  - **Baccarat** (a row above Player / Banker / Tie): Dragon Bonus Player and Banker (natural win 1:1, natural tie push, non-natural
+    win by 9 30:1 … by 4 1:1), Fortune 7 (Banker wins with a three-card 7, 40:1; the Banker bet itself still pays 0.95:1), Heavenly 9
+    (both three-card 9s 75:1, either 10:1), Golden 8 (Player wins with a three-card 8, 25:1) and Blazing 7s (both three-card 7s 200:1,
+    both two-card 7s 40:1). The last four are Nevada's approved "Commission Free 5 Treasures Baccarat" paytable.
+- Tests compute every outcome from fixed shoes and the exact house edge of every bet (all match the published figures to 0.01
+  points), plus a 1,000,000-round simulation each.
+
 ## 0.23.0
 
 - **Craps / Crapless Place bets before the point:** they go up any time and can come down before any roll; on a come-out roll they are OFF (every Place box shows a black OFF puck) and are never won or lost by it; they work once a Point is set. Come bets are unchanged (a 7 loses every Come bet on a number; Come Odds are off on a come-out and come back; a fresh Come wins on 7).

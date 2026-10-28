@@ -5,6 +5,12 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.24.0 (Will, 2026-10-28 13:37 CT) — IN PROGRESS on wip: code, tests, docs done; phone check running, then merge
+Spec: "Blackjack 21+3 side bet; Baccarat side bets Dragon Bonus, Fortune 7, Heavenly 9, Golden 8, Blazing 7s".
+Files: shared/casino/sideBets.js, shared/casino/baccarat.js, server/casino/{blackjack,baccarat}Table.js, BlackjackPage / BaccaratPage,
+BlackjackFelt / BaccaratFelt, RulesSheet.jsx, src/lib/casinoRules.js, tablefelt.css / index.css, test/sideBets.test.js,
+test/sideBetMath.js, test/casino/casino9.test.mjs, tools/phone-check/{interact,shoot}.mjs. Details in docs/CASINO_PROGRESS.md.
+
 ## Phase 0.23.1 (Will, 2026-10-28 12:55 CT; his message says "0.22.1", but 0.23.0 is already merged, so 0.23.1) — COMPLETE (2026-10-28), merged to main
 Spec: "remove the Gemini agent, add GPT-6.1 Sol prices". Will set AGENT_OPENAI_MODEL = gpt-6.1-sol and deleted the Gemini secrets.
 - [x] 1 agents.yml: gemini out of the matrix, the dispatch choices, the secrets / variables lines and the header comment. The runner's
@@ -986,7 +992,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.23.1 is merged; next steps come from Will's testing. (0.17.1, Slots chat removal / clearer chat errors, was
+0.24.0 in progress (above); after it nothing queued; next steps come from Will's testing. (0.17.1, Slots chat removal / clearer chat errors, was
 never started here and needs its spec re-sent.)
 
 ## Open questions

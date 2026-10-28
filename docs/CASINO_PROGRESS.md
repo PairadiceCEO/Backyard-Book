@@ -136,6 +136,19 @@ suspended while hidden, closed when the last page using it unmounts; navigator.v
 casino top bar and the lobby. Hooks: useChipBetting.place (chip), PlayingCard slide (card), ResultFx (win), CrapsPage (dice), Slots
 (reels, win, big win). Details in PROGRESS.md 0.20.0.
 
+## 0.24.0 (2026-10-28): side bets
+- shared/casino/sideBets.js: 21+3 (twentyOne3Hand / ReturnCents), Baccarat baccaratSideOutcome / ReturnCents for dragonPlayer,
+  dragonBanker, fortune7, heavenly9, golden8, blazing7; paytables + sources in the header comment; rules-sheet rows.
+- Blackjack engine: `bet` takes `side` (dollars; left out = unchanged), charged with the main bet's diff (cbet_{uid}_{requestId});
+  needs a main bet (SIDE_NEEDS_MAIN); settled in deal() after the hole card, before insurance: seat.side { cards, hand, stakeCents,
+  returnCents }, paid cpay_blackjack_{round}_{uid}_s{n}_213. seat.sideCents counts toward stakeCents / the seat's result.
+- Baccarat engine: the six side spots on seat.bets (stored only while > 0), same `bet` action, needs a main bet; settleBaccaratBets(bets,
+  coup) adds `sides` { spot: { stakeCents, returnCents } } and pays them in the seat's one cpay_..._end entry.
+- UI: BaccaratFelt SideSpot row (.bact-sides, 3 across on phones, 6 on wide screens) portalled by the seat panel; Blackjack 21+3 circle
+  beside the bet spot + a look-only marker on every felt seat (sideFor); RulesSheet + src/lib/casinoRules.js. Max stays on the main spot.
+- Tests: test/sideBets.test.js (+ test/sideBetMath.js: exact enumeration, seeded 1M-round sims), test/casino/casino9.test.mjs;
+  interact.mjs side-bet + Rebet checks; shoot.mjs bj-sides, bj-side-result, bj-rules, bac-sides, bac-side-results, bac-rules.
+
 ## 0.21.0 (2026-10-27): no casino change
 AI agent players are a sportsbook feature (see PROGRESS.md 0.21.0). The casino is unchanged; agents never play it.
 
