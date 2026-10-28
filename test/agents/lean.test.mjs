@@ -387,3 +387,117 @@ test('no cache fields (OpenAI, Gemini, an uncached Anthropic reply): the trace s
   assert.match(r.text, /- Turn 1: 2,000 in · 80 out · get_board ≈/);
   assert.doesNotMatch(r.text, /billed-equivalent|read from cache/);
 });
+
+// ---- 0.25.1: OpenAI cached input counts like Anthropic's (billed-equivalent), the factor from agents/prices.json ----
+const REAL_PRICES = JSON.parse(readFileSync(`${root}/agents/prices.json`, 'utf8'));
+
+test('openai cached input: the weight comes from prices.json (cached_input ÷ input), 1 when the model has no cached price', async () => {
+  const { openaiCachedWeight, openaiUsage } = await import(url('agents/lib/providers.mjs'));
+  assert.equal(openaiCachedWeight(REAL_PRICES, 'gpt-6.1-sol'), 0.05, '$0.10 cached ÷ $2.00 input');
+  assert.equal(openaiCachedWeight({ openai: { m: { input: 4, cached_input: 1, output: 8 } } }, 'm'), 0.25, 'not hard-coded');
+  assert.equal(openaiCachedWeight(REAL_PRICES, 'gpt-6-luna'), 1, 'no cached price: counted in full');
+  assert.equal(openaiCachedWeight(REAL_PRICES, 'unknown-model'), 1);
+  assert.equal(openaiCachedWeight(null, 'x'), 1);
+  // 10,000 input tokens of which 9,000 cached: 1,000 + 9,000 × 0.05 = 1,450 billed-equivalent.
+  assert.deepEqual(openaiUsage({ input_tokens: 10000, output_tokens: 70, input_tokens_details: { cached_tokens: 9000 } }, 0.05), { input: 1450, output: 70, raw: 10000, cacheRead: 9000, cacheWrite: 0 });
+  assert.deepEqual(openaiUsage({ input_tokens: 500, output_tokens: 5 }, 0.05), { input: 500, output: 5, raw: 500, cacheRead: 0, cacheWrite: 0 }, 'no cached_tokens field: as before');
+  assert.deepEqual(openaiUsage({ input_tokens: 100, input_tokens_details: { cached_tokens: 900 } }, 0.5).cacheRead, 100, 'never more cached than input');
+  assert.deepEqual(openaiUsage(undefined, 0.05), { input: 0, output: 0, raw: 0, cacheRead: 0, cacheWrite: 0 });
+});
+
+test('openai adapter: turn and search usage read input_tokens_details.cached_tokens at the cached weight', async () => {
+  const replies = [
+    { id: 'r1', output: [{ type: 'function_call', call_id: 'c1', name: 'get_leagues', arguments: '{}' }], usage: { input_tokens: 4000, output_tokens: 30, input_tokens_details: { cached_tokens: 0 } } },
+    { id: 'r2', output: [{ type: 'message', content: [{ type: 'output_text', text: 'ok' }] }], usage: { input_tokens: 5000, output_tokens: 10, input_tokens_details: { cached_tokens: 4000 } } },
+    { id: 'r3', output: [{ type: 'message', content: [{ type: 'output_text', text: 'rain' }] }], usage: { input_tokens: 300, output_tokens: 20, input_tokens_details: { cached_tokens: 200 } } },
+  ];
+  let n = 0;
+  const fetchImpl = async () => ({ ok: true, status: 200, text: async () => JSON.stringify(replies[n++]) });
+  const ad = openaiAdapter({ apiKey: 'k', model: 'gpt-6.1-sol', system: 's', tools: toolDefs(LIMITS), fetchImpl, cachedWeight: 0.05 });
+  assert.deepEqual(ad.cacheWeights, { read: 0.05, write: 1 });
+  const t1 = await ad.turn([], 'hi');
+  const t2 = await ad.turn([{ id: 'c1', name: 'get_leagues', output: {} }], null);
+  const s = await ad.search('weather');
+  assert.deepEqual(t1.usage, { input: 4000, output: 30, raw: 4000, cacheRead: 0, cacheWrite: 0 });
+  assert.deepEqual(t2.usage, { input: 1200, output: 10, raw: 5000, cacheRead: 4000, cacheWrite: 0 }, '1,000 + 4,000 × 0.05');
+  assert.deepEqual(s.usage, { input: 110, output: 20, raw: 300, cacheRead: 200, cacheWrite: 0 }, 'the search counts the same way');
+  // Without a weight (an old caller) cached tokens are counted in full, as before 0.25.1.
+  n = 1;
+  const plain = openaiAdapter({ apiKey: 'k', model: 'm', system: 's', tools: toolDefs(LIMITS), fetchImpl });
+  assert.equal((await plain.turn([], 'x')).usage.input, 5000);
+});
+
+test('openai cached input: the pre-turn estimate uses the cached weight once a cached request has been seen', () => {
+  const w = { read: 0.05, write: 1 };
+  assert.equal(nextTurnEstimate({ lastRaw: 40000, lastOutput: 500, cached: false, results: null, weights: w }), 40500, 'nothing cached yet: full size');
+  assert.equal(nextTurnEstimate({ lastRaw: 40000, lastOutput: 500, cached: true, results: null, weights: w }), Math.ceil(0.05 * 40000 + 500));
+  assert.equal(nextTurnEstimate({ lastRaw: 40000, lastOutput: 500, cached: true, results: [{ output: 'x'.repeat(3500) }], weights: w }), Math.ceil(0.05 * 40000 + 500 + Math.ceil(JSON.stringify([{ output: 'x'.repeat(3500) }]).length / 3.5)));
+  // Anthropic's weights stay the default.
+  assert.equal(nextTurnEstimate({ lastRaw: 20000, lastOutput: 500, cached: true, results: null }), Math.ceil(0.1 * 20000 + 1.25 * 500));
+});
+
+test('openai cached input: a run that re-sends a big cached conversation fits its budget, the summary and cost use the billed-equivalent input', async () => {
+  const { openaiUsage } = await import(url('agents/lib/providers.mjs'));
+  const boards = { nfl: fixtureBoard('nfl') };
+  const call = (name, args) => ({ id: `c${Math.random()}`, name, args });
+  // Every request carries 20,000 input tokens, 19,000 of them cached: 1,000 + 19,000 × 0.05 = 1,950 billed-equivalent.
+  const usage = openaiUsage({ input_tokens: 20000, output_tokens: 100, input_tokens_details: { cached_tokens: 19000 } }, 0.05);
+  const steps = [{ calls: [call('get_leagues', {})] }, { calls: [call('get_board', { league: 'nfl' })] }, { calls: [call('get_leagues', {})] }, { calls: [call('get_leagues', {})] }, { text: 'Passing today.' }];
+  const model = { ...scriptedModel(steps, usage), provider: 'openai', model: 'gpt-6.1-sol', cacheWeights: { read: 0.05, write: 1 } };
+  const r = await runAgent({ agentId: 'openai', env: { ...ENV, AGENT_MAX_INPUT_TOKENS: '15000' }, fetchImpl: api(boards), now: () => NOW, adapter: model, prompt: 'p', prices: REAL_PRICES });
+  assert.equal(r.summary.turns, 5, 'counted in full, 20,000 per request would have stopped the run after the first turn');
+  assert.equal(r.summary.stopReason, '');
+  assert.equal(r.summary.usage.input, 5 * 1950);
+  assert.equal(r.summary.usage.cacheRead, 5 * 19000);
+  assert.match(r.text, /Tokens: 9,750 in \/ 500 out \(input is billed-equivalent: 95,000 cached at 0\.05x\)/);
+  assert.doesNotMatch(r.text, /written to cache|read from cache at 0\.1x/);
+  assert.match(r.text, /- Turn 1: 1,950 in \(19,000 read from cache\)/);
+  // 9,750 × $2.00 + 500 × $10.00 per 1M tokens.
+  assert.equal(r.summary.costUsd, Math.round(((9750 / 1e6) * 2 + (500 / 1e6) * 10) * 10000) / 10000);
+});
+
+test('openai cached input: the runner builds the OpenAI adapter with the weight from prices.json (a real run, mocked fetch)', async () => {
+  const bodies = [];
+  const providerFetch = async (u, init) => {
+    const href = String(u);
+    if (href.startsWith('https://api.openai.com/')) {
+      bodies.push(JSON.parse(init.body));
+      const n = bodies.length;
+      const json = n === 1
+        ? { id: 'r1', output: [{ type: 'function_call', call_id: 'c1', name: 'get_leagues', arguments: '{}' }], usage: { input_tokens: 3000, output_tokens: 20, input_tokens_details: { cached_tokens: 0 } } }
+        : { id: 'r2', output: [{ type: 'message', content: [{ type: 'output_text', text: 'Pass.' }] }], usage: { input_tokens: 3400, output_tokens: 10, input_tokens_details: { cached_tokens: 3000 } } };
+      return { ok: true, status: 200, text: async () => JSON.stringify(json) };
+    }
+    return api({})(u, init);
+  };
+  const env = { AGENT_OPENAI_USERNAME: 'gpt', AGENT_OPENAI_PASSWORD: 'hunter2-very-secret', OPENAI_API_KEY: 'sk-proj-SECRETKEYVALUE123456', VITE_FIREBASE_API_KEY: 'AIzaSyD-fakeFirebaseWebKey12345', BB_SITE_URL: 'https://bb.example.app' };
+  const r = await runAgent({ agentId: 'openai', env, fetchImpl: providerFetch, now: () => NOW, prompt: 'p', prices: REAL_PRICES });
+  assert.equal(r.summary.stopReason, '');
+  assert.deepEqual(r.summary.cacheWeights, { read: 0.05, write: 1 });
+  assert.equal(r.summary.usage.input, 3000 + 400 + 150, 'second request: 400 uncached + 3,000 × 0.05');
+  assert.match(r.text, /3,550 in \/ 30 out \(input is billed-equivalent: 3,000 cached at 0\.05x\)/);
+});
+
+// ---- 0.25.1: the schedule and the prompt's slip rules ----
+test('the workflow runs at an off-the-hour minute (14:23 UTC) and can still be started by hand', () => {
+  const yml = readFileSync(`${root}/.github/workflows/agents.yml`, 'utf8');
+  assert.match(yml, /^\s+- cron: '23 14 \* \* \*'/m);
+  assert.doesNotMatch(yml, /cron: '0 16/);
+  assert.match(yml, /workflow_dispatch:/);
+  assert.match(yml, /9:23 AM Central in daylight time, 8:23 AM in standard time/);
+});
+
+test('prompt.md states the slip rules the server enforces and the re-check after a price change', () => {
+  const p = readFileSync(`${root}/agents/prompt.md`, 'utf8');
+  assert.match(p, /One pick per game and market type on a slip/);
+  assert.match(p, /at most one leg per player per stat/);
+  assert.match(p, /moneyline and spread/);
+  assert.match(p, /Pre-game only/);
+  assert.match(p, /At most 5% of your current balance/);
+  assert.match(p, /At most 10 bet slips per day/);
+  assert.match(p, /Re-check your edge at\s+the new price/);
+  assert.match(p, /ODDS_CHANGED/);
+  assert.match(p, /LINE_CHANGED/);
+  // The placeholders still fill in.
+  assert.doesNotMatch(renderPrompt(p, { maxSearches: 5, maxTurns: 25 }), /\{\{/);
+});

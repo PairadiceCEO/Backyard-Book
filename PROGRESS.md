@@ -5,6 +5,18 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.25.1 (Will, 2026-10-28 16:39 CT) — IN PROGRESS (checks, then merge to main)
+Spec: agent runs on time, OpenAI cached input counted like Anthropic's, one-pick-per-game rule in the prompt. From the 2026-10-28 run:
+the cron '0 16 * * *' started 4 h 40 min late; GPT-6.1 Sol stopped on "token cap reached (176054 in of 200000)" (all input at full
+weight, cached input is billed at a fraction); Sonnet had a "BAD_SLIP: Only one pick per game and market type" refusal.
+Done: .github/workflows/agents.yml (cron '23 14 * * *', header comment, workflow_dispatch kept); agents/lib/providers.mjs (openaiCachedWeight,
+openaiUsage: input = uncached + cached × weight, raw/cacheRead; cacheWeights on both adapters); agents/lib/runner.mjs (nextTurnEstimate takes the
+adapter's weights, summary line "N cached at Wx" for openai, prices loaded once); agents/prompt.md (slip rules, re-check after a price
+change); agents/prices.json note; agents/README.md, README.md; tests in test/agents/lean.test.mjs (+9). Version 0.25.1.
+Decision: the weight is cached_input ÷ input from prices.json = 0.10 / 2.00 = **0.05x** for gpt-6.1-sol (Will's message said "a tenth"; the
+price file, which he said to derive it from, gives a twentieth). It follows the file if the price changes; 1x for a model with no cached price.
+No firestore.rules or index change.
+
 ## Phase 0.25.0 (Will, 2026-10-28 15:05 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: Will's attachment of 15:05 ("craps/crapless working switch: Place bets and Hard ways can be turned ON for the come-out roll").
 Files: shared/casino/dice.js, shared/casino/constants.js (winningsCents), server/casino/crapsTable.js, server/casino/router.js,

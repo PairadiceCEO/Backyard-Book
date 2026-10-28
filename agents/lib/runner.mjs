@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { usernameToEmail } from '../../shared/constants.js';
 import { RESEARCH_TOOLS, createTools, estimateTokens, toolDefs } from './tools.mjs';
-import { CACHE_READ_WEIGHT, CACHE_WRITE_WEIGHT, ProviderError, makeAdapter } from './providers.mjs';
+import { ANTHROPIC_CACHE_WEIGHTS, ProviderError, makeAdapter, openaiCachedWeight } from './providers.mjs';
 
 export const RESEARCH_SHARE = 0.75;
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
@@ -39,10 +39,11 @@ export function renderPrompt(template, limits) {
 
 // What the next model request will add to the run's input total: the conversation so far (the last request's size plus the reply
 // it got) plus the new tool results, cautiously counted at 3.5 characters per token. When the last request used the prompt cache
-// the re-sent conversation counts 0.1x and only the new text (the reply and the results) 1.25x, the same weights the budget uses.
-export function nextTurnEstimate({ lastInput, lastRaw = lastInput, lastOutput, cached = false, results }) {
+// the re-sent conversation counts at the provider's cache-read weight and only the new text (the reply and the results) at its
+// write weight, the same weights the budget uses (Anthropic 0.1x / 1.25x; OpenAI cached_input ÷ input / 1x since 0.25.1).
+export function nextTurnEstimate({ lastInput, lastRaw = lastInput, lastOutput, cached = false, results, weights = ANTHROPIC_CACHE_WEIGHTS }) {
   const newText = (results ? Math.ceil(JSON.stringify(results).length / 3.5) : 0) + lastOutput;
-  return cached ? Math.ceil(CACHE_READ_WEIGHT * lastRaw + CACHE_WRITE_WEIGHT * newText) : lastRaw + newText;
+  return cached ? Math.ceil(weights.read * lastRaw + weights.write * newText) : lastRaw + newText;
 }
 
 export function redactor(secrets) {
@@ -123,7 +124,14 @@ export function formatSummary(s) {
   const researchCalls = s.trace.reduce((n, t) => n + t.tools.filter((x) => RESEARCH_TOOLS.includes(x.name)).length, 0);
   lines.push(`Research calls: ${researchCalls}${s.researchClosedAtTurn ? ` (research closed after turn ${s.researchClosedAtTurn}: 75% of the input budget was used, so the agent had to decide)` : ''}`);
   if (s.retries) lines.push(`Retries: ${s.retries} (provider was busy; waited 60 s and tried once more)`);
-  lines.push(`Tokens: ${s.usage.input.toLocaleString('en-US')} in / ${s.usage.output.toLocaleString('en-US')} out${s.usage.cacheRead || s.usage.cacheWrite ? ` (input is billed-equivalent: ${s.usage.cacheRead.toLocaleString('en-US')} read from cache at 0.1x, ${s.usage.cacheWrite.toLocaleString('en-US')} written to cache at 1.25x)` : ''}`);
+  const n = (v) => Number(v).toLocaleString('en-US');
+  let cacheNote = '';
+  if (s.usage.cacheRead || s.usage.cacheWrite) {
+    cacheNote = s.provider === 'openai'
+      ? ` (input is billed-equivalent: ${n(s.usage.cacheRead)} cached at ${s.cacheWeights?.read ?? 1}x)`
+      : ` (input is billed-equivalent: ${n(s.usage.cacheRead)} read from cache at 0.1x, ${n(s.usage.cacheWrite)} written to cache at 1.25x)`;
+  }
+  lines.push(`Tokens: ${n(s.usage.input)} in / ${n(s.usage.output)} out${cacheNote}`);
   if (s.trace.length) {
     lines.push('Turn by turn (input is what the budget counts; tool results are about chars / 4):');
     for (const t of s.trace) lines.push(`- Turn ${t.turn}: ${t.input.toLocaleString('en-US')} in${t.cacheRead ? ` (${t.cacheRead.toLocaleString('en-US')} read from cache)` : ''} · ${t.output.toLocaleString('en-US')} out${t.tools.length ? ` · ${t.tools.map((x) => `${x.name} ≈${x.tokens.toLocaleString('en-US')}`).join(', ')}` : ''}`);
@@ -145,9 +153,14 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
   const password = env[`AGENT_${cfg.secret}_PASSWORD`] || env.AGENT_PASSWORD;
   const apiKey = env[cfg.keyVar];
   const redact = redactor([password, apiKey, env.VITE_FIREBASE_API_KEY, env.ANTHROPIC_API_KEY, env.OPENAI_API_KEY, env.GEMINI_API_KEY]);
-  const summary = { agentId, provider: cfg.provider, model, outcome: 'skipped', stopReason: '', retries: 0, bets: [], refusals: [], searches: 0, searchFailures: 0, turns: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, trace: [], researchClosedAtTurn: 0, costUsd: 0, balanceCents: null, finalText: '', limits };
+  const summary = { agentId, provider: cfg.provider, model, outcome: 'skipped', stopReason: '', retries: 0, bets: [], refusals: [], searches: 0, searchFailures: 0, turns: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, trace: [], researchClosedAtTurn: 0, cacheWeights: null, costUsd: 0, balanceCents: null, finalText: '', limits };
+  let priceTable = prices;
+  const loadPrices = () => {
+    priceTable ??= JSON.parse(readFileSync(here('../prices.json'), 'utf8'));
+    return priceTable;
+  };
   const finish = () => {
-    summary.costUsd = estimateCost(prices ?? JSON.parse(readFileSync(here('../prices.json'), 'utf8')), cfg.provider, model, summary.usage, summary.searches);
+    summary.costUsd = estimateCost(loadPrices(), cfg.provider, model, summary.usage, summary.searches);
     return { summary, text: redact(formatSummary(summary)) };
   };
 
@@ -166,7 +179,9 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
   }
   const api = makeApi({ siteUrl: env.BB_SITE_URL, idToken, fetchImpl });
   const system = renderPrompt(prompt ?? readFileSync(here('../prompt.md'), 'utf8'), limits);
-  const ai = adapter ?? makeAdapter(cfg.provider, { apiKey, model, system, tools: toolDefs(limits), fetchImpl, sleep, retryWaitMs });
+  const ai = adapter ?? makeAdapter(cfg.provider, { apiKey, model, system, tools: toolDefs(limits), fetchImpl, sleep, retryWaitMs, ...(cfg.provider === 'openai' ? { cachedWeight: openaiCachedWeight(loadPrices(), model) } : {}) });
+  const weights = ai.cacheWeights ?? ANTHROPIC_CACHE_WEIGHTS;
+  summary.cacheWeights = weights;
 
   const addUsage = (u) => {
     summary.usage.input += Number(u?.input) || 0;
@@ -214,7 +229,7 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
         break;
       }
       // Before sending: would this request take the run's input total over its budget? Then end the run here.
-      const next = results ? nextTurnEstimate({ lastRaw: last.raw, lastOutput: last.output, cached: last.cached, results }) : estimateTokens(`${system}\n${opening}`);
+      const next = results ? nextTurnEstimate({ lastRaw: last.raw, lastOutput: last.output, cached: last.cached, results, weights }) : estimateTokens(`${system}\n${opening}`);
       if (summary.usage.input + next > limits.maxInput) {
         summary.stopReason = `${capLine()}; the next turn would add about ${next} and was not sent`;
         break;

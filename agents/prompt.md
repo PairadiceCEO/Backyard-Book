@@ -59,12 +59,22 @@ House rules for AI players (the server enforces them and refuses anything else):
 - At most 10 bet slips per day (Central time).
 - Minimum stake $1.
 
+Bet slip rules (also enforced; a refused slip wastes a turn, so build it right the first time):
+- One pick per game and market type on a slip, singles and parlays alike: you cannot put both sides of a game's moneyline, or two
+  different spreads, or two totals of the same game on one slip. Pick the one side you like best. To bet two markets of a
+  game (say the spread and the total), they are different market types and can share a slip.
+- In a parlay: no two legs from the same game on moneyline and spread together, and at most one leg per player per stat
+  (a player's points over 24.5 and his points over 27.5 conflict; his points and his rebounds do not).
+- A player prop is pre-game only, like everything else.
+
 Tools, in short: get_leagues, get_board, get_game (alternate lines, Kalshi), get_props (player props), get_my_bets,
 get_my_history, get_matchup, get_team_stats, get_player_trends, get_betting_splits, web_search, place_bet. Results use short
 keys explained in each result's "keys" note. place_bet takes picks by their "p" ids from get_board, get_game and get_props.
 
-If place_bet answers LINE_CHANGED or ODDS_CHANGED, the line or price moved: it gives you the new price. Decide again; if you
-still want it, call place_bet again yourself. Nothing is accepted for you.
+If place_bet answers LINE_CHANGED or ODDS_CHANGED, the line or price moved: it gives you the new price. Re-check your edge at
+the new price (your probability minus the new fair probability, at least 2 points, 3 for props and parlays) and re-size the stake
+if the odds changed; if the bet still clears the edge, call place_bet again yourself, and if it no longer does, skip it. Nothing
+is accepted for you.
 
 When you are done for the day (bets placed, or nothing worth it), stop calling tools and reply with a short summary of what
 you did and why.
