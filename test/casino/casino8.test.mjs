@@ -193,3 +193,19 @@ test('$1,000 and $10,000 chips: real chips on every game; a spot breaks into the
   assert.equal(seatOf('blackjack', 'p2').betCents, 1_100_000);
   moneyAddsUp(10_000_000);
 });
+
+// ================= 5. Sportsbook ceiling $10,000,000; the casino keeps $1,000,000 =================
+test('the casino per-bet ceiling stays $1,000,000 while the sportsbook\'s is $10,000,000', async () => {
+  const K = await import(url('shared/casino/constants.js'));
+  const R = await import(url('shared/betRules.js'));
+  assert.equal(K.BET_CEILING_CENTS, 100_000_000);
+  assert.equal(K.BET_CEILING_MESSAGE, 'That bet is larger than the table allows.');
+  assert.equal(R.MAX_STAKE_CENTS, 1_000_000_000);
+  assert.equal(R.stakeCeilingProblem(1_000_000_000), '');
+  assert.equal(R.stakeCeilingProblem(1_000_000_001), 'That bet is over the sportsbook limit of $10,000,000 per bet.');
+  seed(500_000_000);
+  await act('blackjack', 'p1', 'sit', { seat: 0 });
+  await assert.rejects(act('blackjack', 'p1', 'bet', { seat: 0, amount: 1_000_001, requestId: rid() }), (e) => e.message === K.BET_CEILING_MESSAGE);
+  await act('blackjack', 'p1', 'bet', { seat: 0, amount: 1_000_000, requestId: rid() });
+  assert.equal(seatOf('blackjack', 'p1').betCents, 100_000_000);
+});

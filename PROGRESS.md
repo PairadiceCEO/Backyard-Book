@@ -21,7 +21,10 @@ sportsbook per-bet limit $10,000,000, Blackjack seats show their cards").
       four under 600 px, one row of eight above; craps upright one row of eight; sideways 4 × 2 (rail 182 px, 236 px on computers),
       and 3 across in three rows on the narrowest sideways phones (568 × 320) so the number boxes keep 44 px.
 - [ ] 4 Max bet (Blackjack, Baccarat)
-- [ ] 5 Sportsbook per-bet ceiling $10,000,000
+- [x] 5 Sportsbook per-bet ceiling $10,000,000: SPORTSBOOK_BET_CEILING_CENTS (shared/constants.js) → betRules MAX_STAKE_CENTS,
+      slipProblems (browser + /api/bets) for singles and parlay stakes; message "That bet is over the sportsbook limit of
+      $10,000,000 per bet."; an unsafe payout now says PAYOUT_TOO_LARGE_MESSAGE. Casino, Slots and Battles keep $1,000,000 and
+      "That bet is larger than the table allows.". CLAUDE.md lines updated.
 - [ ] 6 Blackjack seats show their cards
 - [ ] 7 Version 0.23.0, docs, CLAUDE.md, all checks, merge
 Decisions:

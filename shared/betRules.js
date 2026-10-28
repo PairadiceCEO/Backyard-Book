@@ -1,18 +1,19 @@
 // Bet slip rules shared by the browser (to guide the user) and /api/bets (to enforce them).
 
-import { MAX_WALLET_CHANGE_CENTS, REQUEST_ID_PATTERN } from './constants.js';
-import { BET_CEILING_MESSAGE } from './casino/constants.js';
+import { REQUEST_ID_PATTERN, SPORTSBOOK_BET_CEILING_CENTS } from './constants.js';
 import { decimalToAmerican } from './oddsMath.js';
 import { cryptoPickLabel } from './crypto/coins.js';
 import { parsePropTicker, propConflictMessage, propPickLabel, propSeries } from './props.js';
 
 export const MIN_STAKE_CENTS = 100; // $1.00
-// No maximum stake (0.16.0): the wallet is the cap, plus a technical per-bet ceiling ($1,000,000) and a payout that
-// must stay a safe integer (a $1,000,000 ten-leg longshot parlay could otherwise overflow).
-export const MAX_STAKE_CENTS = MAX_WALLET_CHANGE_CENTS;
-export { BET_CEILING_MESSAGE };
+// No maximum stake (0.16.0): the wallet is the cap, plus a per-bet ceiling ($10,000,000 since 0.23.0, sportsbook bets and
+// parlays only; the casino stays at $1,000,000) and a payout that must stay a safe integer (a $10,000,000 ten-leg longshot
+// parlay could otherwise overflow).
+export const MAX_STAKE_CENTS = SPORTSBOOK_BET_CEILING_CENTS;
+export const BET_CEILING_MESSAGE = 'That bet is over the sportsbook limit of $10,000,000 per bet.';
+export const PAYOUT_TOO_LARGE_MESSAGE = 'That bet would pay more than the sportsbook can hold. Lower the stake.';
 
-// '' if a stake (cents) is under the sanity ceiling, else BET_CEILING_MESSAGE.
+// '' if a stake (cents) is at most the sportsbook ceiling, else BET_CEILING_MESSAGE.
 export function stakeCeilingProblem(cents) {
   return Number.isInteger(cents) && cents > MAX_STAKE_CENTS ? BET_CEILING_MESSAGE : '';
 }
@@ -106,7 +107,7 @@ export function payoutCents(stakeCents, decimal) {
   return Math.floor(stakeCents * decimal + 1e-9);
 }
 
-// A payout the ledger can hold exactly (a safe integer). Anything bigger is refused with BET_CEILING_MESSAGE.
+// A payout the ledger can hold exactly (a safe integer). Anything bigger is refused with PAYOUT_TOO_LARGE_MESSAGE.
 export function payoutTooLarge(cents) {
   return !Number.isSafeInteger(cents);
 }

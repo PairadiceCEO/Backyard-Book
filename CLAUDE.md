@@ -65,8 +65,10 @@ Vercel deploys the live site from `main`.
 - Crapless 2/12 Odds pay 5:1.
 - Payouts round down to the cent.
 - No maximum bets anywhere (sportsbook, casino, slots, Battles): minimum $1, the wallet balance is the only cap, plus a
-  $1,000,000 per-bet sanity ceiling. Craps Odds stay capped at 2× the line bet (a game rule).
-- Chips: $1, $2, $5, $10, $25 and $100 on every game.
+  per-bet sanity ceiling: $10,000,000 for sportsbook bets and parlays (SPORTSBOOK_BET_CEILING_CENTS, 0.23.0), $1,000,000 for
+  the casino, slots and Battles. Craps Odds stay capped at 2× the line bet (a game rule).
+- Chips: $1, $2, $5, $10, $25, $100, $1,000 and $10,000 on every game (CHIP_VALUES).
+- Craps/Crapless Place bets go up any time (0.23.0) but are OFF on a come-out roll (never won or lost by it).
 - Cash out: pre-game = stake × 0.90; live = potential payout × Kalshi bid(s) × 0.90; crypto = potential payout × Kalshi
   bid × 0.90 (no cash out in the last 60 s). Never on a bet containing a custom-game or Challenge leg; Battles have no
   cash out.

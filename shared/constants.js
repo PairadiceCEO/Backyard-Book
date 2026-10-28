@@ -21,8 +21,12 @@ export const LEAGUES = [
 
 export const SHOP_AMOUNTS_DOLLARS = [5, 25, 50, 100];
 
-// Largest single admin wallet change or starting balance: $1,000,000.
+// Largest single admin wallet change or starting balance: $1,000,000. Also the casino's (and Battles') per-bet ceiling.
 export const MAX_WALLET_CHANGE_CENTS = 100_000_000;
+
+// 0.23.0: the sportsbook's per-bet ceiling (a single, or a parlay's stake): $10,000,000. Sportsbook only; the casino and
+// Battles keep $1,000,000.
+export const SPORTSBOOK_BET_CEILING_CENTS = 1_000_000_000;
 
 // Optional id the browser sends so a double-click can't apply the same request twice.
 export const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
