@@ -269,8 +269,7 @@ body.craps-stage-on .craps-stage .offline-banner {
 }
 
 .cs-felt-wrap.dim {
-  opacity: 0.6;
-  pointer-events: none;
+  opacity: 0.6; /* 0.23.0: still tappable while the dice tumble (it used to swallow taps with pointer-events: none) */
 }
 
 .craps-felt {
@@ -442,6 +441,14 @@ body.craps-stage-on .craps-stage .offline-banner {
   letter-spacing: 0;
   line-height: 1;
   pointer-events: none;
+}
+
+/* 0.23.0: on a come-out roll every Place box carries the black OFF puck (Place bets go up any time, off on the come-out). */
+.fn-puck.off {
+  background: #151515;
+  color: #f4f4ef;
+  border-color: #9a9a92;
+  font-size: 0.5rem;
 }
 
 .fn.is-point .fn-main {

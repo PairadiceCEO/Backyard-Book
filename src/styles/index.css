@@ -33,6 +33,23 @@ a {
   color: var(--accent);
 }
 
+/* 0.23.0 "every chip tap counts": on iPhones a second quick tap on a control without this is taken as the start of a
+   double-tap zoom and its click never fires, so 10 quick taps on a bet spot left fewer chips (Blackjack, Baccarat and the
+   Slots bet had no touch-action; the craps felt already did). manipulation keeps pan and pinch-zoom and makes every tap a
+   click. Applies to every control in the app; tapcheck.mjs checks the casino ones. */
+button,
+a,
+label,
+summary,
+input,
+select,
+textarea,
+[role='button'],
+[role='radio'],
+[role='tab'] {
+  touch-action: manipulation;
+}
+
 h1,
 h2,
 h3 {

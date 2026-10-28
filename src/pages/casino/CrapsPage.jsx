@@ -49,6 +49,7 @@ import '../../styles/craps.css';
 
 const NO_SEATS = [null, null, null, null, null];
 const KIND_TEXT = { natural: 'Winner!', craps: 'Craps', point: 'Point set', pointMade: 'Point made!', sevenOut: 'Seven out', roll: '' };
+const ROLLING_MESSAGE = 'The dice are on their way. Bet again as soon as they land.';
 // Tall upright screens have room under the felt for the seats, last rolls, help and rules; everywhere else they are in
 // the Table sheet. (Everything else about the two layouts is plain CSS.)
 export const INLINE_INFO_QUERY = '(orientation: portrait) and (min-height: 780px)';
@@ -256,7 +257,9 @@ export default function CrapsPage({ game }) {
       }),
     [call],
   );
-  const canChip = Boolean(mySeat) && !mySeat.leaving && !rolling;
+  // 0.23.0: chips go down while the dice tumble too (the roll is already in the table: they are bets on the next roll). Only
+  // between the shooter's Roll tap and the reply are they held back, with a message, since that roll isn't known yet.
+  const canChip = Boolean(mySeat) && !mySeat.leaving && !rollTapped;
   const chips = useChipBetting({ spots: serverSpots, roundKey: table?.rollSeq ?? null, validate, send: sendChips, onPending: setPendingCents, enabled: canChip });
 
   async function run(kind, action, fields = {}) {
@@ -298,7 +301,11 @@ export default function CrapsPage({ game }) {
   const walletCents = displayCents(balanceCents);
 
   function tapSpot(kind, number) {
-    if (!mySeat || rolling) return;
+    if (!mySeat) return;
+    if (rollTapped) {
+      setActionError(ROLLING_MESSAGE);
+      return;
+    }
     if (takeDown) {
       if (!spotAmount(serverBets, kind, number)) return;
       const blocked = removeBlocker(tablePoint, kind);
@@ -409,7 +416,7 @@ export default function CrapsPage({ game }) {
         {variant.oddsMultiple}× their line bet{variant.dontPass ? '; Don’t Pass Odds pay the inverse' : ''}. Come bets work like a new Pass bet on the
         next roll ({variant.comeOutPassWins.join(' or ')} wins{variant.comeOutPassLoses.length ? `, ${variant.comeOutPassLoses.join(', ')} loses` : ''}), then
         move to their number; Come Odds are off on the come-out. Place bets pay {variant.points.map((n) => `${n} ${ratio(variant.place[n])}`).join(', ')} and,
-        like Hard ways, are off on the come-out. Field: 3, 4, 9, 10, 11 pay 1:1; 2 and 12 pay 2:1. Hard 4 and 10 pay {ratio(variant.hardWays[4])}, Hard 6
+        go up any time; like Hard ways, they are OFF on the come-out (a come-out roll never wins or loses them) and work once a Point is set. Field: 3, 4, 9, 10, 11 pay 1:1; 2 and 12 pay 2:1. Hard 4 and 10 pay {ratio(variant.hardWays[4])}, Hard 6
         and 8 pay {ratio(variant.hardWays[6])} and stay up after a win. With 2 or more players the shooter has 30 s to roll, then the dice roll themselves;
         a player alone rolls when they tap Roll. One seat per player.
       </p>

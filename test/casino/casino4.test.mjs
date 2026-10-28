@@ -93,7 +93,7 @@ test('a full Craps hand: point, Odds, Place 6 at 7:6 ($5 wins $5.83), Field, poi
   await sitAll(['p1', 'p2']);
   await bet('p1', 'pass', 5);
   await err(bet('p1', 'odds', 5), 'BET_NOT_ALLOWED');
-  await err(bet('p2', 'place', 5, { number: 6 }), 'BET_NOT_ALLOWED');
+  await err(bet('p2', 'place', 5, { number: 2 }), 'BET_NOT_ALLOWED'); // no Place 2 in Craps (Place bets themselves go up any time since 0.23.0)
   rollAs(4, 2);
   await roll('p1');
   assert.equal(table().point, 6);
@@ -398,7 +398,7 @@ for (const variant of ['craps', 'crapless']) {
       if (after.lastRoll) kinds[after.lastRoll.kind] = (kinds[after.lastRoll.kind] ?? 0) + 1;
       for (const seat of after.seats.filter(Boolean)) {
         assert.ok(after.point !== null || seat.bets.odds === 0, 'no Odds without a point');
-        for (const v of Object.values(seat.bets.place)) assert.ok(v > 0 && v <= 1000);
+        for (const v of Object.values(seat.bets.place)) assert.ok(v > 0, 'a Place spot holds a positive amount (no maximum since 0.16.0)');
       }
     }
     assert.ok(table().rollSeq > 100, `rolled ${table().rollSeq} times`);
@@ -444,7 +444,7 @@ test('chips tapped together arrive as one request: all applied with one charge, 
   const before = table();
   await err(chipsDown('p1', [{ kind: 'field', cents: 100 }, { kind: 'odds', cents: 100 }]), 'BET_NOT_ALLOWED', 'Odds before a point');
   await err(chipsDown('p1', [{ kind: 'field', cents: 100 }, { kind: 'pass', cents: 100_000_100 }]), 'BET_TOO_LARGE');
-  await err(chipsDown('p1', [{ kind: 'place', number: 6, cents: 100 }]), 'BET_NOT_ALLOWED');
+  await err(chipsDown('p1', [{ kind: 'place', number: 3, cents: 100 }]), 'BET_NOT_ALLOWED', 'no Place 3 in Craps');
   await err(chipsDown('p1', [{ kind: 'field', cents: 150 }]), 'BAD_BET');
   await err(chipsDown('p1', [{ kind: 'field', cents: -300 }]), 'NO_BET');
   assert.deepEqual(table(), before);

@@ -5,6 +5,35 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.23.0 (Will, 2026-10-28 01:16 CT) — IN PROGRESS on wip
+Spec: Will's message of 01:16 ("craps Place bets before the point, every chip tap counts, Max bet, $1,000 and $10,000 chips,
+sportsbook per-bet limit $10,000,000, Blackjack seats show their cards").
+
+### Checklist
+- [x] 1 Craps/Crapless Place bets any time (shared/casino/dice.js placeBlocker); still off on a come-out roll (settleRoll
+      unchanged); the felt shows the black OFF puck on every Place box during a come-out (CrapsFelt.jsx, craps.css); help text.
+- [x] 2 Every chip tap counts: reproduced with tools/phone-check/tapcheck.mjs (real engines + real client, 10 taps of $5 in
+      < 2 s on Blackjack, Baccarat, Craps, Crapless, Slots; server reply 0 and 1500 ms; craps also with another player's roll
+      landing mid-taps). Causes and fixes in Decisions below.
+- [ ] 3 $1,000 and $10,000 chips
+- [ ] 4 Max bet (Blackjack, Baccarat)
+- [ ] 5 Sportsbook per-bet ceiling $10,000,000
+- [ ] 6 Blackjack seats show their cards
+- [ ] 7 Version 0.23.0, docs, CLAUDE.md, all checks, merge
+Decisions:
+- **Lost taps, cause 1 (iPhone, every game but the craps felt):** the bet spots, chips, Undo / Clear and the Slots bet had no
+  `touch-action`, so iOS Safari takes a second quick tap as the start of a double-tap zoom and never fires its click. One rule in
+  index.css gives every control `touch-action: manipulation` (pan and pinch-zoom still work). Chromium has no double-tap zoom
+  here, so tapcheck.mjs checks the computed touch-action of every tapped control instead.
+- **Lost taps, cause 2 (Craps / Crapless, reproduced):** a roll landing in the middle of quick taps (another player's, or the
+  shooter's own) lost them two ways: useChipBetting dropped every tap still waiting in its 300 ms batch when the round key
+  (rollSeq) changed, and the felt had `pointer-events: none` for the 1 s tumble, so taps then did nothing. Old code: 10 taps with
+  a roll after tap 4 left $10. Now waiting taps survive a new round (an Undo / Clear still waiting is dropped: its round is
+  over), and the felt takes chips while the dice tumble (the roll is already in the table: they are bets on the next roll).
+  Only between the shooter's own Roll tap and its reply are chips held back, with a message ("The dice are on their way…").
+- No refusal, batching or disabled-while-sending loss was found in the client: with the real engines all five games end at
+  exactly $50 with replies of 0 and 1,500 ms, 40-180 ms between taps, listener delay 0-2,500 ms.
+
 ## Phase 0.22.0 (Will, 2026-10-28 00:20 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: Will's attachment of 00:20 ("agents research like real bettors (form, splits, player trends, injuries, line movement,
 public vs sharp money) and bet a few times a day"). Cause: all four agents passed on 0.21.3's first full run; they only see

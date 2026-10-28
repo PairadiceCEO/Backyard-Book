@@ -6,7 +6,7 @@
 //   odds, dontOdds        Odds behind Pass / Don't Pass (once a Point is set)
 //   come                  a fresh Come bet in the Come spot (point phase only; decided by the next roll)
 //   comeOn { [n]: { bet, odds } }   Come bets that moved to their number, with their Odds
-//   place { [n] }, hard { [n] }, field
+//   place { [n] }, hard { [n] }, field   (Place and Hard ways go up any time; both are off on a come-out roll)
 
 import { BET_CEILING_CENTS, BET_CEILING_MESSAGE, dollarsText, winningsCents } from './constants.js';
 
@@ -184,8 +184,8 @@ export function placeBlocker(variant, point, bets, kind, number) {
     case 'comeOdds':
       return b.comeOn[number]?.bet > 0 ? null : `Odds on ${number} need a Come bet on ${number}.`;
     case 'place':
-      if (!variant.place[number]) return `There's no Place ${number} in ${variant.name}.`;
-      return pointOn ? null : 'Place bets go up once a Point is set.';
+      // Any time (0.23.0). On a come-out roll they are off: settleRoll never wins or loses them then.
+      return variant.place[number] ? null : `There's no Place ${number} in ${variant.name}.`;
     case 'hard':
       return variant.hardWays[number] ? null : `There's no Hard ${number}.`;
     case 'field':

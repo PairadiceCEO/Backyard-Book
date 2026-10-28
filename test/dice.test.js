@@ -77,7 +77,9 @@ test('Place: pays with cent rounding ($5 Place 6 wins $5.83), stays up, off on c
   const offSeven = place(CRAPS, 6, 500, 7, null);
   assert.deepEqual([offSeven.lostCents, offSeven.bets.place[6]], [0, 500]);
   assert.equal(place(CRAPS, 6, 500, 6, null).returnCents, 0);
-  assert.match(placeBlocker(CRAPS, null, bets(), 'place', 6), /once a Point is set/);
+  assert.equal(placeBlocker(CRAPS, null, bets(), 'place', 6), null, 'Place bets go up on a come-out too (0.23.0)');
+  assert.equal(placeBlocker(CRAPLESS, null, bets(), 'place', 2), null);
+  assert.equal(removeBlocker(null, 'place'), null, 'and come down before any roll');
   assert.match(placeBlocker(CRAPS, 6, bets(), 'place', 2), /no Place 2/);
   assert.equal(placeBlocker(CRAPLESS, 6, bets(), 'place', 2), null);
 });
