@@ -209,3 +209,27 @@ test('the casino per-bet ceiling stays $1,000,000 while the sportsbook\'s is $10
   await act('blackjack', 'p1', 'bet', { seat: 0, amount: 1_000_000, requestId: rid() });
   assert.equal(seatOf('blackjack', 'p1').betCents, 100_000_000);
 });
+
+// ================= 4. Max bet (the plan; the button is checked in tools/phone-check/interact.mjs) =================
+test('Max bet: the whole wallet left (whole dollars) on the spot; capped at the $1,000,000 ceiling; nothing when the wallet is empty', async () => {
+  const { maxBetPlan } = await import(url('shared/casino/maxBet.js'));
+  assert.deepEqual(maxBetPlan(0, 12_345), { addCents: 12_300, totalCents: 12_300, capped: false }, '$123.45 → $123');
+  assert.deepEqual(maxBetPlan(500, 9_500), { addCents: 9_500, totalCents: 10_000, capped: false }, '$5 already on it + $95');
+  assert.deepEqual(maxBetPlan(0, 250_000_000), { addCents: 100_000_000, totalCents: 100_000_000, capped: true }, '$2.5M wallet → $1M');
+  assert.deepEqual(maxBetPlan(40_000_000, 250_000_000), { addCents: 60_000_000, totalCents: 100_000_000, capped: true });
+  assert.deepEqual(maxBetPlan(100_000_000, 5_000), { refuse: 'ceiling' });
+  assert.deepEqual(maxBetPlan(0, 99), { refuse: 'wallet' });
+  assert.deepEqual(maxBetPlan(0, -500), { refuse: 'wallet' }, 'pending chips past the balance');
+  // Through the chip path at the table: the Max amount is an ordinary bet; the server takes exactly the wallet.
+  seed(12_345);
+  await act('blackjack', 'p1', 'sit', { seat: 0 });
+  const plan = maxBetPlan(0, wallet('p1'));
+  await act('blackjack', 'p1', 'bet', { seat: 0, amount: plan.totalCents / 100, requestId: rid() });
+  assert.deepEqual([seatOf('blackjack', 'p1').betCents, wallet('p1')], [12_300, 45]);
+  await act('baccarat', 'p2', 'sit', { seat: 0 });
+  await act('baccarat', 'p2', 'bet', { seat: 0, player: 10, banker: 0, tie: 0, requestId: rid() });
+  const bank = maxBetPlan(0, wallet('p2'));
+  await act('baccarat', 'p2', 'bet', { seat: 0, player: 10, banker: bank.totalCents / 100, tie: 0, requestId: rid() });
+  assert.deepEqual(seatOf('baccarat', 'p2').bets, { player: 1000, banker: 11_300, tie: 0 });
+  moneyAddsUp(12_345);
+});

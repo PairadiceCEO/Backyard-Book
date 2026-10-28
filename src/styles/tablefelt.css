@@ -405,6 +405,42 @@ button.bjt-circle:disabled {
   cursor: default;
 }
 
+/* ---------- Max bet (0.23.0) ---------- */
+.max-btn {
+  margin-left: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.max-confirm {
+  flex: 1 1 100%;
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--gold, #f5c451);
+  border-radius: 12px;
+  background: rgba(245, 196, 81, 0.1);
+}
+
+.max-question {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.max-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 0.4rem;
+}
+
+.max-actions .btn {
+  min-height: 44px;
+  min-width: 0;
+}
+
 /* ---------- Baccarat ---------- */
 .bact-rail {
   max-width: 640px;

@@ -165,6 +165,9 @@ const scenarios = [
   S('bac-new-shoe', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(() => ({ ...tables.watch(), shoeResults: '' })) }),
   S('bj-lobby', '/casino', { admin: false, user: 'u1', fs: () => ({ ...fsDefault, casinoTables: [bj.betting(), tables.lobby()] }) }),
   S('bj-betting', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting) }),
+  // 0.23.0: the Max confirm step, and a seat with the new $1,000 / $10,000 chips on it.
+  S('bj-max-confirm', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting), act: async (p) => { await p.getByRole('button', { name: /^Max: bet your whole wallet/ }).click(); await p.waitForTimeout(100); } }),
+  S('bac-max-confirm', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.betting), act: async (p) => { await p.getByRole('button', { name: /Banker, pays/ }).click(); await p.getByRole('button', { name: /^Max: bet your whole wallet/ }).click(); await p.waitForTimeout(100); } }),
   S('bj-betting-chips', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting), act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.bj-bet-spot').click(); await p.getByRole('radio', { name: '$2 chip' }).click(); await p.locator('.bj-bet-spot').click(); await p.getByRole('radio', { name: '$1 chip' }).click(); await p.locator('.bj-bet-spot').click(); await p.waitForTimeout(100); } }),
   S('bj-insurance', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.insurance) }),
   S('bj-my-turn', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.myTurn) }),

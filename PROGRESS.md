@@ -20,7 +20,11 @@ sportsbook per-bet limit $10,000,000, Blackjack seats show their cards").
       (yellow-orange, black edge) and .fc-10000 (purple, gold edge) in chips.css. Racks: Blackjack / Baccarat / Slots two rows of
       four under 600 px, one row of eight above; craps upright one row of eight; sideways 4 × 2 (rail 182 px, 236 px on computers),
       and 3 across in three rows on the narrowest sideways phones (568 × 320) so the number boxes keep 44 px.
-- [ ] 4 Max bet (Blackjack, Baccarat)
+- [x] 4 Max bet (Blackjack, Baccarat): src/components/casino/MaxBet.jsx + shared/casino/maxBet.js (maxBetPlan). A "Max" button in
+      the Rebet row (always there while the seat can bet); tap → "Bet your whole wallet, $X?" with Yes / Cancel; Yes adds the
+      amount through chips.place (validation, one Undo entry, batching, 0.17.2 replies). Wallet left = balance minus every chip
+      not confirmed yet on any seat (WalletDisplayContext), whole dollars. Baccarat: the spot the seat last tapped (Player by
+      default). Past $1,000,000 it stops at $1,000,000 and the question starts with "That bet is larger than the table allows.".
 - [x] 5 Sportsbook per-bet ceiling $10,000,000: SPORTSBOOK_BET_CEILING_CENTS (shared/constants.js) → betRules MAX_STAKE_CENTS,
       slipProblems (browser + /api/bets) for singles and parlay stakes; message "That bet is over the sportsbook limit of
       $10,000,000 per bet."; an unsafe payout now says PAYOUT_TOO_LARGE_MESSAGE. Casino, Slots and Battles keep $1,000,000 and

@@ -1683,6 +1683,76 @@ for (const game of ['blackjack', 'baccarat']) {
   });
 }
 
+// ---------- 0.23.0: Max bet (Blackjack, Baccarat) ----------
+for (const game of ['blackjack', 'baccarat']) {
+  const openMax = async (balanceCents = null) => {
+    const rig = chipRig(game);
+    const { page, context } = await openPage(`/casino/${game}`, [rig.table], rig.handler);
+    rig.page = page;
+    if (balanceCents !== null) {
+      await page.evaluate((b) => { window.__H.fs.users = window.__H.fs.users.map((u) => (u.id === 'u1' ? { ...u, balanceCents: b } : u)); window.__H.emit?.(); }, balanceCents);
+      await page.waitForTimeout(200);
+    }
+    await page.waitForTimeout(300);
+    return { rig, page, context };
+  };
+  const maxBtn = (page) => page.getByRole('button', { name: /^Max: bet your whole wallet/ });
+  const spotName = game === 'blackjack' ? 'seat 2' : 'Player';
+  const total = (rig) => (game === 'blackjack' ? rig.table.seats[1].betCents : rig.table.seats[1].bets.player);
+
+  await check(`${game}: Max sits next to Rebet, asks "Bet your whole wallet, $X?" first; Cancel sends nothing`, async () => {
+    const { rig, page, context } = await openMax();
+    const r = await maxBtn(page).boundingBox();
+    assert.ok(r.width >= 43.5 && r.height >= 43.5, `Max button ${r.width}x${r.height}`);
+    await maxBtn(page).click();
+    assert.equal(await page.locator('.max-question').innerText(), `Bet your whole wallet, $96.00 on ${spotName}?`, 'whole dollars of the $96.40 wallet');
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.waitForTimeout(BET_REPLY_MS + 400);
+    assert.equal(rig.sent.length, 0, 'nothing sent');
+    assert.equal(await page.locator('.max-question').count(), 0);
+    await context.close();
+  });
+
+  await check(`${game}: Max → Yes puts the whole wallet ($96 of $96.40) on ${spotName} in one request; Undo takes it back`, async () => {
+    const { rig, page, context } = await openMax();
+    await maxBtn(page).click();
+    await page.getByRole('button', { name: /^Yes, bet \$96\.00/ }).click();
+    await page.waitForTimeout(BET_REPLY_MS + 700);
+    assert.equal(rig.sent.length, 1, JSON.stringify(sentAmounts(rig, game)));
+    assert.equal(total(rig), 9600);
+    await page.getByRole('button', { name: 'Undo' }).first().click();
+    await page.waitForTimeout(BET_REPLY_MS + 700);
+    assert.equal(total(rig), 0, `Undo took the Max chips back (sent ${JSON.stringify(sentAmounts(rig, game))})`);
+    await context.close();
+  });
+
+  await check(`${game}: Max past $1,000,000 stops at $1,000,000 with the usual ceiling message`, async () => {
+    const { rig, page, context } = await openMax(250_000_000);
+    await maxBtn(page).click();
+    const q = await page.locator('.max-question').innerText();
+    assert.match(q, /^That bet is larger than the table allows\. Bet the most one bet can be, \$1,000,000\.00 on /);
+    await page.getByRole('button', { name: /^Yes, bet \$1,000,000\.00/ }).click();
+    await page.waitForTimeout(BET_REPLY_MS + 700);
+    assert.equal(total(rig), 100_000_000);
+    await context.close();
+  });
+}
+
+await check('baccarat: Max goes on the spot last tapped (Banker), counting chips not sent yet', async () => {
+  const rig = chipRig('baccarat');
+  const { page, context } = await openPage('/casino/baccarat', [rig.table], rig.handler);
+  rig.page = page;
+  await page.waitForTimeout(300);
+  await page.getByRole('radio', { name: '$5 chip' }).first().click();
+  await page.getByRole('button', { name: /Banker, pays/ }).click();
+  await page.getByRole('button', { name: /^Max: bet your whole wallet on Banker/ }).click();
+  assert.equal(await page.locator('.max-question').innerText(), 'Bet your whole wallet, $91.00 ($96.00 on Banker in all)?');
+  await page.getByRole('button', { name: /^Yes, bet \$91\.00/ }).click();
+  await page.waitForTimeout(BET_REPLY_MS * 2 + 900);
+  assert.deepEqual(rig.table.seats[1].bets, { player: 0, banker: 9600, tie: 0 }, JSON.stringify(sentAmounts(rig, 'baccarat')));
+  await context.close();
+});
+
 // ---------- 0.19.0: total pills, results float, squeeze ----------
 const bjSeatFull = (extra) => ({ uid: 'u1', name: 'Mike', sitAt: now() - 60000, leaving: false, reqs: [], betCents: 1000, stakeCents: 1000, returnCents: 0, insurance: null, hands: [], result: null, ready: true, ...extra });
 const bjHand = (cards, extra = {}) => ({ cards, betCents: 1000, status: 'stood', seq: 1, fromSplit: false, splitAces: false, doubled: false, outcome: null, ...extra });

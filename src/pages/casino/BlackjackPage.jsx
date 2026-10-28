@@ -14,6 +14,7 @@ import { ChipRack, ChipStack } from '../../components/casino/Chips.jsx';
 import { Link } from 'react-router-dom';
 import PlayingCard from '../../components/casino/PlayingCard.jsx';
 import BlackjackFelt from '../../components/casino/BlackjackFelt.jsx';
+import MaxBet from '../../components/casino/MaxBet.jsx';
 import { ErrorState, LoadingState, friendlyError } from '../../components/StatusViews.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useWalletDisplay } from '../../context/WalletDisplayContext.jsx';
@@ -166,6 +167,9 @@ function SeatPanel({
   );
   const chips = useChipBetting({ spots: serverSpots, roundKey: roundId, validate, send: sendChips, onPending, enabled: canBet });
   const myBetCents = chips.spots.bet ?? 0;
+  // Max (0.23.0): the wallet left for this seat = the balance minus every chip not confirmed yet, on any of my seats.
+  const { displayCents, heldCents, pendingCents } = useWalletDisplay();
+  const walletLeft = heldCents === null ? displayCents(balanceCents) : balanceCents - pendingCents;
 
   // Cards are dealt to this seat: remember its bet (the server's seat bet, not a doubled or split hand's).
   const dealtBet = hands.length ? seat.betCents || 0 : 0;
@@ -261,14 +265,26 @@ function SeatPanel({
             canUndo={chips.canUndo}
             disabled={!canBet}
             rebet={
-              showRebet ? (
+              canBet ? (
                 <div className="rebet-row">
-                  <button type="button" className="rebet-btn" onClick={() => rebet(1)}>
-                    Rebet {formatMoney(lastBet)}
-                  </button>
-                  <button type="button" className="rebet-btn" onClick={() => rebet(2)}>
-                    Rebet ×2 {formatMoney(lastBet * 2)}
-                  </button>
+                  {showRebet ? (
+                    <>
+                      <button type="button" className="rebet-btn" onClick={() => rebet(1)}>
+                        Rebet {formatMoney(lastBet)}
+                      </button>
+                      <button type="button" className="rebet-btn" onClick={() => rebet(2)}>
+                        Rebet ×2 {formatMoney(lastBet * 2)}
+                      </button>
+                    </>
+                  ) : null}
+                  <MaxBet
+                    spotName={`seat ${index + 1}`}
+                    currentCents={myBetCents}
+                    availableCents={walletLeft}
+                    onPlace={(cents) => chips.place('bet', cents)}
+                    onRefuse={chips.setError}
+                    disabled={!canBet}
+                  />
                 </div>
               ) : null
             }
