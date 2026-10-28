@@ -114,7 +114,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 
 - No console step (same rules). Casino → **Craps** or **Crapless Craps**: 5 seats each, separate tables.
 - **One engine, two games:** `shared/casino/dice.js` settles every roll; `shared/casino/diceVariants.js` is the only place the two games differ (come-out winners/losers, Don't Pass, point numbers, Odds and Place payouts). Crapless Odds on 2/12 pay 5:1.
-- **Bets:** pick a chip, tap a spot; "Take down" + tap takes a bet back (Pass / Don't Pass stay up once a Point is set). Minimum $1. Bet as much as your wallet holds. Place bets work only while a Point is on and stay up after a win; Field is one roll.
+- **Bets:** pick a chip, tap a spot; "Take down" + tap takes a bet back (Pass / Don't Pass stay up once a Point is set). Minimum $1. Bet as much as your wallet holds. Place bets go up any time (since 0.23.0) but are OFF on a come-out roll (the felt shows OFF; a come-out roll never wins or loses them), work once a Point is set and stay up after a win; Field is one roll.
 - **Shooter:** only the shooter can roll, and only with a line bet. Roll carries `rollSeq`, so a double tap rolls once and other players' bets never block it. The clock starts at the first bet after a come-out roll, or right after each roll while a Point is on; at zero the server rolls (or, on a come-out with no line bet, passes the dice). Seven-out: dice to the next seat clockwise.
 - **Leaving / gone 60 s:** Pass, Don't Pass and Odds play out; then the seat frees and its Place and Field bets are refunded.
 - **Tests:** `npm test` (rules for every game) and `npm run test:casino` (all four table engines and the slot against an in-memory Firestore). Everything: `npm run test:all`. Build notes: `docs/CASINO_PROGRESS.md`.
@@ -147,6 +147,15 @@ site's `/api` with their own login, so they can't do anything a player can't.
   (OpenAI's cheapest current model, with function calling and the web search tool); Gemini `gemini-3.8-flash` (free tier;
   Google Search grounding isn't included on the free tier, so that agent plays without web search unless its key has
   billing on).
+
+## 0.23.0
+
+- **Craps / Crapless Place bets before the point:** they go up any time and can come down before any roll; on a come-out roll they are OFF (every Place box shows a black OFF puck) and are never won or lost by it; they work once a Point is set. Come bets are unchanged (a 7 loses every Come bet on a number; Come Odds are off on a come-out and come back; a fresh Come wins on 7).
+- **Every chip tap counts:** quick taps on a bet spot no longer go missing. Two causes fixed: iPhones took a second quick tap as a double-tap zoom (every control now has `touch-action: manipulation`), and at craps a roll landing in the middle of quick taps dropped the taps still waiting to be sent and ignored taps while the dice tumbled. `tools/phone-check/tapcheck.mjs` taps 10 × $5 on every game against the real engines.
+- **$1,000 (yellow-orange) and $10,000 (purple) chips** on every game and Slots. Racks are two rows of four on phones.
+- **Max bet** (Blackjack, Baccarat): a Max button next to Rebet asks "Bet your whole wallet, $X?" and puts it on the seat (Baccarat: the spot you tapped last, Player at first), through the normal chips (Undo works). One bet still stops at $1,000,000.
+- **Sportsbook per-bet limit $10,000,000** for singles and parlays ("That bet is over the sportsbook limit of $10,000,000 per bet."). The casino, Slots and Battles keep $1,000,000.
+- **Blackjack seats show their cards:** every seat circle on the felt, yours and everyone else's, shows that seat's cards as small cards with a total pill; a split's hands sit side by side. The dealer's hole card stays face down until it's turned.
 
 ## 0.22.0
 

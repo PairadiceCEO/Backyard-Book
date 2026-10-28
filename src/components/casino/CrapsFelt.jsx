@@ -5,7 +5,8 @@
 // sideways (a long table with the Pass Line down the left edge); rotating the phone never remounts anything.
 //   Pass Line and Don't Pass Bar exist twice: the long vertical strips down the left edge (sideways, wide enough) and the
 //   rows along the bottom. They are the same bet (the strips are a second place to tap, hidden from screen readers).
-//   Place numbers: payout small at the top, the number, the ON puck bottom-left, my chips bottom-right. A Come bet that
+//   Place numbers: payout small at the top, the number, the ON puck bottom-left (on a come-out every box shows the black
+//   OFF puck there instead: Place bets go up any time but are off on the come-out), my chips bottom-right. A Come bet that
 //   moved to a number shows as a chip marked C with its Odds chip beside it; tapping that cluster adds Come Odds.
 
 import Die from './Die.jsx';
@@ -78,6 +79,11 @@ export default function CrapsFelt({ variant, point, bets, takeDown, oddsMax, don
                     {NUMBER_WORD[n] ?? n}
                   </span>
                   {point === n ? <span className="fn-puck">ON</span> : null}
+                  {point ? null : (
+                    <span className="fn-puck off" data-off="true" aria-hidden="true">
+                      OFF
+                    </span>
+                  )}
                 </Area>
                 {come ? (
                   <button

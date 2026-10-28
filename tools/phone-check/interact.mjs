@@ -457,8 +457,9 @@ for (const game of ['craps', 'crapless']) {
       }
       assert.deepEqual(m.small, [], `${tag}: felt buttons at least 44×44`);
       assert.deepEqual(m.outside, [], `${tag}: nothing outside the screen`);
-      const rackMin = m.orient === 'sideways' ? 44 : 48;
-      assert.ok(m.rackBoxes.length === 6 && m.rackBoxes.every((w) => w >= rackMin - 1), `${tag}: six rack chips of ${rackMin}+ px (${m.rackBoxes})`);
+      // 0.23.0: eight chips ($1 … $10,000); 320 px upright puts them in two rows of four, 568 × 320 three across.
+      const rackMin = 44;
+      assert.ok(m.rackBoxes.length === 8 && m.rackBoxes.every((w) => w >= rackMin - 1), `${tag}: eight rack chips of ${rackMin}+ px (${m.rackBoxes})`);
       report.push(`${tag.split(' ')[0]}${m.stageScroll ? ` scroll ${m.stageScroll}` : ''}`);
       await context.close();
     }
@@ -484,8 +485,15 @@ for (const game of ['craps', 'crapless']) {
       assert.equal(await chipText(spot(page, key).first()), '$5', `${key}: a $5 chip on the area`);
       assert.match((await spot(page, key).first().getAttribute('aria-label')) ?? '', /, \$5\.00 on it$/, `${key}: label says what is on it`);
     }
-    // Blocked on the come-out: Come, Place, Odds. Tapping says why and puts nothing there.
-    for (const key of ['come', 'odds', 'place:6']) {
+    // 0.23.0: a Place bet goes up on the come-out (OFF puck on every Place box, the bet takes the chip).
+    const placeKey = 'place:6';
+    assert.ok(!(await spot(page, placeKey).evaluate((el) => el.classList.contains('blocked'))), `${placeKey}: not blocked on the come-out`);
+    assert.equal(await page.locator('.craps-felt .fn-puck.off').count(), Object.keys(crapless ? { 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 8: 1, 9: 1, 10: 1, 11: 1, 12: 1 } : { 4: 1, 5: 1, 6: 1, 8: 1, 9: 1, 10: 1 }).length, 'OFF on every Place box');
+    await spot(page, placeKey).click();
+    assert.equal(await chipText(spot(page, placeKey)), '$5', `${placeKey}: a $5 chip on the come-out`);
+    comeOutSpots.push(placeKey);
+    // Blocked on the come-out: Come, Odds. Tapping says why and puts nothing there.
+    for (const key of ['come', 'odds']) {
       assert.ok(await spot(page, key).evaluate((el) => el.classList.contains('blocked')), `${key}: blocked look on the come-out`);
       await spot(page, key).click();
       assert.equal(await chipText(spot(page, key)), '', `${key}: no chip`);
@@ -755,7 +763,7 @@ await check('craps: "Sit down" takes the first open seat; "Table full" when all 
 });
 
 // ---------- 0.16.0: no maximum bets; $25 and $100 chips on every game ----------
-// A rich player ($10,000) on every casino game: six chips; $100 + $100 + $25 on one spot goes to the server as one
+// A rich player ($10,000) on every casino game: eight chips (0.23.0); $100 + $100 + $25 on one spot goes to the server as one
 // $225 total (an amount built from chips); no "up to $10" / "$1–$10" / "$60" text anywhere; the new help line shows.
 async function openRich(path, tables, onCasino) {
   const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
@@ -776,7 +784,7 @@ async function openRich(path, tables, onCasino) {
 const OLD_LIMIT_TEXT = /up to \$10\b|\$1[–-]\$10\b|\$1[–-]\$20|\$1[–-]\$30|\$60\b|of \$60|Room \$/;
 async function chipsAndText(page, where) {
   const labels = await page.getByRole('radio', { name: /chip$/ }).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
-  assert.deepEqual([...new Set(labels)], ['$1 chip', '$2 chip', '$5 chip', '$10 chip', '$25 chip', '$100 chip'], `${where}: six chips`);
+  assert.deepEqual([...new Set(labels)], ['$1 chip', '$2 chip', '$5 chip', '$10 chip', '$25 chip', '$100 chip', '$1,000 chip', '$10,000 chip'], `${where}: eight chips`);
   const text = await page.evaluate(() => document.body.innerText);
   assert.ok(!OLD_LIMIT_TEXT.test(text), `${where}: old limit wording left: ${(text.match(OLD_LIMIT_TEXT) ?? [])[0]}`);
   assert.match(text, /Minimum \$1\. Bet as much as your wallet holds\./, `${where}: new help text`);
@@ -1683,11 +1691,123 @@ for (const game of ['blackjack', 'baccarat']) {
   });
 }
 
+// ---------- 0.23.0: Max bet (Blackjack, Baccarat) ----------
+for (const game of ['blackjack', 'baccarat']) {
+  const openMax = async (balanceCents = null) => {
+    const rig = chipRig(game);
+    const { page, context } = await openPage(`/casino/${game}`, [rig.table], rig.handler);
+    rig.page = page;
+    if (balanceCents !== null) {
+      await page.evaluate((b) => { window.__H.fs.users = window.__H.fs.users.map((u) => (u.id === 'u1' ? { ...u, balanceCents: b } : u)); window.__H.emit?.(); }, balanceCents);
+      await page.waitForTimeout(200);
+    }
+    await page.waitForTimeout(300);
+    return { rig, page, context };
+  };
+  const maxBtn = (page) => page.getByRole('button', { name: /^Max: bet your whole wallet/ });
+  const spotName = game === 'blackjack' ? 'seat 2' : 'Player';
+  const total = (rig) => (game === 'blackjack' ? rig.table.seats[1].betCents : rig.table.seats[1].bets.player);
+
+  await check(`${game}: Max sits next to Rebet, asks "Bet your whole wallet, $X?" first; Cancel sends nothing`, async () => {
+    const { rig, page, context } = await openMax();
+    const r = await maxBtn(page).boundingBox();
+    assert.ok(r.width >= 43.5 && r.height >= 43.5, `Max button ${r.width}x${r.height}`);
+    await maxBtn(page).click();
+    assert.equal(await page.locator('.max-question').innerText(), `Bet your whole wallet, $96.00 on ${spotName}?`, 'whole dollars of the $96.40 wallet');
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.waitForTimeout(BET_REPLY_MS + 400);
+    assert.equal(rig.sent.length, 0, 'nothing sent');
+    assert.equal(await page.locator('.max-question').count(), 0);
+    await context.close();
+  });
+
+  await check(`${game}: Max → Yes puts the whole wallet ($96 of $96.40) on ${spotName} in one request; Undo takes it back`, async () => {
+    const { rig, page, context } = await openMax();
+    await maxBtn(page).click();
+    await page.getByRole('button', { name: /^Yes, bet \$96\.00/ }).click();
+    await page.waitForTimeout(BET_REPLY_MS + 700);
+    assert.equal(rig.sent.length, 1, JSON.stringify(sentAmounts(rig, game)));
+    assert.equal(total(rig), 9600);
+    await page.getByRole('button', { name: 'Undo' }).first().click();
+    await page.waitForTimeout(BET_REPLY_MS + 700);
+    assert.equal(total(rig), 0, `Undo took the Max chips back (sent ${JSON.stringify(sentAmounts(rig, game))})`);
+    await context.close();
+  });
+
+  await check(`${game}: Max past $1,000,000 stops at $1,000,000 with the usual ceiling message`, async () => {
+    const { rig, page, context } = await openMax(250_000_000);
+    await maxBtn(page).click();
+    const q = await page.locator('.max-question').innerText();
+    assert.match(q, /^That bet is larger than the table allows\. Bet the most one bet can be, \$1,000,000\.00 on /);
+    await page.getByRole('button', { name: /^Yes, bet \$1,000,000\.00/ }).click();
+    await page.waitForTimeout(BET_REPLY_MS + 700);
+    assert.equal(total(rig), 100_000_000);
+    await context.close();
+  });
+}
+
+await check('baccarat: Max goes on the spot last tapped (Banker), counting chips not sent yet', async () => {
+  const rig = chipRig('baccarat');
+  const { page, context } = await openPage('/casino/baccarat', [rig.table], rig.handler);
+  rig.page = page;
+  await page.waitForTimeout(300);
+  await page.getByRole('radio', { name: '$5 chip' }).first().click();
+  await page.getByRole('button', { name: /Banker, pays/ }).click();
+  await page.getByRole('button', { name: /^Max: bet your whole wallet on Banker/ }).click();
+  assert.equal(await page.locator('.max-question').innerText(), 'Bet your whole wallet, $91.00 ($96.00 on Banker in all)?');
+  await page.getByRole('button', { name: /^Yes, bet \$91\.00/ }).click();
+  await page.waitForTimeout(BET_REPLY_MS * 2 + 900);
+  assert.deepEqual(rig.table.seats[1].bets, { player: 0, banker: 9600, tie: 0 }, JSON.stringify(sentAmounts(rig, 'baccarat')));
+  await context.close();
+});
+
 // ---------- 0.19.0: total pills, results float, squeeze ----------
 const bjSeatFull = (extra) => ({ uid: 'u1', name: 'Mike', sitAt: now() - 60000, leaving: false, reqs: [], betCents: 1000, stakeCents: 1000, returnCents: 0, insurance: null, hands: [], result: null, ready: true, ...extra });
 const bjHand = (cards, extra = {}) => ({ cards, betCents: 1000, status: 'stood', seq: 1, fromSplit: false, splitAces: false, doubled: false, outcome: null, ...extra });
 const bjTbl = (over, seatExtra) => ({ id: 'blackjack', game: 'blackjack', epoch: 'p', roundNo: 9, roundId: 'p-9', phase: 'playing', deadline: now() + 9000, turn: { seat: 3, hand: 0 }, dealer: { cards: ['KH0', '7D0'], holeDown: false }, lastDeal: { at: now() - 60000, cards: [] }, shoe: { remaining: 240, total: 312, shuffles: 0 }, version: 20, updatedAt: now() - 5000, seats: [null, bjSeatFull(seatExtra), null, bjSeatFull({ uid: 'u3', name: 'Dan', hands: [bjHand(['5S0', '2C0'], { status: 'playing' })] }), null], ...over });
 const noCasino = async (route) => json(route, 200, { ok: true, serverNow: now() });
+
+// ---------- 0.23.0: every seat circle shows its cards ----------
+await check('blackjack: every seat circle shows its own cards and total (other players too), a split side by side; the dealer\'s hole card stays a card back', async () => {
+  const mineSplit = { hands: [bjHand(['8C0', '3D1', 'TS2'], { status: 'stood', fromSplit: true }), bjHand(['8D0', '9S1'], { status: 'playing', fromSplit: true })] };
+  const t = bjTbl({ turn: { seat: 1, hand: 1 }, dealer: { cards: ['6H0'], holeDown: true } }, mineSplit);
+  const { page, context } = await openPage('/casino/blackjack', [t], noCasino);
+  await page.waitForTimeout(400);
+  const hands = (n) => page.locator(`.bjt-seat:nth-child(${n}) .bjt-hands`);
+  assert.equal(await hands(2).getAttribute('aria-label'), 'Hand 1: 8 of clubs, 3 of diamonds, 10 of spades, 21; Hand 2: 8 of diamonds, 9 of spades, 17');
+  assert.equal(await hands(2).locator('.bjt-mini-hand').count(), 2, 'a split: two hands side by side');
+  assert.equal(await hands(2).locator('.bjt-mini-hand.active .bjt-mini-total').innerText(), '17', 'the hand being played is marked');
+  assert.equal(await hands(4).getAttribute('aria-label'), '5 of spades, 2 of clubs, 7', "another player's seat shows their cards");
+  assert.equal(await hands(4).locator('.mcard').count(), 2);
+  const boxes = await hands(2).locator('.bjt-mini-hand').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().left));
+  assert.ok(boxes[1] > boxes[0], 'hand 2 to the right of hand 1');
+  assert.equal(await page.locator('.bjt-dealer .pcard.back').count(), 1, 'the dealer hole card is a card back');
+  assert.equal(await page.locator('.bjt-seat .bjt-hands [aria-label*="hole"], .bjt-seat .pcard.back').count(), 0);
+  for (const w of [320, 375, 414]) {
+    await page.setViewportSize({ width: w, height: 760 });
+    await page.waitForTimeout(150);
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    assert.ok(over <= 0, `${w} px: no sideways scroll (${over})`);
+    const out = await page.locator('.bjt-hands').evaluateAll((els) => {
+      const felt = document.querySelector('.bjt-felt').getBoundingClientRect();
+      return els.filter((e) => { const r = e.getBoundingClientRect(); return r.left < felt.left - 1 || r.right > felt.right + 1; }).length;
+    });
+    assert.equal(out, 0, `${w} px: every seat's cards stay on the felt`);
+  }
+  await context.close();
+});
+
+await check('blackjack: a seat circle only shows cards once they are face up (dealt one by one)', async () => {
+  const at = now();
+  const t = bjTbl({ turn: { seat: 3, hand: 0 }, lastDeal: { at, cards: [{ to: '1-0', i: 0, t: 0 }, { to: '3-0', i: 0, t: 1000 }, { to: 'd', i: 0, t: 2000 }, { to: '1-0', i: 1, t: 3000 }, { to: '3-0', i: 1, t: 4000 }] }, dealer: { cards: ['KH0'], holeDown: true } }, { hands: [bjHand(['9C0', '7D0'], { status: 'playing' })] });
+  const { page, context } = await openPage('/casino/blackjack', [t], noCasino);
+  const count = (n) => page.locator(`.bjt-seat:nth-child(${n}) .mcard`).count();
+  const early = [await count(2), await count(4)];
+  assert.ok(early[0] <= 1 && early[1] <= 1, `before the second round of cards: ${early}`);
+  await page.waitForTimeout(Math.max(0, at + 4300 - now()));
+  assert.deepEqual([await count(2), await count(4)], [2, 2]);
+  await context.close();
+});
 
 await check('blackjack: a total pill beside every hand and the dealer (17, soft 17, BJ, bust)', async () => {
   const { page, context } = await openPage('/casino/blackjack', [bjTbl({}, { hands: [bjHand(['AH0', '6C0'])] })], noCasino);

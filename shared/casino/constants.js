@@ -8,13 +8,18 @@ export const CASINO_MIN_BET_DOLLARS = 1;
 export const CASINO_SEATS = 5;
 
 // The chips on every casino game and on Slots. A chip is a denomination, not a limit: a spot or a bet can hold any
-// whole-dollar amount built from them.
-export const CHIP_VALUES = [1, 2, 5, 10, 25, 100];
+// whole-dollar amount built from them. 0.23.0 added $1,000 and $10,000.
+export const CHIP_VALUES = [1, 2, 5, 10, 25, 100, 1000, 10000];
+
+// "$1", "$1,000", "$10,000": a chip's name in text and aria-labels.
+export function chipName(dollars) {
+  return `$${Number(dollars).toLocaleString('en-US')}`;
+}
 
 export const BET_CEILING_CENTS = MAX_WALLET_CHANGE_CENTS;
 export const BET_CEILING_MESSAGE = 'That bet is larger than the table allows.';
 export const BET_AMOUNT_MESSAGE = 'Bets are whole dollars, at least $1.';
-export const CHIP_MESSAGE = `A chip is ${CHIP_VALUES.map((d) => `$${d}`).join(', ').replace(/, (\$\d+)$/, ' or $1')}.`;
+export const CHIP_MESSAGE = `A chip is ${CHIP_VALUES.slice(0, -1).map(chipName).join(', ')} or ${chipName(CHIP_VALUES.at(-1))}.`;
 export const BET_HELP_TEXT = 'Minimum $1. Bet as much as your wallet holds.';
 
 // Table timers. Deadlines are server milliseconds; phones count down against the server's clock.

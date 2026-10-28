@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChipRack } from '../../components/casino/Chips.jsx';
 import BaccaratFelt, { PrintedSpot, SPOT_ORDER, watcherLabel } from '../../components/casino/BaccaratFelt.jsx';
+import MaxBet from '../../components/casino/MaxBet.jsx';
 import { Link } from 'react-router-dom';
 import BaccaratScoreboard from '../../components/casino/BaccaratScoreboard.jsx';
 import PlayingCard, { PeelCard } from '../../components/casino/PlayingCard.jsx';
@@ -117,6 +118,11 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, slot, call, 
   const chips = useChipBetting({ spots: serverBets, roundKey: roundId, validate, send: sendChips, onPending, enabled: canBet });
   const myBets = { ...NO_BETS, ...chips.spots };
   const myTotal = totalBetCents(myBets);
+  // Max (0.23.0): the spot this seat last tapped (Player until one is tapped), and the wallet left for this seat (the balance
+  // minus every chip not confirmed yet, on any of my seats).
+  const [maxSpot, setMaxSpot] = useState('player');
+  const { displayCents, heldCents, pendingCents } = useWalletDisplay();
+  const walletLeft = heldCents === null ? displayCents(balanceCents) : balanceCents - pendingCents;
 
   const dealtKey = `${serverBets.player || 0},${serverBets.banker || 0},${serverBets.tie || 0}`;
   useEffect(() => {
@@ -197,7 +203,10 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, slot, call, 
                   cents={stake}
                   won={winner === spot}
                   disabled={!canBet}
-                  onClick={() => chips.place(spot, chip * 100)}
+                  onClick={() => {
+                    setMaxSpot(spot);
+                    chips.place(spot, chip * 100);
+                  }}
                   label={`Seat ${index + 1}: ${SPOT_LABELS[spot]}, pays ${BACCARAT_ODDS[spot].label}, your bet ${formatMoney(stake)}. Tap to add a $${chip} chip.`}
                   fx={resultKnown ? { show: true, netCents: spotReturnCents(spot, stake, winner) - stake, stakeCents: stake, roundKey: `${roundId}-${index}-${spot}` } : null}
                 />
@@ -215,14 +224,26 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, slot, call, 
         canUndo={chips.canUndo}
         disabled={!canBet}
         rebet={
-          showRebet ? (
+          canBet ? (
             <div className="rebet-row">
-              <button type="button" className="rebet-btn" onClick={() => rebet(1)}>
-                Rebet {formatMoney(lastTotal)}
-              </button>
-              <button type="button" className="rebet-btn" onClick={() => rebet(2)}>
-                Rebet ×2 {formatMoney(lastTotal * 2)}
-              </button>
+              {showRebet ? (
+                <>
+                  <button type="button" className="rebet-btn" onClick={() => rebet(1)}>
+                    Rebet {formatMoney(lastTotal)}
+                  </button>
+                  <button type="button" className="rebet-btn" onClick={() => rebet(2)}>
+                    Rebet ×2 {formatMoney(lastTotal * 2)}
+                  </button>
+                </>
+              ) : null}
+              <MaxBet
+                spotName={SPOT_LABELS[maxSpot]}
+                currentCents={myBets[maxSpot]}
+                availableCents={walletLeft}
+                onPlace={(cents) => chips.place(maxSpot, cents)}
+                onRefuse={chips.setError}
+                disabled={!canBet}
+              />
             </div>
           ) : null
         }

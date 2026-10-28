@@ -369,7 +369,7 @@ test('slip rules mirror the server: named message in a parlay; singles keep one 
 
 // ---------- 0.16.0: no maximum stake, only the sanity ceiling ----------
 
-test('sportsbook: no maximum stake — $50,000 accepted when the wallet covers it; above $1,000,000 refused; a payout past safe integers refused', async () => {
+test('sportsbook: no maximum stake — $50,000 accepted when the wallet covers it; above $10,000,000 refused (0.23.0); a payout past safe integers refused', async () => {
   fake.write('users/mike', { ...fake.get('users/mike'), balanceCents: 6_000_000 });
   const big = await placeBets(caller('mike'), { mode: 'singles', clientRequestId: rid(), legs: [{ ...propLeg(G4HR), stakeCents: 5_000_000 }] }, { now: NOW, fetchImpl, ctx: pctx() });
   assert.equal(big.bets[0].stakeCents, 5_000_000);
@@ -380,26 +380,31 @@ test('sportsbook: no maximum stake — $50,000 accepted when the wallet covers i
     (e) => e.code === 'INSUFFICIENT_BALANCE',
   );
   assert.equal(fake.get('users/mike').balanceCents, 1_000_000);
-  // The ceiling, on a single and on a parlay stake, before any pricing request.
-  fake.write('users/mike', { ...fake.get('users/mike'), balanceCents: 500_000_000 });
+  // The ceiling (0.23.0: $10,000,000 for sportsbook bets and parlays), on a single and on a parlay stake, before any pricing request.
+  const LIMIT = 'That bet is over the sportsbook limit of $10,000,000 per bet.';
+  fake.write('users/mike', { ...fake.get('users/mike'), balanceCents: 5_000_000_000 });
   const calls = world.calls.length;
   for (const body of [
-    { mode: 'singles', clientRequestId: rid(), legs: [{ ...propLeg(G4HR), stakeCents: 100_000_001 }] },
-    { mode: 'parlay', clientRequestId: rid(), stakeCents: 100_000_001, legs: [propLeg(G4HR), propLeg(CAM)] },
+    { mode: 'singles', clientRequestId: rid(), legs: [{ ...propLeg(G4HR), stakeCents: 1_000_000_001 }] },
+    { mode: 'parlay', clientRequestId: rid(), stakeCents: 1_000_000_001, legs: [propLeg(G4HR), propLeg(CAM)] },
   ]) {
-    await assert.rejects(placeBets(caller('mike'), body, { now: NOW, fetchImpl, ctx: pctx() }), (e) => e.code === 'BAD_SLIP' && e.message === 'That bet is larger than the table allows.');
+    await assert.rejects(placeBets(caller('mike'), body, { now: NOW, fetchImpl, ctx: pctx() }), (e) => e.code === 'BAD_SLIP' && e.message === LIMIT);
   }
   assert.equal(world.calls.length, calls, 'refused before pricing');
-  assert.equal(fake.get('users/mike').balanceCents, 500_000_000);
-  // Exactly $1,000,000 is allowed.
-  const max = await placeBets(caller('mike'), { mode: 'singles', clientRequestId: rid(), legs: [{ ...propLeg(G4HR), stakeCents: 100_000_000 }] }, { now: NOW, fetchImpl, ctx: pctx() });
-  assert.equal(max.bets[0].stakeCents, 100_000_000);
+  assert.equal(fake.get('users/mike').balanceCents, 5_000_000_000);
+  // $5,000,000 (over the old $1,000,000 ceiling) and exactly $10,000,000 are allowed.
+  const five = await placeBets(caller('mike'), { mode: 'singles', clientRequestId: rid(), legs: [{ ...propLeg(G4HR), stakeCents: 500_000_000 }] }, { now: NOW, fetchImpl, ctx: pctx() });
+  assert.equal(five.bets[0].stakeCents, 500_000_000);
+  const max = await placeBets(caller('mike'), { mode: 'singles', clientRequestId: rid(), legs: [{ ...propLeg(G4HR), stakeCents: 1_000_000_000 }] }, { now: NOW, fetchImpl, ctx: pctx() });
+  assert.equal(max.bets[0].stakeCents, 1_000_000_000);
+  assert.equal(fake.get('users/mike').balanceCents, 5_000_000_000 - 1_500_000_000);
   // The slip mirrors it; a payout must stay an exact integer number of cents.
-  assert.deepEqual(rules.slipProblems({ mode: 'singles', legs: [{ gameId: 'g', marketType: 'moneyline', selection: 'home', stakeCents: 100_000_001 }] }), ['That bet is larger than the table allows.']);
-  assert.deepEqual(rules.slipProblems({ mode: 'singles', legs: [{ gameId: 'g', marketType: 'moneyline', selection: 'home', stakeCents: 100_000_000 }] }), []);
-  assert.equal(rules.payoutTooLarge(rules.payoutCents(100_000_000, 34 ** 10)), true, 'a $1,000,000 ten-leg longshot parlay');
-  assert.equal(rules.payoutTooLarge(rules.payoutCents(100_000_000, 1.909)), false);
-  assert.equal('MAX_STAKE_CENTS' in rules && rules.MAX_STAKE_CENTS, 100_000_000, 'the ceiling, not a game limit');
+  assert.deepEqual(rules.slipProblems({ mode: 'singles', legs: [{ gameId: 'g', marketType: 'moneyline', selection: 'home', stakeCents: 1_000_000_001 }] }), [LIMIT]);
+  assert.deepEqual(rules.slipProblems({ mode: 'parlay', stakeCents: 1_000_000_001, legs: [{ gameId: 'g', marketType: 'moneyline', selection: 'home' }, { gameId: 'h', marketType: 'moneyline', selection: 'home' }] }), [LIMIT]);
+  assert.deepEqual(rules.slipProblems({ mode: 'singles', legs: [{ gameId: 'g', marketType: 'moneyline', selection: 'home', stakeCents: 1_000_000_000 }] }), []);
+  assert.equal(rules.payoutTooLarge(rules.payoutCents(1_000_000_000, 34 ** 10)), true, 'a $10,000,000 ten-leg longshot parlay');
+  assert.equal(rules.payoutTooLarge(rules.payoutCents(1_000_000_000, 1.909)), false);
+  assert.equal(rules.MAX_STAKE_CENTS, 1_000_000_000, 'the sportsbook ceiling, not a game limit');
 });
 
 // ---------- grading and settlement ----------

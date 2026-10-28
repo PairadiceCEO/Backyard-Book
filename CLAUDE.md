@@ -19,7 +19,8 @@ Vercel deploys the live site from `main`.
     Challenges)
   - the production build (`npx vite build` with dummy `VITE_FIREBASE_*` env vars)
   - lint (`npx eslint src`)
-  - the phone check at 320 / 375 / 414 px (`tools/phone-check/`: `shoot.mjs`, `interact.mjs`, `dealcheck.mjs`)
+  - the phone check at 320 / 375 / 414 px (`tools/phone-check/`: `shoot.mjs`, `interact.mjs`, `dealcheck.mjs`, and since 0.23.0
+    `tapcheck.mjs`: 10 quick chip taps on every game must all count)
 - If something blocks a phase: push to `wip`, record it in PROGRESS.md, tell Will. Never push unfinished
   work to `main`.
 - When a phase is merged, mark it complete in PROGRESS.md and tell Will it's ready to test.
@@ -65,8 +66,10 @@ Vercel deploys the live site from `main`.
 - Crapless 2/12 Odds pay 5:1.
 - Payouts round down to the cent.
 - No maximum bets anywhere (sportsbook, casino, slots, Battles): minimum $1, the wallet balance is the only cap, plus a
-  $1,000,000 per-bet sanity ceiling. Craps Odds stay capped at 2× the line bet (a game rule).
-- Chips: $1, $2, $5, $10, $25 and $100 on every game.
+  per-bet sanity ceiling: $10,000,000 for sportsbook bets and parlays (SPORTSBOOK_BET_CEILING_CENTS, 0.23.0), $1,000,000 for
+  the casino, slots and Battles. Craps Odds stay capped at 2× the line bet (a game rule).
+- Chips: $1, $2, $5, $10, $25, $100, $1,000 and $10,000 on every game (CHIP_VALUES).
+- Craps/Crapless Place bets go up any time (0.23.0) but are OFF on a come-out roll (never won or lost by it).
 - Cash out: pre-game = stake × 0.90; live = potential payout × Kalshi bid(s) × 0.90; crypto = potential payout × Kalshi
   bid × 0.90 (no cash out in the last 60 s). Never on a bet containing a custom-game or Challenge leg; Battles have no
   cash out.

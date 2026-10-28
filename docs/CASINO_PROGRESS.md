@@ -28,7 +28,7 @@ come from Will's live testing.
 - Bets $1–$10, whole dollars; each spot holds at most $10 (Odds up to $10). Every bet carries a requestId.
 - Pass / Don't Pass (Craps only): placed before a come-out; taken down only before the come-out (never once a Point is set).
 - Odds (Pass only): after a Point is set; true odds 4/10 2:1, 5/9 3:2, 6/8 6:5; Crapless adds 2/12 5:1 (Will confirmed 5:1), 3/11 3:1.
-- Place: point phase only; 4/10 9:5, 5/9 7:5, 6/8 7:6; Crapless adds 2/12 9:2, 3/11 11:4. A win pays and stays up; off on come-outs; loses on a seven-out.
+- Place: point phase only (0.23.0: any time, OFF on come-outs — see below); 4/10 9:5, 5/9 7:5, 6/8 7:6; Crapless adds 2/12 9:2, 3/11 11:4. A win pays and stays up; off on come-outs; loses on a seven-out.
 - Field: any time, one roll: 3, 4, 9, 10, 11 pay 1:1; 2 and 12 pay 2:1; 5–8 lose.
 - Craps: come-out 7/11 win, 2/3/12 lose; Don't Pass wins 2/3, pushes 12. Crapless: come-out 7 wins, every other number is a point.
 - Roll: shooter only, needs a line bet, carries `rollSeq`; refused only if a roll already happened (another seat's bet in between never blocks it).
@@ -138,3 +138,16 @@ casino top bar and the lobby. Hooks: useChipBetting.place (chip), PlayingCard sl
 
 ## 0.21.0 (2026-10-27): no casino change
 AI agent players are a sportsbook feature (see PROGRESS.md 0.21.0). The casino is unchanged; agents never play it.
+
+## 0.23.0 (2026-10-28): Place before the point, every tap counts, $1,000 / $10,000 chips, Max, seat cards
+- Craps/Crapless: placeBlocker allows Place on a come-out; settleRoll already left Place bets alone on every come-out roll (now
+  tested for all 36 dice). CrapsFelt shows the black OFF puck on every Place box during a come-out.
+- useChipBetting keeps taps still waiting in the 300 ms batch when the round key (craps rollSeq) changes (only an Undo / Clear
+  still waiting is dropped); the craps felt takes chips while the dice tumble (no more pointer-events: none), and only between
+  the shooter's Roll tap and the reply says "The dice are on their way…". Every control: touch-action: manipulation (index.css).
+  tools/phone-check/tapcheck.mjs (real engines behind the real client) checks 10 quick taps on every game.
+- CHIP_VALUES gains 1000 and 10000 (chipName for "$1,000"); .fc-1000 / .fc-10000 in chips.css; racks 4 × 2 on phones; craps rail
+  182 px sideways (3 × 3 at 568 × 320, 236 px on computers).
+- MaxBet.jsx + shared/casino/maxBet.js (Blackjack, Baccarat); through chips.place; capped at the $1,000,000 casino ceiling.
+- BlackjackFelt handsFor → mini cards above every seat circle with total pills (split hands side by side).
+- Tests: test/casino/casino8.test.mjs, test/chips.test.js; interact.mjs Max and seat-card checks; shoot.mjs bj-/bac-max-confirm.

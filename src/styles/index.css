@@ -33,6 +33,23 @@ a {
   color: var(--accent);
 }
 
+/* 0.23.0 "every chip tap counts": on iPhones a second quick tap on a control without this is taken as the start of a
+   double-tap zoom and its click never fires, so 10 quick taps on a bet spot left fewer chips (Blackjack, Baccarat and the
+   Slots bet had no touch-action; the craps felt already did). manipulation keeps pan and pinch-zoom and makes every tap a
+   click. Applies to every control in the app; tapcheck.mjs checks the casino ones. */
+button,
+a,
+label,
+summary,
+input,
+select,
+textarea,
+[role='button'],
+[role='radio'],
+[role='tab'] {
+  touch-action: manipulation;
+}
+
 h1,
 h2,
 h3 {
@@ -3057,11 +3074,18 @@ body.no-scroll {
 
 .chip-choices {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.3rem;
 }
 
-/* Six chips in one row: the token shrinks to fit the cell on narrow phones (the button stays ≥ 44 px tall). */
+/* 0.23.0: eight chips ($1 … $10,000): two rows of four on phones (every button ≥ 44 px), one row of eight on wide screens. */
+@media (min-width: 600px) {
+  .chip-choices {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
+
+/* The token shrinks to fit the cell on narrow phones (the button stays ≥ 44 px tall). */
 .chip-pick {
   min-height: 52px;
   border-radius: 12px;

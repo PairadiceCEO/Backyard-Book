@@ -2,6 +2,9 @@
 // each other go to the server as one request (one at a time, never overlapping). If the server
 // refuses, those chips come back off and the reason is shown. Undo takes back the last chip placed this
 // round; Clear takes back every chip placed this round.
+// Every tap counts (0.23.0): there is no limit on taps and none is ever dropped without a reason on screen; a tap the
+// page can't take right now (a refusal by validate) shows why. tools/phone-check/tapcheck.mjs taps 10 quick chips on
+// every game against the real engines.
 //
 //   spots      { [spotKey]: cents } as the server has them (from the table doc)
 //   roundKey   changes when a new round starts: the Undo history starts over
@@ -60,14 +63,26 @@ export function useChipBetting({ spots, roundKey, validate, send, onPending, ena
     setHistory(next);
   };
 
-  // A new round: the Undo history starts over (anything still queued is dropped with it).
+  // A new round: the Undo history starts over, except for chips tapped but not sent yet. 0.23.0: those used to be dropped
+  // here, so at craps a roll landing in the middle of quick taps (another player's roll, or the listener catching up) lost
+  // every tap still waiting in the 300 ms batch. Now they still go to the server (it is the judge; a bet the new round
+  // doesn't allow comes back off with the reason), and Undo can still take them back.
+  // An Undo / Clear still waiting belonged to the round that just ended, so it is dropped (its chips were decided by it).
   useEffect(() => {
-    clearTimeout(timerRef.current);
-    queuedRef.current = [];
-    historyRef.current = [];
-    setQueued([]);
-    setHistory([]);
+    const waiting = queuedRef.current.filter((op) => op.cents > 0);
+    if (waiting.length !== queuedRef.current.length) {
+      queuedRef.current = waiting;
+      setQueued(waiting);
+    }
+    historyRef.current = historyRef.current.filter((h) => waiting.some((op) => op.id === h.id));
+    setHistory(historyRef.current);
     setError('');
+    // Nothing left to send: anyone waiting on flushNow (Confirm / Roll) can go ahead.
+    if (!waiting.length && !inFlightRef.current.length) {
+      const waiters = waitersRef.current;
+      waitersRef.current = [];
+      waiters.forEach((resolve) => resolve());
+    }
   }, [roundKey]);
 
   useEffect(() => () => clearTimeout(timerRef.current), []);

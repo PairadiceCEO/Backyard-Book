@@ -240,6 +240,108 @@ button.bjt-circle:disabled {
   font-weight: 700;
 }
 
+/* 0.23.0: every seat's cards as small overlapping faces just above its circle; a split's hands side by side; a total pill on
+   each. Sized from the felt's width (container units), so they fit the 320 px felt and grow on a computer. */
+.bjt-felt {
+  container-type: inline-size;
+  --mc-w: clamp(15px, 6.4cqw, 30px);
+  --mc-step: calc(var(--mc-w) * 0.46); /* how much of each card under the next one shows: its rank and suit */
+}
+
+.bjt-hands {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 1px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.bjt-mini-hand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 2px;
+  border-radius: 5px;
+}
+
+.bjt-mini-hand.active {
+  box-shadow: 0 0 0 2px var(--gold, #f5c451);
+  background: rgba(245, 196, 81, 0.15);
+}
+
+.bjt-mini-cards {
+  display: flex;
+}
+
+.mcard {
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--mc-w);
+  height: calc(var(--mc-w) * 1.4);
+  border-radius: 3px;
+  background: #fbfbf8;
+  border: 1px solid #b9b9b2;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  color: #1b1b1b;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 1px 0 0 2px;
+  font-family: var(--felt-font, 'Oswald', 'Arial Narrow', Arial, sans-serif);
+  font-weight: 700;
+  line-height: 0.95;
+}
+
+.mcard + .mcard {
+  margin-left: calc(var(--mc-step) - var(--mc-w));
+}
+
+.mcard.red {
+  color: #c62828;
+}
+
+.mcard-rank {
+  font-size: calc(var(--mc-w) * 0.5);
+  letter-spacing: -0.06em;
+}
+
+.mcard.ten .mcard-rank {
+  font-size: calc(var(--mc-w) * 0.38); /* "10" fits the part of the card that shows */
+  letter-spacing: -0.12em;
+}
+
+.mcard-suit {
+  font-size: calc(var(--mc-w) * 0.42);
+}
+
+.bjt-mini-total {
+  margin-top: -6px;
+  min-width: 1.5rem;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #fff;
+  font-family: var(--felt-font, 'Oswald', 'Arial Narrow', Arial, sans-serif);
+  font-weight: 600;
+  font-size: clamp(9px, 3.2cqw, 13px);
+  line-height: 1.35;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  position: relative;
+  z-index: 1;
+}
+
+.bjt-mini-total.bust {
+  background: rgba(150, 30, 30, 0.9);
+  border-color: #ff9a9a;
+}
+
 /* The dealer's hand sits on the felt without a box */
 .bjt-dealer .bj-hand {
   border: 0;
@@ -403,6 +505,42 @@ button.bjt-circle:disabled {
 .rebet-btn:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* ---------- Max bet (0.23.0) ---------- */
+.max-btn {
+  margin-left: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.max-confirm {
+  flex: 1 1 100%;
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--gold, #f5c451);
+  border-radius: 12px;
+  background: rgba(245, 196, 81, 0.1);
+}
+
+.max-question {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.max-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 0.4rem;
+}
+
+.max-actions .btn {
+  min-height: 44px;
+  min-width: 0;
 }
 
 /* ---------- Baccarat ---------- */

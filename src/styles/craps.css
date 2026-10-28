@@ -47,7 +47,7 @@ body.craps-stage-on .craps-stage .offline-banner {
   --field-h: 48px;
   --dp-h: 44px;
   --pass-h: 44px;
-  --rail-w: 138px;
+  --rail-w: 182px; /* 0.23.0: four chips across (eight chips, 4 × 2); was 138px for 3 × 2 */
   --dock-h: 164px;
   position: fixed;
   inset: 0;
@@ -269,8 +269,7 @@ body.craps-stage-on .craps-stage .offline-banner {
 }
 
 .cs-felt-wrap.dim {
-  opacity: 0.6;
-  pointer-events: none;
+  opacity: 0.6; /* 0.23.0: still tappable while the dice tumble (it used to swallow taps with pointer-events: none) */
 }
 
 .craps-felt {
@@ -442,6 +441,14 @@ body.craps-stage-on .craps-stage .offline-banner {
   letter-spacing: 0;
   line-height: 1;
   pointer-events: none;
+}
+
+/* 0.23.0: on a come-out roll every Place box carries the black OFF puck (Place bets go up any time, off on the come-out). */
+.fn-puck.off {
+  background: #151515;
+  color: #f4f4ef;
+  border-color: #9a9a92;
+  font-size: 0.5rem;
 }
 
 .fn.is-point .fn-main {
@@ -749,7 +756,7 @@ body.craps-stage-on .craps-stage .offline-banner {
 
 .cs-rack {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr)); /* 0.23.0: eight chips ($1 … $10,000) in one row upright */
 }
 
 .rack-chip {
@@ -1213,7 +1220,7 @@ body.craps-stage-on .craps-stage .offline-banner {
   }
 
   .cs-rack {
-    grid-template-columns: repeat(3, 44px);
+    grid-template-columns: repeat(4, 44px); /* 0.23.0: eight chips, 4 × 2 */
     gap: 1px;
     justify-content: center;
   }
@@ -1333,7 +1340,7 @@ body.craps-stage-on .craps-stage .offline-banner {
   @media (min-height: 501px) {
     .craps-stage {
       --scale: 1.2;
-      --rail-w: 190px;
+      --rail-w: 236px; /* 0.23.0: four 52 px chips across (was 190px for three) */
       --hw: 150px;
       --sw: 56px;
       --odds-w: 130px;
@@ -1365,7 +1372,7 @@ body.craps-stage-on .craps-stage .offline-banner {
     }
 
     .cs-rack {
-      grid-template-columns: repeat(3, 52px);
+      grid-template-columns: repeat(4, 52px);
       gap: 4px;
     }
 
@@ -1392,5 +1399,63 @@ body.craps-stage-on .craps-stage .offline-banner {
     .craps-stage .die.red {
       --hd: 24px;
     }
+  }
+}
+
+/* 0.23.0: the narrowest sideways phones (568 × 320) keep the 138 px rail, so the number boxes stay 44 px wide: the eight chips
+   go 3 across in three rows there instead of 4 × 2, each 44 px wide (the rail's inner width is exactly 3 × 44 + 2) and 40 px
+   tall, with the wallet and message lines set tight so Roll keeps 44 px. While the offline banner is showing, Roll gives up
+   the banner's height instead of falling off the screen (nothing can be rolled offline anyway). */
+@media (orientation: landscape) and (max-width: 639px) {
+  .craps-stage {
+    --rail-w: 138px;
+  }
+
+  .cs-rail {
+    gap: 1px;
+  }
+
+  .cs-rack {
+    grid-template-columns: repeat(3, 44px);
+    gap: 1px;
+  }
+
+  .rack-chip {
+    width: 44px;
+    height: 40px;
+  }
+
+  .rack-chip .fchip {
+    --chip-size: 39px;
+  }
+
+  .cs-tools .btn {
+    min-height: 40px;
+  }
+
+  .cs-money {
+    font-size: 0.64rem;
+    line-height: 1;
+  }
+
+  .cs-msg {
+    min-height: 2em;
+    font-size: 0.64rem;
+    line-height: 1;
+  }
+
+  .craps-stage:has(.offline-banner) .cs-roll,
+  .craps-stage:has(.offline-banner) .cs-roll .craps-roll-btn,
+  .craps-stage:has(.offline-banner) .cs-roll .craps-sit-btn {
+    min-height: 28px;
+  }
+}
+
+/* 0.23.0: the narrowest upright phones (320 px): eight chips in one row would be 38 px wide, so they go two rows of four
+   (this size may scroll below 600 px tall anyway). */
+@media (orientation: portrait) and (max-width: 359px) {
+  .cs-rack {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    row-gap: 2px;
   }
 }

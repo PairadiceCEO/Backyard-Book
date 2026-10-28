@@ -14,6 +14,7 @@ import { ChipRack, ChipStack } from '../../components/casino/Chips.jsx';
 import { Link } from 'react-router-dom';
 import PlayingCard from '../../components/casino/PlayingCard.jsx';
 import BlackjackFelt from '../../components/casino/BlackjackFelt.jsx';
+import MaxBet from '../../components/casino/MaxBet.jsx';
 import { ErrorState, LoadingState, friendlyError } from '../../components/StatusViews.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useWalletDisplay } from '../../context/WalletDisplayContext.jsx';
@@ -166,6 +167,9 @@ function SeatPanel({
   );
   const chips = useChipBetting({ spots: serverSpots, roundKey: roundId, validate, send: sendChips, onPending, enabled: canBet });
   const myBetCents = chips.spots.bet ?? 0;
+  // Max (0.23.0): the wallet left for this seat = the balance minus every chip not confirmed yet, on any of my seats.
+  const { displayCents, heldCents, pendingCents } = useWalletDisplay();
+  const walletLeft = heldCents === null ? displayCents(balanceCents) : balanceCents - pendingCents;
 
   // Cards are dealt to this seat: remember its bet (the server's seat bet, not a doubled or split hand's).
   const dealtBet = hands.length ? seat.betCents || 0 : 0;
@@ -261,14 +265,26 @@ function SeatPanel({
             canUndo={chips.canUndo}
             disabled={!canBet}
             rebet={
-              showRebet ? (
+              canBet ? (
                 <div className="rebet-row">
-                  <button type="button" className="rebet-btn" onClick={() => rebet(1)}>
-                    Rebet {formatMoney(lastBet)}
-                  </button>
-                  <button type="button" className="rebet-btn" onClick={() => rebet(2)}>
-                    Rebet ×2 {formatMoney(lastBet * 2)}
-                  </button>
+                  {showRebet ? (
+                    <>
+                      <button type="button" className="rebet-btn" onClick={() => rebet(1)}>
+                        Rebet {formatMoney(lastBet)}
+                      </button>
+                      <button type="button" className="rebet-btn" onClick={() => rebet(2)}>
+                        Rebet ×2 {formatMoney(lastBet * 2)}
+                      </button>
+                    </>
+                  ) : null}
+                  <MaxBet
+                    spotName={`seat ${index + 1}`}
+                    currentCents={myBetCents}
+                    availableCents={walletLeft}
+                    onPlace={(cents) => chips.place('bet', cents)}
+                    onRefuse={chips.setError}
+                    disabled={!canBet}
+                  />
                 </div>
               ) : null
             }
@@ -497,13 +513,24 @@ export default function BlackjackPage() {
       const cents = seat.uid === myUid ? localBets[i] ?? seat.betCents : seat.betCents;
       return { text: cents ? `${formatMoney(cents)}${seat.ready ? ' ✓' : ''}` : '—', tone: seat.ready ? 'ready' : '' };
     }
-    const labels = seat.hands.map((h, j) => {
+    // 0.23.0: the cards and their totals sit on the circle (handsFor); the line under it shows what the seat has bet.
+    const bet = seat.hands.reduce((sum, h) => sum + (h.betCents || 0), 0);
+    return { text: bet ? formatMoney(bet) : '', tone: turn?.seat === i && phase === 'playing' ? 'active' : '' };
+  }
+
+  // Every seat's hands for its circle (mine and everyone else's): only the cards face up right now, each with its total.
+  function handsFor(seat, i) {
+    return (seat.hands ?? []).map((h, j) => {
       const visible = h.cards.slice(0, hiddenFrom(`${i}-${j}`, h.cards.length));
-      if (isBlackjack(visible, h.fromSplit)) return 'BJ';
-      const t = handValue(visible).total;
-      return t > 21 ? 'bust' : String(t);
+      const value = handValue(visible);
+      let total = '';
+      if (visible.length) {
+        if (isBlackjack(visible, h.fromSplit)) total = 'BJ';
+        else if (value.total > 21) total = `bust ${value.total}`;
+        else total = value.soft && value.total < 21 ? `soft ${value.total}` : String(value.total);
+      }
+      return { cards: visible, total, bust: value.total > 21, active: phase === 'playing' && turn?.seat === i && turn.hand === j && !revealing };
     });
-    return { text: labels.join(' · '), tone: turn?.seat === i && phase === 'playing' ? 'active' : '' };
   }
 
   // The chips drawn in a seat's circle: the bet (mine: the chips as I put them down, before the server answers), or the
@@ -562,6 +589,7 @@ export default function BlackjackPage() {
         onSit={sit}
         detail={seatDetail}
         betFor={circleBet}
+        handsFor={handsFor}
         results={results}
         roundKey={table?.roundId ?? 'r'}
         dealer={<HandView label="Dealer" cards={dealer.cards} hiddenFrom={dealerHidden} holeDown={dealer.holeDown} fromSplit={false} handKey="d" dealAtFor={dealAtFor} />}
