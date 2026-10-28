@@ -34,7 +34,8 @@ sportsbook per-bet limit $10,000,000, Blackjack seats show their cards").
       felt with container units) just above every circle, a split's hands side by side, a total pill on each, the hand being
       played outlined in gold; every seat, not only mine. The line under a circle now shows the seat's bet while cards are out.
       The dealer's hole card is untouched (a card back until the server turns it).
-- [ ] 7 Version 0.23.0, docs, CLAUDE.md, all checks, merge
+- [x] 7 Version 0.23.0 (package.json + lockfile), README, docs/CASINO_PROGRESS.md, tools/phone-check/README.md, CLAUDE.md (ceilings,
+      chips, Place rule, tapcheck in the phone check), all checks (below), merge wip → main.
 Decisions:
 - **Lost taps, cause 1 (iPhone, every game but the craps felt):** the bet spots, chips, Undo / Clear and the Slots bet had no
   `touch-action`, so iOS Safari takes a second quick tap as the start of a double-tap zoom and never fires its click. One rule in
@@ -46,6 +47,16 @@ Decisions:
   a roll after tap 4 left $10. Now waiting taps survive a new round (an Undo / Clear still waiting is dropped: its round is
   over), and the felt takes chips while the dice tumble (the roll is already in the table: they are bets on the next roll).
   Only between the shooter's own Roll tap and its reply are chips held back, with a message ("The dice are on their way…").
+- **Rack fit, found by the phone check (second session, 02:26):** eight chips in one row made the craps rack chips 38 px wide at
+  320 × 568 upright, and at 568 × 320 sideways the 3 × 3 rack was 42 × 38 and the offline banner pushed Roll off the screen.
+  Now: upright under 360 px wide the craps rack is two rows of four (76 px cells, 48 px chips; that size may scroll below 600 px
+  tall anyway); 568 × 320 keeps the 138 px rail (a 4 × 2 rack there shrinks the craps Place boxes to 38 px) with three 44 × 40
+  chips across, tighter wallet / message lines, Roll 44 px, and Roll shrinks to 28 px only while the offline banner shows.
+  interact.mjs now expects eight chips of 44+ px and a Place 6 chip on the come-out (OFF puck on every Place box); dealcheck reads
+  the seat totals from the total pills beside the small cards. useChipBetting resolves flushNow waiters when a round change
+  leaves nothing to send.
+- Lint: the repo has no eslint config; as before, a scratch flat config outside the repo (@eslint/js + react + react-hooks
+  recommended, react/no-unescaped-entities off: it only flags apostrophes in text) over src + shared.
 - No refusal, batching or disabled-while-sending loss was found in the client: with the real engines all five games end at
   exactly $50 with replies of 0 and 1,500 ms, 40-180 ms between taps, listener delay 0-2,500 ms.
 
@@ -956,7 +967,8 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.17.2 is merged. 0.17.1 (Slots chat removal, clearer chat errors) was never started here; it needs its spec re-sent.
+Nothing queued: 0.23.0 is merged; next steps come from Will's testing. (0.17.1, Slots chat removal / clearer chat errors, was
+never started here and needs its spec re-sent.)
 
 ## Open questions
 None open.

@@ -77,6 +77,12 @@ export function useChipBetting({ spots, roundKey, validate, send, onPending, ena
     historyRef.current = historyRef.current.filter((h) => waiting.some((op) => op.id === h.id));
     setHistory(historyRef.current);
     setError('');
+    // Nothing left to send: anyone waiting on flushNow (Confirm / Roll) can go ahead.
+    if (!waiting.length && !inFlightRef.current.length) {
+      const waiters = waitersRef.current;
+      waitersRef.current = [];
+      waiters.forEach((resolve) => resolve());
+    }
   }, [roundKey]);
 
   useEffect(() => () => clearTimeout(timerRef.current), []);

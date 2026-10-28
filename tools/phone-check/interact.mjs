@@ -457,8 +457,9 @@ for (const game of ['craps', 'crapless']) {
       }
       assert.deepEqual(m.small, [], `${tag}: felt buttons at least 44×44`);
       assert.deepEqual(m.outside, [], `${tag}: nothing outside the screen`);
-      const rackMin = m.orient === 'sideways' ? 44 : 48;
-      assert.ok(m.rackBoxes.length === 6 && m.rackBoxes.every((w) => w >= rackMin - 1), `${tag}: six rack chips of ${rackMin}+ px (${m.rackBoxes})`);
+      // 0.23.0: eight chips ($1 … $10,000); 320 px upright puts them in two rows of four, 568 × 320 three across.
+      const rackMin = 44;
+      assert.ok(m.rackBoxes.length === 8 && m.rackBoxes.every((w) => w >= rackMin - 1), `${tag}: eight rack chips of ${rackMin}+ px (${m.rackBoxes})`);
       report.push(`${tag.split(' ')[0]}${m.stageScroll ? ` scroll ${m.stageScroll}` : ''}`);
       await context.close();
     }
@@ -484,8 +485,15 @@ for (const game of ['craps', 'crapless']) {
       assert.equal(await chipText(spot(page, key).first()), '$5', `${key}: a $5 chip on the area`);
       assert.match((await spot(page, key).first().getAttribute('aria-label')) ?? '', /, \$5\.00 on it$/, `${key}: label says what is on it`);
     }
-    // Blocked on the come-out: Come, Place, Odds. Tapping says why and puts nothing there.
-    for (const key of ['come', 'odds', 'place:6']) {
+    // 0.23.0: a Place bet goes up on the come-out (OFF puck on every Place box, the bet takes the chip).
+    const placeKey = 'place:6';
+    assert.ok(!(await spot(page, placeKey).evaluate((el) => el.classList.contains('blocked'))), `${placeKey}: not blocked on the come-out`);
+    assert.equal(await page.locator('.craps-felt .fn-puck.off').count(), Object.keys(crapless ? { 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 8: 1, 9: 1, 10: 1, 11: 1, 12: 1 } : { 4: 1, 5: 1, 6: 1, 8: 1, 9: 1, 10: 1 }).length, 'OFF on every Place box');
+    await spot(page, placeKey).click();
+    assert.equal(await chipText(spot(page, placeKey)), '$5', `${placeKey}: a $5 chip on the come-out`);
+    comeOutSpots.push(placeKey);
+    // Blocked on the come-out: Come, Odds. Tapping says why and puts nothing there.
+    for (const key of ['come', 'odds']) {
       assert.ok(await spot(page, key).evaluate((el) => el.classList.contains('blocked')), `${key}: blocked look on the come-out`);
       await spot(page, key).click();
       assert.equal(await chipText(spot(page, key)), '', `${key}: no chip`);

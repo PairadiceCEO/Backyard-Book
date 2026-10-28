@@ -19,7 +19,8 @@ Vercel deploys the live site from `main`.
     Challenges)
   - the production build (`npx vite build` with dummy `VITE_FIREBASE_*` env vars)
   - lint (`npx eslint src`)
-  - the phone check at 320 / 375 / 414 px (`tools/phone-check/`: `shoot.mjs`, `interact.mjs`, `dealcheck.mjs`)
+  - the phone check at 320 / 375 / 414 px (`tools/phone-check/`: `shoot.mjs`, `interact.mjs`, `dealcheck.mjs`, and since 0.23.0
+    `tapcheck.mjs`: 10 quick chip taps on every game must all count)
 - If something blocks a phase: push to `wip`, record it in PROGRESS.md, tell Will. Never push unfinished
   work to `main`.
 - When a phase is merged, mark it complete in PROGRESS.md and tell Will it's ready to test.

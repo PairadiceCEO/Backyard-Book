@@ -68,12 +68,17 @@ await check('Blackjack: every seat gets its card in turn (seat totals: 1 â†’ 2 â
   const at = Date.now() + 1500;
   const { page, context } = await openPage('/casino/blackjack', bjDeal(at));
   const seatText = async () => (await page.locator('.bjt-seats').innerText()).replace(/\s+/g, ' ').trim();
+  // 0.23.0: each seat's total is the pill beside its small cards (0 = no cards yet).
+  const seatTotals = () => page.locator('.bjt-seats > li').evaluateAll((lis) => lis
+    .filter((li) => /^(Will|Mike|Dan|Bo)$/i.test(li.querySelector('.bjt-name')?.textContent.trim() ?? ''))
+    .map((li) => Number(li.querySelector('.bjt-mini-total')?.textContent.trim() ?? 0)));
   const snaps = [];
+  const totals = [];
   for (const t of [500, 1500, 2500, 3500, 5500, 6500, 7500, 8500]) {
     await page.waitForTimeout(Math.max(0, at + t - Date.now()));
     snaps.push(await seatText());
+    totals.push(await seatTotals());
   }
-  const totals = snaps.map((line) => [...line.matchAll(/(Will|Mike|Dan|Bo) (\d+)/gi)].map((m) => Number(m[2])));
   assert.deepEqual(totals, [
     [5, 0, 0, 0], [5, 6, 0, 0], [5, 6, 7, 0], [5, 6, 7, 8],
     [14, 6, 7, 8], [14, 12, 7, 8], [14, 12, 17, 8], [14, 12, 17, 10],

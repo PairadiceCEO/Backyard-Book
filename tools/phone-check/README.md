@@ -25,6 +25,15 @@ Since 0.21.2: the `admin-agents` screen shows Sportsbook profit as the main numb
 under each card (fixtures `agentUsers` have a balance that differs from their profit); `interact.mjs` checks the order, the numbers
 and that nothing scrolls sideways.
 
+Since 0.23.0: `tapcheck.mjs` ("every chip tap counts") runs the REAL table engines (in-memory Firestore) behind the real app and
+taps a $5 chip 10 times within 2 s on Blackjack, Baccarat, Craps, Crapless (Place 6) and the Slots bet, with server replies of 0
+and 1,500 ms, and at craps also with another player's roll landing after tap 4. Each run must end at exactly $50 on the screen
+and the server, with no error, and every tapped control (spot, chips, Undo, Clear) must have `touch-action: manipulation`
+(Chromium has no double-tap zoom here, so that is checked instead of reproduced). Options: `--work=<ms>`, `--lag=<ms>`,
+`--gap=<ms>` (time between taps), `--game=<id>`, `--verbose`. Run: `node --experimental-test-module-mocks tapcheck.mjs <repo root>`.
+`interact.mjs` also checks Max bet (Blackjack, Baccarat) and the cards on every Blackjack seat circle; `shoot.mjs` has
+`bj-max-confirm` / `bac-max-confirm` and now shoots the table screens at 320 px too.
+
 1. Copy the repo somewhere temporary, then put `mocks/` there as `harness-mocks/` and
    `vite.harness.config.mjs` at its root; `npm install`.
 2. Start it: `VITE_FIREBASE_API_KEY=x VITE_FIREBASE_AUTH_DOMAIN=x VITE_FIREBASE_PROJECT_ID=x VITE_FIREBASE_APP_ID=x npx vite --config vite.harness.config.mjs` (port 5199).

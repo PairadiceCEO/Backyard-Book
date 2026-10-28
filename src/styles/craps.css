@@ -1403,24 +1403,30 @@ body.craps-stage-on .craps-stage .offline-banner {
 }
 
 /* 0.23.0: the narrowest sideways phones (568 × 320) keep the 138 px rail, so the number boxes stay 44 px wide: the eight chips
-   go 3 across in three rows there instead of 4 × 2. */
+   go 3 across in three rows there instead of 4 × 2, each 44 px wide (the rail's inner width is exactly 3 × 44 + 2) and 40 px
+   tall, with the wallet and message lines set tight so Roll keeps 44 px. While the offline banner is showing, Roll gives up
+   the banner's height instead of falling off the screen (nothing can be rolled offline anyway). */
 @media (orientation: landscape) and (max-width: 639px) {
   .craps-stage {
     --rail-w: 138px;
   }
 
+  .cs-rail {
+    gap: 1px;
+  }
+
   .cs-rack {
-    grid-template-columns: repeat(3, 42px);
-    gap: 0 3px;
+    grid-template-columns: repeat(3, 44px);
+    gap: 1px;
   }
 
   .rack-chip {
-    width: 42px;
-    height: 38px;
+    width: 44px;
+    height: 40px;
   }
 
   .rack-chip .fchip {
-    --chip-size: 38px;
+    --chip-size: 39px;
   }
 
   .cs-tools .btn {
@@ -1428,12 +1434,28 @@ body.craps-stage-on .craps-stage .offline-banner {
   }
 
   .cs-money {
-    line-height: 1.05;
+    font-size: 0.64rem;
+    line-height: 1;
   }
 
   .cs-msg {
-    min-height: 2.1em;
-    font-size: 0.66rem;
-    line-height: 1.05;
+    min-height: 2em;
+    font-size: 0.64rem;
+    line-height: 1;
+  }
+
+  .craps-stage:has(.offline-banner) .cs-roll,
+  .craps-stage:has(.offline-banner) .cs-roll .craps-roll-btn,
+  .craps-stage:has(.offline-banner) .cs-roll .craps-sit-btn {
+    min-height: 28px;
+  }
+}
+
+/* 0.23.0: the narrowest upright phones (320 px): eight chips in one row would be 38 px wide, so they go two rows of four
+   (this size may scroll below 600 px tall anyway). */
+@media (orientation: portrait) and (max-width: 359px) {
+  .cs-rack {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    row-gap: 2px;
   }
 }
