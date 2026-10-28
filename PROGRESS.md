@@ -18,7 +18,8 @@ Spec: "remove the Gemini agent, add GPT-6.1 Sol prices". Will set AGENT_OPENAI_M
 - [x] 3 Disable already existed (Admin → Players → Disable, `setDisabled`; the leaderboard already hides disabled players). Admin →
       Agents now hides disabled agents too (AdminAgents.jsx). Bets and history untouched. No server, rules or index change.
 - [x] 4 README "AI agents", agents/README.md, CLAUDE.md: three agents (claude-small Haiku, claude-big Sonnet, openai GPT-6.1 Sol).
-Checks: see the line added below when they finished.
+Checks: test:all 408 pass, lint clean (scratch flat config), build ok, /api = 7 files, interact 80/80, dealcheck 8/8, tapcheck 14/14,
+shoot 157 screens clean. No firestore.rules change, no index.
 
 ## Phase 0.23.0 (Will, 2026-10-28 01:16 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: Will's message of 01:16 ("craps Place bets before the point, every chip tap counts, Max bet, $1,000 and $10,000 chips,
