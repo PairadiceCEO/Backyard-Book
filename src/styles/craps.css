@@ -443,12 +443,62 @@ body.craps-stage-on .craps-stage .offline-banner {
   pointer-events: none;
 }
 
-/* 0.23.0: on a come-out roll every Place box carries the black OFF puck (Place bets go up any time, off on the come-out). */
-.fn-puck.off {
+/* 0.25.0: on a come-out, a box holding my chips shows my bet's state: black OFF (the default) or white ON (switched working). */
+.fn-puck.work.off,
+.fh-puck.work.off {
   background: #151515;
   color: #f4f4ef;
   border-color: #9a9a92;
   font-size: 0.5rem;
+}
+
+/* My bet's come-out puck sits bottom-left where the point puck goes (never shown on a come-out), and my chip moves to the
+   bottom-right of that box, so the payout at the top stays readable. */
+.fn-puck.work {
+  left: 2px;
+  bottom: 2px;
+  width: 20px;
+  height: 20px;
+  z-index: 2;
+}
+
+.fn-main:has(.fn-puck.work) .fa-chip {
+  left: auto;
+  right: 2px;
+}
+
+.fn-puck.work.on,
+.fh-puck.work.on {
+  background: #fbfbf8;
+  color: #111;
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.45);
+}
+
+.fh-puck {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid;
+  font-size: 0.5rem;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Switch mode: the boxes that can be switched stand out; nothing else takes chips. */
+.craps-felt.switching .fa.blocked {
+  opacity: 0.45;
+}
+
+.craps-felt.switching .fa:not(.blocked) {
+  box-shadow: inset 0 0 0 2px #fff;
 }
 
 .fn.is-point .fn-main {
@@ -1457,5 +1507,156 @@ body.craps-stage-on .craps-stage .offline-banner {
   .cs-rack {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     row-gap: 2px;
+  }
+}
+
+/* ---------- 0.25.0: the come-out working switch (all my Place bets / Hard ways, and Switch mode) ----------
+   Shown only on a come-out while I have Place bets or Hard ways up: a row under Undo / Clear / Take down. */
+.cs-comeout {
+  grid-area: comeout;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
+}
+
+.cs-comeout .btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.work-all.some {
+  background: #151515;
+  color: #f5c451;
+  border-color: #f5c451;
+}
+
+.work-all.off {
+  background: #151515;
+  color: #f4f4ef;
+  border-color: #9a9a92;
+}
+
+.work-all.on {
+  background: #fbfbf8;
+  color: #111;
+  border-color: #fff;
+}
+
+/* The two-line label: "Bets OFF" / "for come-out". */
+.work-all span,
+.work-all small {
+  display: block;
+}
+
+.work-all small {
+  font-size: 0.85em;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* Copies for the narrowest sideways phones only. */
+.work-all.in-roll,
+.work-switch.in-rack {
+  display: none;
+}
+
+/* Upright 360 px and wider: beside Undo / Clear / Take down in the tools row, so the dock is no taller. */
+@media (orientation: portrait) and (min-width: 360px) {
+  .craps-stage .cs-rail:has(.cs-comeout) {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'money money money'
+      'msg msg msg'
+      'rack rack rack'
+      'tools comeout roll';
+  }
+
+  .cs-comeout .btn {
+    padding: 0 4px;
+    font-size: 0.7rem;
+  }
+
+  .cs-comeout .work-all {
+    width: 74px;
+  }
+
+  .craps-stage .cs-rail:has(.cs-comeout) .cs-roll .craps-roll-btn,
+  .craps-stage .cs-rail:has(.cs-comeout) .cs-roll .craps-sit-btn {
+    min-width: 44px;
+    width: 100%;
+    padding: 0 4px;
+  }
+
+  .craps-stage .cs-rail:has(.cs-comeout) .cs-roll {
+    min-width: 0;
+  }
+
+  /* "Take / down" on two lines while the come-out buttons share the row, so Roll keeps 44 px+ at 360. */
+  .craps-stage .cs-rail:has(.cs-comeout) .cs-tools .take-down {
+    max-width: 56px;
+    padding: 0 4px;
+    white-space: normal;
+  }
+}
+
+/* Upright under 360 px (that size may scroll): a row of its own. */
+@media (orientation: portrait) and (max-width: 359px) {
+  .craps-stage .cs-rail:has(.cs-comeout) {
+    grid-template-areas:
+      'money money'
+      'msg msg'
+      'rack rack'
+      'comeout comeout'
+      'tools roll';
+  }
+}
+
+/* The narrowest sideways phones (568 × 320): no height left in the rail, so Switch takes the rack's empty ninth cell (the
+   chips' 44 × 40) and the all-bets button shares the Roll row. */
+@media (orientation: landscape) and (max-width: 639px) {
+  .cs-comeout {
+    display: none;
+  }
+
+  .work-switch.in-rack {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 40px;
+    min-height: 0;
+    min-width: 0;
+    padding: 0;
+    font-size: 0.6rem;
+    font-weight: 700;
+  }
+
+  .work-all.in-roll {
+    display: block;
+    flex: 0 0 62px;
+    min-height: 44px;
+    padding: 0 2px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  .cs-roll:has(.work-all) {
+    gap: 2px;
+  }
+}
+
+@media (orientation: landscape) {
+  .cs-comeout {
+    gap: 1px;
+  }
+
+  .cs-comeout .btn {
+    padding: 0 3px;
+    font-size: 0.66rem;
   }
 }
