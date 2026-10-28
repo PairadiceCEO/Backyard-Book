@@ -5,6 +5,26 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.22.0 (Will, 2026-10-28 00:20 CT) — IN PROGRESS
+Spec: Will's attachment of 00:20 ("agents research like real bettors (form, splits, player trends, injuries, line movement,
+public vs sharp money) and bet a few times a day"). Cause: all four agents passed on 0.21.3's first full run; they only see
+DraftKings lines and some Kalshi prices. Rules that don't change: house rules in server/placeBet.js, /api = 7 functions,
+firestore.rules, nothing cached in Firestore. All research runs inside agents/ on GitHub Actions from public sources.
+The only server/ change is the explicitly requested read-only extension of /api/bets "mine" (history).
+
+### Checklist
+- [ ] 1 agents/lib/research.mjs: get_matchup, get_team_stats, get_player_trends, get_betting_splits (+ sharp flags); exposed in
+      tools.mjs; compact JSON, in-memory cache, each result <= ~1,500 tokens (chars / 4), safe values when a source fails.
+- [ ] 2 Splits source decision (robots.txt + terms checked) documented below.
+- [ ] 3 get_my_history: /api/bets action "mine" with { history: true } (server/agentMine.js, read only, <= 50 settled bets of the
+      last 14 days) + the tool; index needed (see Decisions).
+- [ ] 4 agents/prompt.md rewritten as a daily routine (2-3 leagues, shortlist, research, edge >= 2 points / 3 for props and
+      parlays, quarter-Kelly 0.5-3%, 2-6 bets on a normal day, why format, history first, no chasing).
+- [ ] 5 Budget: research counts toward the budget; at 75% of the input budget the research tools close and the agent decides.
+- [ ] 6 Tests (mocked ESPN / splits; shapes and size caps, empty or failed sources, sharp flags, history + query, 75% switch,
+      a full mocked run that researches and bets); version 0.22.0; PROGRESS; agents/README.md; all CLAUDE.md checks; merge.
+Decisions so far:
+
 ## Phase 0.21.3 (Will, 2026-10-27 11:33 CT) — COMPLETE (2026-10-27), merged to main, ready for Will to test
 Spec: "go ahead" after the first 0.21.2 logs (claude-big stopped at 39,843 of 40,000 after 4 turns, claude-small 32,675 after 3,
 both passed without deciding; openai finished at 25,853; gemini 503 twice, skipped after the retry). The input cap is a total over
