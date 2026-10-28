@@ -15,7 +15,11 @@ sportsbook per-bet limit $10,000,000, Blackjack seats show their cards").
 - [x] 2 Every chip tap counts: reproduced with tools/phone-check/tapcheck.mjs (real engines + real client, 10 taps of $5 in
       < 2 s on Blackjack, Baccarat, Craps, Crapless, Slots; server reply 0 and 1500 ms; craps also with another player's roll
       landing mid-taps). Causes and fixes in Decisions below.
-- [ ] 3 $1,000 and $10,000 chips
+- [x] 3 $1,000 and $10,000 chips: CHIP_VALUES (shared/casino/constants.js, so the server's chip check, CHIP_MESSAGE and
+      chipsFor follow), chipName() for "$1,000" labels, rack chips print "$1k" / "$10k" (chipAmountLabel), colours .fc-1000
+      (yellow-orange, black edge) and .fc-10000 (purple, gold edge) in chips.css. Racks: Blackjack / Baccarat / Slots two rows of
+      four under 600 px, one row of eight above; craps upright one row of eight; sideways 4 × 2 (rail 182 px, 236 px on computers),
+      and 3 across in three rows on the narrowest sideways phones (568 × 320) so the number boxes keep 44 px.
 - [ ] 4 Max bet (Blackjack, Baccarat)
 - [ ] 5 Sportsbook per-bet ceiling $10,000,000
 - [ ] 6 Blackjack seats show their cards

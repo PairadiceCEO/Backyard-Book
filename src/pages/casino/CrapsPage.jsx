@@ -6,7 +6,7 @@
 // alone (src/styles/craps.css), so turning the phone never remounts anything and the seat, the chips not yet sent and
 // the open drawers all stay:
 //   Upright  (orientation: portrait): top bar + status row, the felt stacked, and a dock at the bottom (wallet, message,
-//            six chips, Undo / Clear / Take down and Roll).
+//            eight chips, Undo / Clear / Take down and Roll).
 //   Sideways (landscape; computers too, sized up): one-row top bar, the felt on the left, a rail on the right (wallet,
 //            chips, Undo / Clear / Take down, message, Roll).
 // Seats, last rolls, Leave seat, help and the rules live in the "Table" sheet (a top-bar button, the chat drawer's sheet
@@ -43,7 +43,7 @@ import { ensureFeltFont } from '../../lib/feltFont.js';
 import { formatMoney } from '../../lib/format.js';
 import { DICE_ANIMATION_MS } from '../../../shared/casino/constants.js';
 import { DICE_VARIANTS } from '../../../shared/casino/diceVariants.js';
-import { BET_HELP_TEXT } from '../../../shared/casino/constants.js';
+import { BET_HELP_TEXT, chipName } from '../../../shared/casino/constants.js';
 import { cloneBets, emptyDiceBets, limitProblem, placeBlocker, removeBlocker, spotAmount, spotLimitCents, totalOnFelt } from '../../../shared/casino/dice.js';
 import '../../styles/craps.css';
 
@@ -97,7 +97,8 @@ function signedMoney(cents) {
   return formatMoney(0);
 }
 
-// Chip rack for the craps table: the six chips in one row upright, 3 × 2 sideways (CSS decides).
+// Chip rack for the craps table: the eight chips in one row upright (two rows of four on the narrowest phones), 4 × 2 sideways
+// (CSS decides).
 function CrapsRack({ chip, takeDown, onChip, disabled }) {
   return (
     <div className="cs-rack" role="radiogroup" aria-label="Chip">
@@ -109,7 +110,7 @@ function CrapsRack({ chip, takeDown, onChip, disabled }) {
             type="button"
             role="radio"
             aria-checked={active}
-            aria-label={`$${d} chip`}
+            aria-label={`${chipName(d)} chip`}
             className={active ? 'rack-chip active' : 'rack-chip'}
             onClick={() => onChip(d)}
             disabled={disabled}

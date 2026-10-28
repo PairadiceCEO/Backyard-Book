@@ -47,7 +47,7 @@ body.craps-stage-on .craps-stage .offline-banner {
   --field-h: 48px;
   --dp-h: 44px;
   --pass-h: 44px;
-  --rail-w: 138px;
+  --rail-w: 182px; /* 0.23.0: four chips across (eight chips, 4 × 2); was 138px for 3 × 2 */
   --dock-h: 164px;
   position: fixed;
   inset: 0;
@@ -756,7 +756,7 @@ body.craps-stage-on .craps-stage .offline-banner {
 
 .cs-rack {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr)); /* 0.23.0: eight chips ($1 … $10,000) in one row upright */
 }
 
 .rack-chip {
@@ -1220,7 +1220,7 @@ body.craps-stage-on .craps-stage .offline-banner {
   }
 
   .cs-rack {
-    grid-template-columns: repeat(3, 44px);
+    grid-template-columns: repeat(4, 44px); /* 0.23.0: eight chips, 4 × 2 */
     gap: 1px;
     justify-content: center;
   }
@@ -1340,7 +1340,7 @@ body.craps-stage-on .craps-stage .offline-banner {
   @media (min-height: 501px) {
     .craps-stage {
       --scale: 1.2;
-      --rail-w: 190px;
+      --rail-w: 236px; /* 0.23.0: four 52 px chips across (was 190px for three) */
       --hw: 150px;
       --sw: 56px;
       --odds-w: 130px;
@@ -1372,7 +1372,7 @@ body.craps-stage-on .craps-stage .offline-banner {
     }
 
     .cs-rack {
-      grid-template-columns: repeat(3, 52px);
+      grid-template-columns: repeat(4, 52px);
       gap: 4px;
     }
 
@@ -1399,5 +1399,41 @@ body.craps-stage-on .craps-stage .offline-banner {
     .craps-stage .die.red {
       --hd: 24px;
     }
+  }
+}
+
+/* 0.23.0: the narrowest sideways phones (568 × 320) keep the 138 px rail, so the number boxes stay 44 px wide: the eight chips
+   go 3 across in three rows there instead of 4 × 2. */
+@media (orientation: landscape) and (max-width: 639px) {
+  .craps-stage {
+    --rail-w: 138px;
+  }
+
+  .cs-rack {
+    grid-template-columns: repeat(3, 42px);
+    gap: 0 3px;
+  }
+
+  .rack-chip {
+    width: 42px;
+    height: 38px;
+  }
+
+  .rack-chip .fchip {
+    --chip-size: 38px;
+  }
+
+  .cs-tools .btn {
+    min-height: 40px;
+  }
+
+  .cs-money {
+    line-height: 1.05;
+  }
+
+  .cs-msg {
+    min-height: 2.1em;
+    font-size: 0.66rem;
+    line-height: 1.05;
   }
 }

@@ -307,7 +307,7 @@ export function makeDiceEngine(variantId) {
   async function bet(ctx, body) {
     const index = requireSeat(ctx, body);
     const { kind, number } = parseKind(body);
-    requireChip(body.amount); // one chip: $1, $2, $5, $10, $25 or $100
+    requireChip(body.amount); // one chip: $1, $2, $5, $10, $25, $100, $1,000 or $10,000
     const result = await placeChips(ctx, index, [{ kind, number, cents: body.amount * 100 }], body.requestId);
     return result.duplicate ? result : { spotCents: spotAmount(result.bets, kind, number) };
   }

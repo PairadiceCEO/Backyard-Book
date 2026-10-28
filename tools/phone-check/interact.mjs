@@ -755,7 +755,7 @@ await check('craps: "Sit down" takes the first open seat; "Table full" when all 
 });
 
 // ---------- 0.16.0: no maximum bets; $25 and $100 chips on every game ----------
-// A rich player ($10,000) on every casino game: six chips; $100 + $100 + $25 on one spot goes to the server as one
+// A rich player ($10,000) on every casino game: eight chips (0.23.0); $100 + $100 + $25 on one spot goes to the server as one
 // $225 total (an amount built from chips); no "up to $10" / "$1–$10" / "$60" text anywhere; the new help line shows.
 async function openRich(path, tables, onCasino) {
   const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true });
@@ -776,7 +776,7 @@ async function openRich(path, tables, onCasino) {
 const OLD_LIMIT_TEXT = /up to \$10\b|\$1[–-]\$10\b|\$1[–-]\$20|\$1[–-]\$30|\$60\b|of \$60|Room \$/;
 async function chipsAndText(page, where) {
   const labels = await page.getByRole('radio', { name: /chip$/ }).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
-  assert.deepEqual([...new Set(labels)], ['$1 chip', '$2 chip', '$5 chip', '$10 chip', '$25 chip', '$100 chip'], `${where}: six chips`);
+  assert.deepEqual([...new Set(labels)], ['$1 chip', '$2 chip', '$5 chip', '$10 chip', '$25 chip', '$100 chip', '$1,000 chip', '$10,000 chip'], `${where}: eight chips`);
   const text = await page.evaluate(() => document.body.innerText);
   assert.ok(!OLD_LIMIT_TEXT.test(text), `${where}: old limit wording left: ${(text.match(OLD_LIMIT_TEXT) ?? [])[0]}`);
   assert.match(text, /Minimum \$1\. Bet as much as your wallet holds\./, `${where}: new help text`);

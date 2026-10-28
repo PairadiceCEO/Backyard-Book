@@ -1,15 +1,17 @@
-// Casino chips: $1 white, $2 yellow, $5 red, $10 blue, $25 green, $100 black (0.19.0: the craps felt's look, FeltChip, on every
-// game). Chips are denominations, not limits (0.16.0): a spot holds any whole-dollar amount the wallet covers.
+// Casino chips: $1 white, $2 yellow, $5 red, $10 blue, $25 green, $100 black, $1,000 yellow-orange, $10,000 purple (0.19.0: the
+// craps felt's look, FeltChip, on every game; 0.23.0: the last two). Chips are denominations, not limits (0.16.0): a spot holds
+// any whole-dollar amount the wallet covers. The rack is two rows of four on phones, one row of eight on wide screens.
 //   ChipRack   pick a chip, plus Undo and Clear (and whatever the game adds)
 //   ChipStack  what a spot holds: one chip coloured by its largest chip, with the amount printed on it
 
-import { CHIP_VALUES } from '../../../shared/casino/constants.js';
+import { CHIP_VALUES, chipName } from '../../../shared/casino/constants.js';
 import { FeltChip } from './FeltChip.jsx';
 
 export { CHIP_VALUES };
 const LARGEST_FIRST = [...CHIP_VALUES].sort((a, b) => b - a);
 
-// $8 → [5, 2, 1]; $137 → [100, 25, 10, 2]. A whole-dollar amount as the fewest chips (largest first).
+// $8 → [5, 2, 1]; $137 → [100, 25, 10, 2]; $12,130 → [10000, 1000, 1000, 100, 25, 5]. A whole-dollar amount as the fewest
+// chips (largest first).
 // `limit` stops early (a $1,000,000 spot would otherwise list 10,000 chips just to draw a few).
 export function chipsFor(cents, limit = Infinity) {
   let left = Math.floor(Math.max(0, cents) / 100);
@@ -41,7 +43,7 @@ export function ChipRack({ chip, onChip, onUndo, onClear, canUndo, disabled = fa
             type="button"
             role="radio"
             aria-checked={chip === d}
-            aria-label={`$${d} chip`}
+            aria-label={`${chipName(d)} chip`}
             className={chip === d ? 'chip-pick active' : 'chip-pick'}
             onClick={() => onChip(d)}
             disabled={disabled}

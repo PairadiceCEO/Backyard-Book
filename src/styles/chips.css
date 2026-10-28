@@ -1,6 +1,7 @@
 /* ===================== Casino chips (0.19.0): one look for every game =====================
    A round disc with a dashed edge, coloured by the largest chip in the amount ($1 white with a blue edge, $2 yellow,
-   $5 red, $10 blue, $25 green, $100 black with a gold edge), the amount printed on it. Used by the craps felt, the chip
+   $5 red, $10 blue, $25 green, $100 black with a gold edge, $1,000 yellow-orange with a black edge, $10,000 purple with a
+   gold edge), the amount printed on it. Used by the craps felt, the chip
    rack and every bet spot in Blackjack, Baccarat and Slots (src/components/casino/FeltChip.jsx).
    Size: set --chip-size on the chip or a parent. */
 
@@ -85,6 +86,19 @@
   --c: #1b1b1f;
   --edge: #e9c46a;
   --ink: #f5d27a;
+}
+
+/* 0.23.0: $1,000 yellow-orange with a black edge, $10,000 purple with a gold edge. */
+.fc-1000 {
+  --c: #f29d1f;
+  --edge: #1b1b1f;
+  --ink: #1b1b1f;
+}
+
+.fc-10000 {
+  --c: #6a35b8;
+  --edge: #e9c46a;
+  --ink: #fff3c4;
 }
 
 

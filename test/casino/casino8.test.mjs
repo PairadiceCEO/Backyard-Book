@@ -176,3 +176,20 @@ test('a retried tap (same requestId) is applied once; a different requestId with
   assert.equal(seatOf('craps', 'p1').bets.field, 1000, 'two taps, two chips; the retry added nothing');
   moneyAddsUp(100_000);
 });
+
+// ================= 3. $1,000 and $10,000 chips =================
+test('$1,000 and $10,000 chips: real chips on every game; a spot breaks into them; the message names them', async () => {
+  const K = await import(url('shared/casino/constants.js'));
+  assert.deepEqual(K.CHIP_VALUES, [1, 2, 5, 10, 25, 100, 1000, 10000]);
+  assert.equal(K.CHIP_MESSAGE, 'A chip is $1, $2, $5, $10, $25, $100, $1,000 or $10,000.');
+  assert.deepEqual([1, 1000, 10000].map(K.chipName), ['$1', '$1,000', '$10,000']);
+  seed(10_000_000); // $100,000
+  await act('craps', 'p1', 'sit', { seat: 0 });
+  await act('craps', 'p1', 'bet', { kind: 'field', amount: 10000, requestId: rid() });
+  await act('craps', 'p1', 'bet', { kind: 'field', amount: 1000, requestId: rid() });
+  assert.equal(seatOf('craps', 'p1').bets.field, 1_100_000, '$11,000 on the Field from two chips');
+  await act('blackjack', 'p2', 'sit', { seat: 0 });
+  await act('blackjack', 'p2', 'bet', { seat: 0, amount: 11000, requestId: rid() });
+  assert.equal(seatOf('blackjack', 'p2').betCents, 1_100_000);
+  moneyAddsUp(10_000_000);
+});
