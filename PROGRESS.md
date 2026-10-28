@@ -5,12 +5,14 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.25.0 (Will, 2026-10-28 15:05 CT) — IN PROGRESS on wip: code, tests, docs done; full checks next, then merge
+## Phase 0.25.0 (Will, 2026-10-28 15:05 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: Will's attachment of 15:05 ("craps/crapless working switch: Place bets and Hard ways can be turned ON for the come-out roll").
 Files: shared/casino/dice.js, shared/casino/constants.js (winningsCents), server/casino/crapsTable.js, server/casino/router.js,
 src/components/casino/CrapsFelt.jsx, src/pages/casino/CrapsPage.jsx, src/styles/craps.css, test/diceWorking.test.js,
 test/casino/casino10.test.mjs, test/dice.test.js + test/casino/casino5.test.mjs (rounding), tools/phone-check/{interact,shoot}.mjs.
 Details: docs/CASINO_PROGRESS.md 0.25.0.
+Checks: test:all 432 pass, lint clean (scratch flat config), build ok, /api = 7, interact 88/88, dealcheck 8/8, tapcheck 14/14,
+shoot 166 screens clean. No firestore.rules change, no index.
 Decisions:
 - Flags live on seat.bets.working and are kept only for bets that are up (take down = flag gone; more chips on an ON spot = still
   ON). Reset: settleRoll on a point made / seven-out, and the engine when the dice go to a new shooter on a come-out. A come-out
@@ -1031,7 +1033,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-0.25.0 in progress (above); next steps come from Will's testing. (0.17.1, Slots chat removal / clearer chat errors, was
+Nothing queued: 0.25.0 is merged; next steps come from Will's testing. (0.17.1, Slots chat removal / clearer chat errors, was
 never started here and needs its spec re-sent.)
 
 ## Open questions
