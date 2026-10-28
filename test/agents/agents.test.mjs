@@ -35,22 +35,28 @@ function ref(path) {
     async delete() { write(path, undefined); },
   };
 }
+const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : v instanceof Date ? v.getTime() : v);
 function matches(x, op, v) {
   if (op === '==') return x === v;
+  if (op === '>=') return x !== undefined && x !== null && ms(x) >= ms(v);
   if (op === '!=') return x !== undefined && x !== null && JSON.stringify(x) !== JSON.stringify(v);
   if (op === '<') return x !== undefined && x < v;
   if (op === 'in') return v.includes(x);
   throw new Error(`fake query: ${op}`);
 }
-function makeQuery(name, filters = [], max = Infinity) {
+const queryLog = [];
+function makeQuery(name, filters = [], max = Infinity, order = null) {
   return {
-    where: (field, op, value) => makeQuery(name, [...filters, [field, op, value]], max),
-    limit: (n) => makeQuery(name, filters, n),
+    where: (field, op, value) => makeQuery(name, [...filters, [field, op, value]], max, order),
+    orderBy: (field, dir = 'asc') => makeQuery(name, filters, max, [field, dir]),
+    limit: (n) => makeQuery(name, filters, n, order),
     async get() {
       await tick();
+      queryLog.push({ name, filters, max, order });
       const docs = [...store.keys()]
         .filter((p) => p.startsWith(`${name}/`) && p.split('/').length === 2)
         .filter((p) => filters.every(([f, op, v]) => matches(store.get(p)[f], op, v)))
+        .sort((a, b) => (order ? (ms(store.get(a)[order[0]]) - ms(store.get(b)[order[0]])) * (order[1] === 'desc' ? -1 : 1) : 0))
         .slice(0, max)
         .map(snap);
       return { docs, size: docs.length, empty: docs.length === 0, forEach: (fn) => docs.forEach(fn) };
@@ -62,6 +68,7 @@ const fakeDb = {
   collection: (name) => ({
     doc: (id) => ref(`${name}/${id ?? `auto${++autoId}`}`),
     where: (...a) => makeQuery(name).where(...a),
+    orderBy: (...a) => makeQuery(name).orderBy(...a),
     limit: (n) => makeQuery(name).limit(n),
     get: () => makeQuery(name).get(),
   }),
@@ -299,6 +306,56 @@ test('mine: the caller\'s open bets only, the balance and today\'s slips', async
   const human = await myBets(caller('mike'), {}, { now, db: fakeDb });
   assert.equal(human.openBets.length, 1);
   assert.deepEqual({ slips: human.today.slips, limit: human.today.limit }, { slips: 0, limit: null });
+});
+
+test('mine with history: settled bets of the last 14 days, newest first, at most 50, why cut to 120; one query; the caller\'s only', async () => {
+  const now = new Date('2026-10-28T15:00:00Z');
+  const day = 24 * 60 * 60 * 1000;
+  const bet = (uid, n, daysAgo, extra = {}) => write(`bets/${uid}${n}`, {
+    uid, status: 'won', type: 'single', stakeCents: 500, payoutCents: 1000, combinedAmerican: 100,
+    legs: [{ label: `Team ${n} ML`, league: 'nba' }], agentWhy: 'x'.repeat(200), settledAt: Timestamp.fromDate(new Date(now.getTime() - daysAgo * day)), ...extra,
+  });
+  bet('bot', 1, 1);
+  bet('bot', 2, 3, { status: 'lost', payoutCents: 0, legs: [{ label: 'A', league: 'nba' }, { label: 'B', league: 'nhl' }], agentWhy: null });
+  bet('bot', 3, 13.5);
+  bet('bot', 4, 15); // older than 14 days
+  bet('mike', 5, 1);
+  write('bets/botOpen', { uid: 'bot', status: 'open', stakeCents: 100, legs: [{ label: 'Open', league: 'nba' }], placedAt: Timestamp.fromDate(now) });
+  queryLog.length = 0;
+  const out = await myBets(caller('bot'), { history: true }, { now, db: fakeDb });
+  assert.equal(out.history.available, true);
+  assert.deepEqual(out.history.bets.map((b) => b.id), ['bot1', 'bot2', 'bot3']);
+  const [first, second] = out.history.bets;
+  assert.equal(first.pick, 'Team 1 ML');
+  assert.equal(first.why.length, 120);
+  assert.deepEqual({ result: first.result, odds: first.odds, stakeCents: first.stakeCents, returnCents: first.returnCents }, { result: 'won', odds: 100, stakeCents: 500, returnCents: 1000 });
+  assert.deepEqual({ pick: second.pick, league: second.league, result: second.result, why: second.why }, { pick: 'A + B', league: 'nba+nhl', result: 'lost', why: null });
+  // exactly one history query: uid + settledAt range, newest first, capped at 50
+  const q = queryLog.filter((x) => x.order);
+  assert.equal(q.length, 1);
+  assert.deepEqual(q[0].filters.map(([f, op]) => `${f} ${op}`), ['uid ==', 'settledAt >=']);
+  assert.deepEqual(q[0].order, ['settledAt', 'desc']);
+  assert.equal(q[0].max, 50);
+  // without `history` nothing extra is queried or returned
+  queryLog.length = 0;
+  const plain = await myBets(caller('bot'), {}, { now, db: fakeDb });
+  assert.equal(plain.history, undefined);
+  assert.equal(queryLog.filter((x) => x.order).length, 0);
+});
+
+test('mine with history: more than 50 settled bets → 50; a missing index (query error) → available false and the rest still answers', async () => {
+  const now = new Date('2026-10-28T15:00:00Z');
+  for (let i = 0; i < 60; i += 1) write(`bets/b${i}`, { uid: 'bot', status: 'lost', stakeCents: 100, payoutCents: 0, legs: [{ label: `L${i}`, league: 'mlb' }], settledAt: Timestamp.fromDate(new Date(now.getTime() - (i + 1) * 60_000)) });
+  const out = await myBets(caller('bot'), { history: true }, { now, db: fakeDb });
+  assert.equal(out.history.bets.length, 50);
+  assert.equal(out.history.bets[0].id, 'b0');
+  const noIndex = { ...fakeDb, collection: (name) => { const c = fakeDb.collection(name); return { ...c, where: (...a) => { const w = c.where(...a); return { ...w, where: (...b) => { const w2 = w.where(...b); return { ...w2, orderBy: () => ({ limit: () => ({ get: async () => { throw new Error('9 FAILED_PRECONDITION: The query requires an index'); } }) }) }; } }; } }; } };
+  const errors = mock.method(console, 'error', () => {});
+  const missing = await myBets(caller('bot'), { history: true }, { now, db: noIndex });
+  errors.mock.restore();
+  assert.equal(missing.history.available, false);
+  assert.equal(typeof missing.balanceCents, 'number');
+  assert.ok(Array.isArray(missing.openBets));
 });
 
 test('the settle cron deletes agentDaily counters older than 3 days', async () => {

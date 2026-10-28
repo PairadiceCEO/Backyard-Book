@@ -4,14 +4,17 @@
 // budget is checked before every model turn (0.21.2): when the next request would take the run over it, the run ends without
 // sending it. A provider error (no credit, quota, bad key, outage) ends that agent's run cleanly; only a busy provider (503 /
 // 429 / overloaded / rate limit) is retried, once, after 60 s (providers.mjs).
+// 0.22.0: the research tools (agents/lib/research.mjs) count toward the same input budget. When 75% of it is used the tools answer
+// researchClosed and the agent has to decide, so a run never ends on the cap without deciding (RESEARCH_SHARE).
 // The summary never contains a password, token or key (redact() also scrubs every secret value it was given).
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { usernameToEmail } from '../../shared/constants.js';
-import { createTools, estimateTokens, toolDefs } from './tools.mjs';
+import { RESEARCH_TOOLS, createTools, estimateTokens, toolDefs } from './tools.mjs';
 import { CACHE_READ_WEIGHT, CACHE_WRITE_WEIGHT, ProviderError, makeAdapter } from './providers.mjs';
 
+export const RESEARCH_SHARE = 0.75;
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 
 // The four agents. Models come from GitHub variables, with these defaults.
@@ -118,6 +121,8 @@ export function formatSummary(s) {
   }
   lines.push(`Searches: ${s.searches} of ${s.limits.maxSearches}${s.searchFailures ? ` (${s.searchFailures} unavailable or failed)` : ''}`);
   lines.push(`Model turns: ${s.turns} of ${s.limits.maxTurns}`);
+  const researchCalls = s.trace.reduce((n, t) => n + t.tools.filter((x) => RESEARCH_TOOLS.includes(x.name)).length, 0);
+  lines.push(`Research calls: ${researchCalls}${s.researchClosedAtTurn ? ` (research closed after turn ${s.researchClosedAtTurn}: 75% of the input budget was used, so the agent had to decide)` : ''}`);
   if (s.retries) lines.push(`Retries: ${s.retries} (provider was busy; waited 60 s and tried once more)`);
   lines.push(`Tokens: ${s.usage.input.toLocaleString('en-US')} in / ${s.usage.output.toLocaleString('en-US')} out${s.usage.cacheRead || s.usage.cacheWrite ? ` (input is billed-equivalent: ${s.usage.cacheRead.toLocaleString('en-US')} read from cache at 0.1x, ${s.usage.cacheWrite.toLocaleString('en-US')} written to cache at 1.25x)` : ''}`);
   if (s.trace.length) {
@@ -131,7 +136,7 @@ export function formatSummary(s) {
 
 // Runs one session. Everything external is injectable for tests: fetchImpl (Firebase sign-in, our /api and the provider),
 // now, adapter (a ready provider adapter), prompt, prices.
-export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, now = () => new Date(), adapter = null, prompt = null, prices = null, sleep, retryWaitMs }) {
+export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, now = () => new Date(), adapter = null, prompt = null, prices = null, sleep, retryWaitMs, researchFetch, splitsSource = null }) {
   const cfg = AGENTS[agentId];
   if (!cfg) throw new Error(`Unknown agent "${agentId}". One of: ${Object.keys(AGENTS).join(', ')}.`);
   const limits = limitsFrom(env);
@@ -141,7 +146,7 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
   const password = env[`AGENT_${cfg.secret}_PASSWORD`] || env.AGENT_PASSWORD;
   const apiKey = env[cfg.keyVar];
   const redact = redactor([password, apiKey, env.VITE_FIREBASE_API_KEY, env.ANTHROPIC_API_KEY, env.OPENAI_API_KEY, env.GEMINI_API_KEY]);
-  const summary = { agentId, provider: cfg.provider, model, outcome: 'skipped', stopReason: '', retries: 0, bets: [], refusals: [], searches: 0, searchFailures: 0, turns: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, trace: [], costUsd: 0, balanceCents: null, finalText: '', limits };
+  const summary = { agentId, provider: cfg.provider, model, outcome: 'skipped', stopReason: '', retries: 0, bets: [], refusals: [], searches: 0, searchFailures: 0, turns: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, trace: [], researchClosedAtTurn: 0, costUsd: 0, balanceCents: null, finalText: '', limits };
   const finish = () => {
     summary.costUsd = estimateCost(prices ?? JSON.parse(readFileSync(here('../prices.json'), 'utf8')), cfg.provider, model, summary.usage, summary.searches);
     return { summary, text: redact(formatSummary(summary)) };
@@ -175,6 +180,8 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
     api,
     now,
     limits,
+    fetchImpl: researchFetch ?? fetchImpl,
+    splitsSource,
     search: async (query) => {
       const r = await ai.search(query);
       addUsage(r.usage);
@@ -191,7 +198,7 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
     return finish();
   }
   const today = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(now());
-  const opening = `Today is ${today} (Central time). Your balance is ${money(mine.balanceCents)}, so at most ${money(Math.floor(mine.balanceCents * 0.05))} per slip. You have ${mine.openBets.length} open bets and have placed ${mine.today.slips} of ${mine.today.limit ?? 10} slips today. Start with get_leagues.`;
+  const opening = `Today is ${today} (Central time). Your balance is ${money(mine.balanceCents)}, so at most ${money(Math.floor(mine.balanceCents * 0.05))} per slip. You have ${mine.openBets.length} open bets and have placed ${mine.today.slips} of ${mine.today.limit ?? 10} slips today. Start with get_my_history, then get_leagues.`;
 
   summary.outcome = 'ran';
   let results = null;
@@ -222,6 +229,10 @@ export async function runAgent({ agentId, env = process.env, fetchImpl = fetch, 
       if (step.text) summary.finalText = step.text;
       if (!step.calls.length) break; // the model is done for the day
       results = [];
+      // Research stays open until 75% of the input budget is used; after that the agent decides with what it has.
+      const open = summary.usage.input < RESEARCH_SHARE * limits.maxInput;
+      tools.setResearchOpen(open);
+      if (!open && !summary.researchClosedAtTurn) summary.researchClosedAtTurn = summary.turns;
       for (const call of step.calls) {
         const output = await tools.run(call.name, call.args);
         entry.tools.push({ name: call.name, tokens: estimateTokens(output) });
