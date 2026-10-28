@@ -5,13 +5,16 @@
 // sideways (a long table with the Pass Line down the left edge); rotating the phone never remounts anything.
 //   Pass Line and Don't Pass Bar exist twice: the long vertical strips down the left edge (sideways, wide enough) and the
 //   rows along the bottom. They are the same bet (the strips are a second place to tap, hidden from screen readers).
-//   Place numbers: payout small at the top, the number, the ON puck bottom-left (on a come-out every box shows the black
-//   OFF puck there instead: Place bets go up any time but are off on the come-out), my chips bottom-right. A Come bet that
-//   moved to a number shows as a chip marked C with its Odds chip beside it; tapping that cluster adds Come Odds.
+//   Place numbers: payout small at the top, the number, the ON puck bottom-left (the point), my chips bottom-right. A Come bet
+//   that moved to a number shows as a chip marked C with its Odds chip beside it; tapping that cluster adds Come Odds.
+//   0.25.0: on a come-out, every Place box and Hard way box holding my chips shows my bet's come-out state there: a black
+//   OFF puck (the default) or a white ON puck (switched working). Boxes without my chips show nothing; with a point on there
+//   are no OFF/ON pucks. `working` = my seat's bets.working from the server.
 
 import Die from './Die.jsx';
 import { FeltChip } from './FeltChip.jsx';
 import { formatMoney } from '../../lib/format.js';
+import { isWorking } from '../../../shared/casino/dice.js';
 
 const NUMBER_WORD = { 6: 'SIX', 9: 'NINE' };
 const NUMBER_NAME = { 6: 'Six', 9: 'Nine' };
@@ -42,7 +45,19 @@ function Area({ kind, number, label, cents = 0, blocked, onTap, disabled, classN
   );
 }
 
-export default function CrapsFelt({ variant, point, bets, takeDown, oddsMax, dontOddsMax, blockedOf, onTap, disabled = false }) {
+// The come-out state of one of my Place bets / Hard ways: a small puck, black OFF or white ON.
+function WorkPuck({ on, className }) {
+  return (
+    <span className={`${className} work ${on ? 'on' : 'off'}`} data-work={on ? 'on' : 'off'} aria-hidden="true">
+      {on ? 'ON' : 'OFF'}
+    </span>
+  );
+}
+
+export default function CrapsFelt({ variant, point, bets, working = null, takeDown, switching = false, oddsMax, dontOddsMax, blockedOf, onTap, disabled = false }) {
+  const comeOut = !point;
+  const workOf = (kind, n) => isWorking({ working }, kind, n);
+  const offText = (kind, n) => (comeOut ? (workOf(kind, n) ? ', ON for the come-out' : ', OFF for the come-out') : '');
   const dontPass = Boolean(variant.dontPass);
   const odds = point ? variant.odds[point] : null;
   const common = (kind, number) => ({ kind, number, blocked: blockedOf(kind, number), onTap, disabled });
@@ -50,7 +65,7 @@ export default function CrapsFelt({ variant, point, bets, takeDown, oddsMax, don
   const dontLabel = "Don't Pass Bar, pays 1:1, 12 pushes";
 
   return (
-    <div className={`craps-felt felt-${variant.id}${takeDown ? ' taking-down' : ''}`} data-variant={variant.id}>
+    <div className={`craps-felt felt-${variant.id}${takeDown ? ' taking-down' : ''}${switching ? ' switching' : ''}`} data-variant={variant.id}>
       <div className="felt-board">
         <Area {...common('pass')} label={passLabel} cents={bets.pass} className="a-pass-strip" strip>
           <span className="fl">Pass Line</span>
@@ -70,7 +85,7 @@ export default function CrapsFelt({ variant, point, bets, takeDown, oddsMax, don
               <div key={n} className={['fn', point === n ? 'is-point' : '', come ? 'has-come' : ''].filter(Boolean).join(' ')}>
                 <Area
                   {...common('place', n)}
-                  label={`Place ${name}, pays ${ratio(variant.place[n])}${point ? '' : ', off on the come-out'}`}
+                  label={`Place ${name}, pays ${ratio(variant.place[n])}${placed ? offText('place', n) : ''}`}
                   cents={placed}
                   className="fn-main"
                 >
@@ -79,11 +94,7 @@ export default function CrapsFelt({ variant, point, bets, takeDown, oddsMax, don
                     {NUMBER_WORD[n] ?? n}
                   </span>
                   {point === n ? <span className="fn-puck">ON</span> : null}
-                  {point ? null : (
-                    <span className="fn-puck off" data-off="true" aria-hidden="true">
-                      OFF
-                    </span>
-                  )}
+                  {comeOut && placed ? <WorkPuck on={workOf('place', n)} className="fn-puck" /> : null}
                 </Area>
                 {come ? (
                   <button
@@ -165,10 +176,11 @@ export default function CrapsFelt({ variant, point, bets, takeDown, oddsMax, don
               <Area
                 key={n}
                 {...common('hard', n)}
-                label={`Hard ${n} (${n / 2} and ${n / 2}), pays ${ratio(variant.hardWays[n])}`}
+                label={`Hard ${n} (${n / 2} and ${n / 2}), pays ${ratio(variant.hardWays[n])}${bets.hard[n] ? offText('hard', n) : ''}`}
                 cents={bets.hard[n] ?? 0}
                 className="fh-box"
               >
+                {comeOut && bets.hard[n] ? <WorkPuck on={workOf('hard', n)} className="fh-puck" /> : null}
                 <span className="fh-dice">
                   <Die value={n / 2} className="red" decorative />
                   <Die value={n / 2} className="red" decorative />

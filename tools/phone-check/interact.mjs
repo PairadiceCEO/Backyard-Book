@@ -490,12 +490,13 @@ for (const game of ['craps', 'crapless']) {
       assert.equal(await chipText(spot(page, key).first()), '$5', `${key}: a $5 chip on the area`);
       assert.match((await spot(page, key).first().getAttribute('aria-label')) ?? '', /, \$5\.00 on it$/, `${key}: label says what is on it`);
     }
-    // 0.23.0: a Place bet goes up on the come-out (OFF puck on every Place box, the bet takes the chip).
+    // 0.23.0: a Place bet goes up on the come-out; 0.25.0: only a box holding my chips shows my OFF puck.
     const placeKey = 'place:6';
     assert.ok(!(await spot(page, placeKey).evaluate((el) => el.classList.contains('blocked'))), `${placeKey}: not blocked on the come-out`);
-    assert.equal(await page.locator('.craps-felt .fn-puck.off').count(), Object.keys(crapless ? { 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 8: 1, 9: 1, 10: 1, 11: 1, 12: 1 } : { 4: 1, 5: 1, 6: 1, 8: 1, 9: 1, 10: 1 }).length, 'OFF on every Place box');
+    assert.equal(await page.locator('.craps-felt .fn-puck.work').count(), 0, 'no Place bets: no OFF pucks');
     await spot(page, placeKey).click();
     assert.equal(await chipText(spot(page, placeKey)), '$5', `${placeKey}: a $5 chip on the come-out`);
+    assert.equal(await spot(page, placeKey).locator('.fn-puck.work.off').count(), 1, 'my Place 6 shows the black OFF puck');
     comeOutSpots.push(placeKey);
     // Blocked on the come-out: Come, Odds. Tapping says why and puts nothing there.
     for (const key of ['come', 'odds']) {
@@ -1758,6 +1759,108 @@ for (const game of ['blackjack', 'baccarat']) {
     assert.equal(rig.sent.length, 1, `one request (${JSON.stringify(rig.sent)})`);
     if (game === 'blackjack') assert.deepEqual([rig.table.seats[1].betCents, rig.table.seats[1].sideCents], [1000, 300]);
     else assert.deepEqual([rig.table.seats[1].bets.player, rig.table.seats[1].bets.heavenly9], [500, 200]);
+    await context.close();
+  });
+}
+
+// ---------- 0.25.0: the come-out working switch (Craps, Crapless) ----------
+// A fake table server with the real rules (setWorking, settleRoll): pucks only on my Place / Hard boxes during a come-out,
+// the all-bets button's three labels, Switch mode (never places a chip), and a come-out roll paying an ON Place bet.
+const DICE = await import('../../shared/casino/dice.js');
+const VARIANTS = (await import('../../shared/casino/diceVariants.js')).DICE_VARIANTS;
+function workRig(game, bets, { point = null } = {}) {
+  const t = { ...crapsBlank(game, { point, bets, shooter: 1, players: 1 }), deadline: null };
+  const rig = { table: t, sent: [], page: null, dice: [] };
+  const push = () => rig.page?.evaluate((tt) => { window.__H.fs.casinoTables = [tt]; window.__H.emit?.(); }, rig.table).catch(() => {});
+  rig.handler = async (route, body) => {
+    rig.sent.push(body);
+    const tt = structuredClone(rig.table);
+    const seatNow = tt.seats[1];
+    if (body.action === 'working') {
+      const r = DICE.setWorking(VARIANTS[game], tt.point, seatNow.bets, body.all ? { all: true, on: body.on } : { kind: body.kind, number: body.number, on: body.on });
+      if (r.problem) return json(route, 409, { error: { code: 'WORKING_NOT_ALLOWED', message: r.problem } });
+      seatNow.bets = r.bets;
+    } else if (body.action === 'roll') {
+      const d = rig.dice.shift() ?? [3, 4];
+      const total = d[0] + d[1];
+      const res = DICE.settleRoll(VARIANTS[game], tt.point, seatNow.bets, total, d);
+      seatNow.bets = res.bets;
+      tt.rollSeq += 1;
+      seatNow.lastRoll = { seq: tt.rollSeq, netCents: res.netCents, profitCents: res.profitCents, lostCents: res.lostCents, returnCents: res.returnCents };
+      tt.lastRoll = { dice: d, total, at: now(), kind: res.kind, pointBefore: tt.point, seq: tt.rollSeq, shooter: 1 };
+      tt.point = res.nextPoint;
+      rig.paid = (rig.paid ?? 0) + res.returnCents;
+    } else if (body.action === 'bets') {
+      return json(route, 200, { ok: true, serverNow: now() });
+    } else return json(route, 200, { ok: true, serverNow: now() });
+    tt.version += 1;
+    tt.updatedAt = now();
+    rig.table = tt;
+    setTimeout(push, 100);
+    const reply = { ok: true, table: tt, serverNow: now(), balanceCents: 9640 };
+    if (body.action === 'roll') Object.assign(reply, { rollSeq: tt.rollSeq, total: tt.lastRoll.total, dice: tt.lastRoll.dice, kind: tt.lastRoll.kind });
+    return json(route, 200, reply);
+  };
+  return rig;
+}
+const workAll = (page) => page.locator('.work-all:visible').first();
+const workSwitch = (page) => page.locator('.work-switch:visible').first();
+
+for (const game of ['craps', 'crapless']) {
+  const placeN = game === 'crapless' ? 2 : 4;
+  await check(`${game}: come-out pucks on my Place / Hard boxes only; the all-bets button reads OFF → ON → Some ON; no pucks or button with a point on`, async () => {
+    const rig = workRig(game, { pass: 500, place: { [placeN]: 1000 }, hard: { 8: 500 } });
+    const { page, context } = await openCraps(`/casino/${game}`, [rig.table], { width: 375, height: 667, onCasino: rig.handler });
+    rig.page = page;
+    assert.equal(await page.locator('.craps-felt .work').count(), 2, 'two pucks: my Place and my Hard 8');
+    assert.equal(await spot(page, `place:${placeN}`).locator('.work.off').count(), 1);
+    assert.equal(await spot(page, 'hard:8').locator('.work.off').count(), 1);
+    assert.match(await workAll(page).innerText(), /Bets OFF\s*for come-out/);
+    for (const b of [workAll(page), workSwitch(page)]) { const r = await b.boundingBox(); assert.ok(r.width >= 43.5 && r.height >= 43.5, `${r.width}x${r.height}`); }
+    await workAll(page).click();
+    await page.waitForTimeout(500);
+    assert.deepEqual(rig.sent.filter((b) => b.action === 'working').map((b) => [b.all, b.on]), [[true, true]]);
+    assert.equal(await page.locator('.craps-felt .work.on').count(), 2, 'both pucks white ON');
+    assert.match(await workAll(page).innerText(), /Bets ON\s*for come-out/);
+    // Switch mode: a tap flips just that bet and never places a chip.
+    await workSwitch(page).click();
+    assert.equal(await workSwitch(page).getAttribute('aria-pressed'), 'true');
+    await spot(page, 'hard:8').click();
+    await page.waitForTimeout(500);
+    const last = rig.sent.at(-1);
+    assert.deepEqual([last.action, last.kind, last.number, last.on], ['working', 'hard', 8, false]);
+    assert.match(await workAll(page).innerText(), /Some ON\s*for come-out/);
+    await spot(page, 'field').click();
+    await page.waitForTimeout(500);
+    assert.equal(rig.sent.filter((b) => b.action === 'bets').length, 0, 'no chips in Switch mode');
+    assert.match(await page.locator('.cs-msg').innerText(), /tap one of your Place bets or Hard ways/);
+    await workSwitch(page).click();
+    assert.equal(await workSwitch(page).getAttribute('aria-pressed'), 'false', 'tap Switch again to leave the mode');
+    await context.close();
+    // With a point on: no pucks, no button.
+    const rig2 = workRig(game, { pass: 500, place: { [placeN]: 1000 }, hard: { 8: 500 } }, { point: 6 });
+    const p2 = await openCraps(`/casino/${game}`, [rig2.table], { width: 375, height: 667, onCasino: rig2.handler });
+    assert.equal(await p2.page.locator('.craps-felt .work').count(), 0);
+    assert.equal(await p2.page.locator('.work-all:visible, .work-switch:visible').count(), 0);
+    await p2.context.close();
+  });
+
+  await check(`${game}: a come-out roll pays an ON Place bet on screen (it stays up); the next come-out after the point is made is OFF again`, async () => {
+    const rig = workRig(game, { pass: 500, place: { [placeN]: 1000 }, working: { place: { [placeN]: true }, hard: {} } });
+    rig.dice = game === 'crapless' ? [[1, 1], [1, 1]] : [[1, 3], [2, 2]];
+    const { page, context } = await openCraps(`/casino/${game}`, [rig.table], { width: 375, height: 800, onCasino: rig.handler });
+    rig.page = page;
+    assert.equal(await spot(page, `place:${placeN}`).locator('.work.on').count(), 1);
+    await page.getByRole('button', { name: 'Roll' }).click();
+    await page.waitForTimeout(2600);
+    const winnings = game === 'crapless' ? 4500 : 1800; // $10 at 9:2 / 9:5
+    assert.equal(rig.paid, winnings, 'the come-out roll paid the ON Place bet');
+    assert.ok((await page.locator('body').innerText()).includes(`+$${(winnings / 100).toFixed(2)}`), `+$${winnings / 100} on screen`);
+    assert.equal(await chipText(spot(page, `place:${placeN}`)), '$10', 'it stays up');
+    await page.getByRole('button', { name: 'Roll' }).click(); // the point is made
+    await page.waitForTimeout(2600);
+    assert.equal(rig.table.point, null);
+    assert.equal(await spot(page, `place:${placeN}`).locator('.work.off').count(), 1, 'next come-out: OFF again');
     await context.close();
   });
 }

@@ -44,7 +44,7 @@ import { formatMoney } from '../../lib/format.js';
 import { DICE_ANIMATION_MS } from '../../../shared/casino/constants.js';
 import { DICE_VARIANTS } from '../../../shared/casino/diceVariants.js';
 import { BET_HELP_TEXT, chipName } from '../../../shared/casino/constants.js';
-import { cloneBets, emptyDiceBets, limitProblem, placeBlocker, removeBlocker, spotAmount, spotLimitCents, totalOnFelt } from '../../../shared/casino/dice.js';
+import { cloneBets, emptyDiceBets, isWorking, limitProblem, placeBlocker, removeBlocker, spotAmount, spotLimitCents, totalOnFelt, workingState } from '../../../shared/casino/dice.js';
 import '../../styles/craps.css';
 
 const NO_SEATS = [null, null, null, null, null];
@@ -99,7 +99,7 @@ function signedMoney(cents) {
 
 // Chip rack for the craps table: the eight chips in one row upright (two rows of four on the narrowest phones), 4 × 2 sideways
 // (CSS decides).
-function CrapsRack({ chip, takeDown, onChip, disabled }) {
+function CrapsRack({ chip, takeDown, onChip, disabled, extra = null }) {
   return (
     <div className="cs-rack" role="radiogroup" aria-label="Chip">
       {CHIP_VALUES.map((d) => {
@@ -119,6 +119,7 @@ function CrapsRack({ chip, takeDown, onChip, disabled }) {
           </button>
         );
       })}
+      {extra}
     </div>
   );
 }
@@ -185,6 +186,8 @@ export default function CrapsPage({ game }) {
 
   const [chip, setChip] = useState(1);
   const [takeDown, setTakeDown] = useState(false);
+  // 0.25.0: Switch mode: a tap on one of my Place bets / Hard ways flips it ON or OFF for the come-out (never places a chip).
+  const [switchMode, setSwitchMode] = useState(false);
   const [busy, setBusy] = useState('');
   const [actionError, setActionError] = useState('');
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -230,6 +233,10 @@ export default function CrapsPage({ game }) {
   const serverBets = mySeat?.bets ?? emptyDiceBets();
   const serverSpots = betsToSpots(serverBets);
   const tablePoint = table?.point ?? null;
+  // A point set ends Switch mode (the next come-out starts with it off).
+  useEffect(() => {
+    if (tablePoint !== null) setSwitchMode(false);
+  }, [tablePoint]);
   const validate = useCallback(
     (key, cents, after) => {
       if (!variant) return 'Unknown table.';
@@ -280,6 +287,7 @@ export default function CrapsPage({ game }) {
     if (rollTapped || !table) return;
     const seq = table.rollSeq;
     setRollTapped(true); // tumble now; the reply (with the dice) usually lands well inside the animation
+    setSwitchMode(false); // rolling leaves Switch mode
     await chips.flushNow();
     await run('roll', 'roll', { rollSeq: seq });
     setRollTapped(false);
@@ -301,10 +309,51 @@ export default function CrapsPage({ game }) {
   const onFelt = totalOnFelt(myBets);
   const walletCents = displayCents(balanceCents);
 
+  // 0.25.0: the come-out working switch. Shown on a come-out while I have Place bets or Hard ways up.
+  const comeOutNow = !rolling && tablePoint === null;
+  const workState = mySeat ? workingState(serverBets) : null;
+  const showWorking = Boolean(mySeat) && comeOutNow && workState !== null && !mySeat.leaving;
+  const switching = switchMode && showWorking;
+
+  function switchAll() {
+    setActionError('');
+    run('workAll', 'working', { all: true, on: workState !== 'on', requestId: newRequestId() });
+  }
+
+  // The two come-out controls. CSS shows one copy per layout: in the dock's tools row (upright), a row under the tools
+  // (wide sideways), or on the narrowest sideways phones Switch in the rack's empty cell and the all-bets button beside Roll.
+  const workAllButton = (where) => (
+    <button type="button" className={['btn', 'work-all', workState, where].filter(Boolean).join(' ')} data-work-all={workState} onClick={switchAll} disabled={busy === 'workAll'}>
+      <span>{workState === 'on' ? 'Bets ON' : workState === 'some' ? 'Some ON' : 'Bets OFF'}</span> <small>for come-out</small>
+    </button>
+  );
+  const switchButton = (where) => (
+    <button
+      type="button"
+      aria-pressed={switching}
+      className={['btn', 'take-down', 'work-switch', switching ? 'active' : '', where].filter(Boolean).join(' ')}
+      onClick={() => {
+        setSwitchMode((v) => !v);
+        setTakeDown(false);
+      }}
+    >
+      Switch
+    </button>
+  );
+
   function tapSpot(kind, number) {
     if (!mySeat) return;
     if (rollTapped) {
       setActionError(ROLLING_MESSAGE);
+      return;
+    }
+    if (switching) {
+      if ((kind !== 'place' && kind !== 'hard') || !spotAmount(serverBets, kind, number)) {
+        setActionError('Switch: tap one of your Place bets or Hard ways.');
+        return;
+      }
+      setActionError('');
+      run(`work-${spotKey(kind, number)}`, 'working', { kind, number, on: !isWorking(serverBets, kind, number), requestId: newRequestId() });
       return;
     }
     if (takeDown) {
@@ -323,7 +372,9 @@ export default function CrapsPage({ game }) {
 
   // An area that can't take a bet right now keeps the old "blocked" look; tapping it says why (the reason comes from chips.place).
   const blockedOf = (kind, number) =>
-    takeDown ? !spotAmount(myBets, kind, number) || Boolean(removeBlocker(table?.point ?? null, kind)) : Boolean(placeBlocker(variant, table?.point ?? null, myBets, kind, number));
+    switching
+      ? !((kind === 'place' || kind === 'hard') && spotAmount(serverBets, kind, number))
+      : takeDown ? !spotAmount(myBets, kind, number) || Boolean(removeBlocker(table?.point ?? null, kind)) : Boolean(placeBlocker(variant, table?.point ?? null, myBets, kind, number));
 
   function seatDetail(seat, i) {
     const showResult = !rolling && seat.lastRoll && seat.lastRoll.seq === table?.rollSeq;
@@ -346,7 +397,7 @@ export default function CrapsPage({ game }) {
   const lastKind = lastRoll && !rolling ? KIND_TEXT[lastRoll.kind] : '';
   const firstOpen = seats.findIndex((s) => !s);
   const message = chips.error || actionError;
-  const hint = rolling ? '' : takeDown ? 'Tap a bet to take it down.' : iShoot && !hasLine ? `Bet Pass${variant.dontPass ? " or Don't Pass" : ''} to roll.` : '';
+  const hint = rolling ? '' : switching ? 'Tap a Place bet or Hard way to switch it ON or OFF for the come-out.' : takeDown ? 'Tap a bet to take it down.' : iShoot && !hasLine ? `Bet Pass${variant.dontPass ? " or Don't Pass" : ''} to roll.` : '';
   const players = seats.filter(Boolean).length;
 
   const rollButton = iShoot ? (
@@ -404,7 +455,9 @@ export default function CrapsPage({ game }) {
       <p className="muted small bac-help">
         {mySeat?.leaving
           ? 'You are leaving: line, Come and Odds bets play out, then the seat frees and Place, Field and Hard ways come back.'
-          : takeDown
+          : switching
+            ? 'Switch: tap one of your Place bets or Hard ways to turn it ON or OFF for the come-out roll. Tap Switch again (or roll) to stop.'
+            : takeDown
             ? 'Take down: tap one of your bets to take all of it down (Pass and Don’t Pass stay up once a Point is set; a Come bet on its number stays, its Odds can come down).'
             : `Pick a chip and tap a bet on the table; each tap adds a chip. ${BET_HELP_TEXT} Odds up to ${variant.oddsMultiple}× their line bet. A Come bet on its number shows as a chip marked C; tap it to add Odds.`}
       </p>
@@ -416,8 +469,10 @@ export default function CrapsPage({ game }) {
         Pass, Don’t Pass and Come pay 1:1. Odds pay true odds ({variant.points.map((n) => `${n} ${ratio(variant.odds[n])}`).join(', ')}), up to{' '}
         {variant.oddsMultiple}× their line bet{variant.dontPass ? '; Don’t Pass Odds pay the inverse' : ''}. Come bets work like a new Pass bet on the
         next roll ({variant.comeOutPassWins.join(' or ')} wins{variant.comeOutPassLoses.length ? `, ${variant.comeOutPassLoses.join(', ')} loses` : ''}), then
-        move to their number; Come Odds are off on the come-out. Place bets pay {variant.points.map((n) => `${n} ${ratio(variant.place[n])}`).join(', ')} and,
-        go up any time; like Hard ways, they are OFF on the come-out (a come-out roll never wins or loses them) and work once a Point is set. Field: 3, 4, 9, 10, 11 pay 1:1; 2 and 12 pay 2:1. Hard 4 and 10 pay {ratio(variant.hardWays[4])}, Hard 6
+        move to their number; Come Odds are off on the come-out. Place bets pay {variant.points.map((n) => `${n} ${ratio(variant.place[n])}`).join(', ')} and
+        go up any time. On the come-out, Place bets and Hard ways are OFF unless you switch them ON (all at once with the come-out
+        button, or one at a time with Switch); switched ON, the number pays and a 7 loses, as with a point on. Every come-out
+        starts OFF again. With a Point set they always work. Field: 3, 4, 9, 10, 11 pay 1:1; 2 and 12 pay 2:1. Hard 4 and 10 pay {ratio(variant.hardWays[4])}, Hard 6
         and 8 pay {ratio(variant.hardWays[6])} and stay up after a win. With 2 or more players the shooter has 30 s to roll, then the dice roll themselves;
         a player alone rolls when they tap Roll. One seat per player.
       </p>
@@ -494,7 +549,9 @@ export default function CrapsPage({ game }) {
           variant={variant}
           point={point}
           bets={myBets}
-          takeDown={takeDown}
+          working={serverBets.working ?? null}
+          takeDown={takeDown && !switching}
+          switching={switching}
           oddsMax={oddsMax}
           dontOddsMax={dontOddsMax}
           blockedOf={blockedOf}
@@ -516,11 +573,13 @@ export default function CrapsPage({ game }) {
           <>
             <CrapsRack
               chip={chip}
-              takeDown={takeDown}
+              takeDown={takeDown || switching}
               disabled={!canChip}
+              extra={showWorking ? switchButton('in-rack') : null}
               onChip={(d) => {
                 setChip(d);
                 setTakeDown(false);
+                setSwitchMode(false);
               }}
             />
             <div className="cs-tools">
@@ -530,16 +589,34 @@ export default function CrapsPage({ game }) {
               <button type="button" className="btn" onClick={chips.clear} disabled={!canChip || !chips.canUndo}>
                 Clear
               </button>
-              <button type="button" aria-pressed={takeDown} className={takeDown ? 'btn take-down active' : 'btn take-down'} onClick={() => setTakeDown((v) => !v)} disabled={!canChip}>
+              <button
+                type="button"
+                aria-pressed={takeDown && !switching}
+                className={takeDown && !switching ? 'btn take-down active' : 'btn take-down'}
+                onClick={() => {
+                  setTakeDown((v) => !(v && !switching));
+                  setSwitchMode(false);
+                }}
+                disabled={!canChip}
+              >
                 Take down
               </button>
             </div>
+            {showWorking ? (
+              <div className="cs-comeout" role="group" aria-label="Come-out working switch">
+                {workAllButton('')}
+                {switchButton('')}
+              </div>
+            ) : null}
           </>
         ) : null}
         <p className={message ? 'cs-msg error' : 'cs-msg'} role={message ? 'alert' : undefined}>
           {message || hint || (mySeat ? '' : 'You are watching.')}
         </p>
-        <div className="cs-roll">{rollArea}</div>
+        <div className="cs-roll">
+          {showWorking ? workAllButton('in-roll') : null}
+          {rollArea}
+        </div>
       </aside>
 
       {inlineInfo ? <div className="cs-info">{tableInfo}</div> : null}

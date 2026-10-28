@@ -5,6 +5,27 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.25.0 (Will, 2026-10-28 15:05 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
+Spec: Will's attachment of 15:05 ("craps/crapless working switch: Place bets and Hard ways can be turned ON for the come-out roll").
+Files: shared/casino/dice.js, shared/casino/constants.js (winningsCents), server/casino/crapsTable.js, server/casino/router.js,
+src/components/casino/CrapsFelt.jsx, src/pages/casino/CrapsPage.jsx, src/styles/craps.css, test/diceWorking.test.js,
+test/casino/casino10.test.mjs, test/dice.test.js + test/casino/casino5.test.mjs (rounding), tools/phone-check/{interact,shoot}.mjs.
+Details: docs/CASINO_PROGRESS.md 0.25.0.
+Checks: test:all 432 pass, lint clean (scratch flat config), build ok, /api = 7, interact 88/88, dealcheck 8/8, tapcheck 14/14,
+shoot 166 screens clean. No firestore.rules change, no index.
+Decisions:
+- Flags live on seat.bets.working and are kept only for bets that are up (take down = flag gone; more chips on an ON spot = still
+  ON). Reset: settleRoll on a point made / seven-out, and the engine when the dice go to a new shooter on a come-out. A come-out
+  natural or craps roll keeps them (it isn't a new come-out by the spec's list).
+- Payouts round down: winningsCents used Math.round, so a $1 Place 6 paid $1.17 against CLAUDE.md's "round down"; now Math.floor.
+  Only craps amounts can change (Blackjack 3:2, insurance 2:1, Baccarat 0.95 and 8:1 are exact on whole dollars).
+- Controls placed per size (measured at all ten 0.18.0 sizes, nothing off screen, felt above the dock at 375 × 667): upright
+  360 px+ in the tools row beside Undo / Clear / Take down; upright under 360 its own row (that size may scroll); wide sideways a
+  row under the tools; 568 × 320 has no height left, so Switch takes the rack's empty ninth cell (44 × 40, like the chips there)
+  and the all-bets button sits beside Roll.
+- My OFF/ON puck sits bottom-left (where the point puck goes, never shown on a come-out) and my chip moves bottom-right in that
+  box, so the payout stays readable. Other players' state isn't drawn (each player sees their own).
+
 ## Phase 0.24.0 (Will, 2026-10-28 13:37 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: "Blackjack 21+3 side bet; Baccarat side bets Dragon Bonus, Fortune 7, Heavenly 9, Golden 8, Blazing 7s".
 Files: shared/casino/sideBets.js, shared/casino/baccarat.js, server/casino/{blackjack,baccarat}Table.js, BlackjackPage / BaccaratPage,
@@ -1012,7 +1033,7 @@ Push `wip` after every commit. Phase 2 starts from a fresh `wip` off main after 
       check 103 screens × 320/375/414 clean. Version 0.12.0. Merged wip → main. No firestore.rules change.
 
 ## Next
-Nothing queued: 0.24.0 is merged; next steps come from Will's testing. (0.17.1, Slots chat removal / clearer chat errors, was
+Nothing queued: 0.25.0 is merged; next steps come from Will's testing. (0.17.1, Slots chat removal / clearer chat errors, was
 never started here and needs its spec re-sent.)
 
 ## Open questions

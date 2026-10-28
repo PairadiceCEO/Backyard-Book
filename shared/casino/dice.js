@@ -6,7 +6,11 @@
 //   odds, dontOdds        Odds behind Pass / Don't Pass (once a Point is set)
 //   come                  a fresh Come bet in the Come spot (point phase only; decided by the next roll)
 //   comeOn { [n]: { bet, odds } }   Come bets that moved to their number, with their Odds
-//   place { [n] }, hard { [n] }, field   (Place and Hard ways go up any time; both are off on a come-out roll)
+//   place { [n] }, hard { [n] }, field   (Place and Hard ways go up any time)
+//   working { place: { [n]: true }, hard: { [n]: true } }   0.25.0: which Place bets and Hard ways the player switched ON
+//                         for come-out rolls. Missing = OFF (the default). Only kept for bets that are up, so a bet taken down
+//                         loses its flag; cleared at every new come-out (a point made, a seven-out, a new shooter). With a
+//                         point on every Place bet and Hard way works and the flags don't matter. Left out when empty.
 
 import { BET_CEILING_CENTS, BET_CEILING_MESSAGE, dollarsText, winningsCents } from './constants.js';
 
@@ -40,17 +44,74 @@ export function cloneBets(bets) {
   for (const [n, c] of Object.entries(b.comeOn ?? {})) {
     if (c && (c.bet || c.odds)) comeOn[n] = { bet: c.bet || 0, odds: c.odds || 0 };
   }
-  return {
+  const place = cleanMap(b.place);
+  const hard = cleanMap(b.hard);
+  const out = {
     pass: b.pass || 0,
     dontPass: b.dontPass || 0,
     odds: b.odds || 0,
     dontOdds: b.dontOdds || 0,
     come: b.come || 0,
     field: b.field || 0,
-    place: cleanMap(b.place),
-    hard: cleanMap(b.hard),
+    place,
+    hard,
     comeOn,
   };
+  // Working flags only for bets still up; no `working` key at all when nothing is ON.
+  const working = { place: {}, hard: {} };
+  for (const kind of ['place', 'hard']) {
+    for (const [n, on] of Object.entries(b.working?.[kind] ?? {})) if (on === true && out[kind][n]) working[kind][n] = true;
+  }
+  if (Object.keys(working.place).length || Object.keys(working.hard).length) out.working = working;
+  return out;
+}
+
+// Is this Place bet / Hard way ON for come-out rolls?
+export function isWorking(bets, kind, number) {
+  return bets?.working?.[kind]?.[number] === true;
+}
+
+// The seat's Place bets and Hard ways as [kind, number] pairs (what the come-out switch can turn ON).
+export function switchableBets(bets) {
+  const b = cloneBets(bets);
+  return [...Object.keys(b.place).map((n) => ['place', Number(n)]), ...Object.keys(b.hard).map((n) => ['hard', Number(n)])];
+}
+
+// 'off' | 'on' | 'some' | null (no Place bets or Hard ways): what the all-bets switch shows.
+export function workingState(bets) {
+  const list = switchableBets(bets);
+  if (!list.length) return null;
+  const on = list.filter(([k, n]) => isWorking(bets, k, n)).length;
+  return on === 0 ? 'off' : on === list.length ? 'on' : 'some';
+}
+
+export const WORKING_POINT_ON = 'Bets always work once a Point is set.';
+
+// 0.25.0: switches come-out working flags. change: { kind: 'place' | 'hard', number, on } for one bet, or { all: true, on }.
+// Returns the new bets, or { problem } when it can't (a point is on, no such bet, nothing to switch).
+export function setWorking(variant, point, bets, change) {
+  if (point !== null && point !== undefined) return { problem: WORKING_POINT_ON };
+  const b = cloneBets(bets);
+  const on = change?.on === true;
+  const flags = { place: { ...(b.working?.place ?? {}) }, hard: { ...(b.working?.hard ?? {}) } };
+  if (change?.all === true) {
+    const list = switchableBets(b);
+    if (!list.length) return { problem: 'You have no Place bets or Hard ways to switch.' };
+    for (const [k, n] of list) {
+      if (on) flags[k][n] = true;
+      else delete flags[k][n];
+    }
+  } else {
+    const kind = change?.kind;
+    const n = change?.number;
+    if (kind !== 'place' && kind !== 'hard') return { problem: 'Only Place bets and Hard ways can be switched.' };
+    const exists = kind === 'place' ? variant.place[n] : variant.hardWays[n];
+    if (!exists) return { problem: kind === 'place' ? `There's no Place ${n} in ${variant.name}.` : `There's no Hard ${n}.` };
+    if (!b[kind][n]) return { problem: `No ${kind === 'place' ? 'Place' : 'Hard'} ${n} bet to switch ${on ? 'on' : 'off'}.` };
+    if (on) flags[kind][n] = true;
+    else delete flags[kind][n];
+  }
+  return { bets: cloneBets({ ...b, working: flags }) };
 }
 
 const sum = (map) => Object.values(map).reduce((s, v) => s + (v || 0), 0);
@@ -247,11 +308,12 @@ export function settleRoll(variant, point, bets, total, dice = null) {
     after.field = 0;
   }
 
-  // Hard ways: off on a come-out. With a Point on: the hard number wins (and stays up); the same
-  // number rolled the easy way, or any 7, loses.
-  if (pointOn) {
+  // Hard ways: with a Point on (or switched ON for the come-out, 0.25.0): the hard number wins (and stays up); the same
+  // number rolled the easy way, or any 7, loses. OFF on a come-out: untouched.
+  {
     for (const [n, stake] of Object.entries(before.hard)) {
       const number = Number(n);
+      if (!pointOn && !isWorking(before, 'hard', number)) continue;
       if (total === variant.seven) {
         lose('hard', stake, number);
         delete after.hard[n];
@@ -316,7 +378,7 @@ export function settleRoll(variant, point, bets, total, dice = null) {
       }
     }
   } else if (kind === 'point') {
-    nextPoint = total; // line bets stay up; Place bets and Hard ways were off for the come-out
+    nextPoint = total; // line bets stay up
   } else if (kind === 'pointMade') {
     if (before.pass) payOff('pass', before.pass, variant.lineOdds);
     if (before.odds) payOff('odds', before.odds, variant.odds[point], point);
@@ -341,10 +403,26 @@ export function settleRoll(variant, point, bets, total, dice = null) {
     after.dontOdds = 0;
     after.place = {};
     nextPoint = null;
-  } else {
+  } else if (pointOn) {
     const placed = before.place[total];
     if (placed) payStays('place', placed, variant.place[total], total);
   }
+
+  // 0.25.0: a come-out roll and Place bets switched ON: the number pays and stays up, a 7 loses, anything else nothing.
+  // OFF Place bets (the default) are untouched by a come-out roll.
+  if (!pointOn) {
+    for (const [n, stake] of Object.entries(before.place)) {
+      const number = Number(n);
+      if (!stake || !isWorking(before, 'place', number)) continue;
+      if (total === variant.seven) {
+        lose('place', stake, number);
+        delete after.place[n];
+      } else if (total === number) payStays('place', stake, variant.place[number], number);
+    }
+  }
+
+  // Every new come-out starts with every bet OFF: after a point is made or a seven-out the flags reset.
+  if (kind === 'pointMade' || kind === 'sevenOut') delete after.working;
 
   return { kind, bets: cloneBets(after), returnCents, profitCents, lostCents, netCents: profitCents - lostCents, lines, nextPoint };
 }
