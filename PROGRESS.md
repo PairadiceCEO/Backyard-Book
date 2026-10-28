@@ -5,7 +5,7 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.23.0 (Will, 2026-10-28 01:16 CT) — IN PROGRESS on wip
+## Phase 0.23.0 (Will, 2026-10-28 01:16 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: Will's message of 01:16 ("craps Place bets before the point, every chip tap counts, Max bet, $1,000 and $10,000 chips,
 sportsbook per-bet limit $10,000,000, Blackjack seats show their cards").
 
@@ -36,6 +36,9 @@ sportsbook per-bet limit $10,000,000, Blackjack seats show their cards").
       The dealer's hole card is untouched (a card back until the server turns it).
 - [x] 7 Version 0.23.0 (package.json + lockfile), README, docs/CASINO_PROGRESS.md, tools/phone-check/README.md, CLAUDE.md (ceilings,
       chips, Place rule, tapcheck in the phone check), all checks (below), merge wip → main.
+Checks: test:all 407 pass, lint clean (scratch flat config), build ok, /api = 7 files, interact.mjs 80/80, dealcheck.mjs 8/8,
+tapcheck.mjs 14/14 (every game, replies 0 and 1,500 ms, craps also with a roll mid-taps), shoot.mjs 157 screens clean.
+No firestore.rules change, no new index.
 Decisions:
 - **Lost taps, cause 1 (iPhone, every game but the craps felt):** the bet spots, chips, Undo / Clear and the Slots bet had no
   `touch-action`, so iOS Safari takes a second quick tap as the start of a double-tap zoom and never fires its click. One rule in
