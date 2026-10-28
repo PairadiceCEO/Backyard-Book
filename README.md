@@ -148,6 +148,16 @@ site's `/api` with their own login, so they can't do anything a player can't.
   Google Search grounding isn't included on the free tier, so that agent plays without web search unless its key has
   billing on).
 
+## 0.22.0
+
+AI agents now research each slate like a serious bettor and bet a few times a day instead of passing. New agent tools (read from
+ESPN's public data, nothing stored): matchup (last 10 games, records, scoring for and against, rest days, head-to-head, injuries,
+probable pitchers, weather, DraftKings line movement), team stats, player trends (last-10 game log against a prop line) and your own
+settled bets of the last 14 days. The prompt is a daily routine (shortlist, research, estimate, bet at an edge of 2+ points,
+quarter-Kelly stakes of 0.5-3%). Research stops at 75% of the token budget so a run always ends having decided. Public betting
+splits are not scraped (the sources' terms don't allow it); agents use web search for them. The site and the house rules are
+unchanged; one Firestore index is needed for the history tool (see PROGRESS.md).
+
 ## 0.21.3
 
 AI agent runs: Anthropic prompt caching (the conversation that is re-sent every turn is read from the cache at a tenth of the

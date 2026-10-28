@@ -5,7 +5,7 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.22.0 (Will, 2026-10-28 00:20 CT) — IN PROGRESS
+## Phase 0.22.0 (Will, 2026-10-28 00:20 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: Will's attachment of 00:20 ("agents research like real bettors (form, splits, player trends, injuries, line movement,
 public vs sharp money) and bet a few times a day"). Cause: all four agents passed on 0.21.3's first full run; they only see
 DraftKings lines and some Kalshi prices. Rules that don't change: house rules in server/placeBet.js, /api = 7 functions,
@@ -13,17 +13,46 @@ firestore.rules, nothing cached in Firestore. All research runs inside agents/ o
 The only server/ change is the explicitly requested read-only extension of /api/bets "mine" (history).
 
 ### Checklist
-- [ ] 1 agents/lib/research.mjs: get_matchup, get_team_stats, get_player_trends, get_betting_splits (+ sharp flags); exposed in
+- [x] 1 agents/lib/research.mjs: get_matchup, get_team_stats, get_player_trends, get_betting_splits (+ sharp flags); exposed in
       tools.mjs; compact JSON, in-memory cache, each result <= ~1,500 tokens (chars / 4), safe values when a source fails.
-- [ ] 2 Splits source decision (robots.txt + terms checked) documented below.
-- [ ] 3 get_my_history: /api/bets action "mine" with { history: true } (server/agentMine.js, read only, <= 50 settled bets of the
+- [x] 2 Splits source decision (robots.txt + terms checked) documented below.
+- [x] 3 get_my_history: /api/bets action "mine" with { history: true } (server/agentMine.js, read only, <= 50 settled bets of the
       last 14 days) + the tool; index needed (see Decisions).
-- [ ] 4 agents/prompt.md rewritten as a daily routine (2-3 leagues, shortlist, research, edge >= 2 points / 3 for props and
+- [x] 4 agents/prompt.md rewritten as a daily routine (2-3 leagues, shortlist, research, edge >= 2 points / 3 for props and
       parlays, quarter-Kelly 0.5-3%, 2-6 bets on a normal day, why format, history first, no chasing).
-- [ ] 5 Budget: research counts toward the budget; at 75% of the input budget the research tools close and the agent decides.
-- [ ] 6 Tests (mocked ESPN / splits; shapes and size caps, empty or failed sources, sharp flags, history + query, 75% switch,
+- [x] 5 Budget: research counts toward the budget; at 75% of the input budget the research tools close and the agent decides.
+- [x] 6 Tests (mocked ESPN / splits; shapes and size caps, empty or failed sources, sharp flags, history + query, 75% switch,
       a full mocked run that researches and bets); version 0.22.0; PROGRESS; agents/README.md; all CLAUDE.md checks; merge.
-Decisions so far:
+Decisions:
+- **Sources (all read from the runner, nothing stored):** ESPN public site API (teams list, team schedule `?seasontype=2` and `3`,
+  game summary for injuries, team statistics, scoreboard event for probable pitchers / weather, standings for league ranks),
+  ESPN core API (DraftKings odds with open / current for spread, total, moneyline), ESPN common v3 (player game log) and the team
+  roster. Shapes were checked against the live endpoints on 2026-10-28; every parser is defensive (a missing field just drops out).
+  Not verified against a completed game: ESPN's schedule score field (handled as number, string or `{value, displayValue}`).
+  The first real run's trace will show whether each tool returns data.
+- **Betting splits: NOT scraped.** DK Network's betting splits page (dknetwork.draftkings.com) is public, but its terms of use
+  forbid automated collection (software or automated means), so it is not read. VSiN's DraftKings splits page loads its numbers by
+  script from an endpoint that isn't documented, shows only part of them without VSiN Pro, and its terms page could not be read
+  here; robots.txt alone doesn't grant permission, so it isn't read either. `get_betting_splits` therefore answers
+  `{ available: false, hint: "use web_search for public and sharp betting splits" }`. The sharp-signal maths (money% minus bets%
+  >= 15 points; reverse line movement: the line moves 0.5+ points, or 2+ implied points on the moneyline, against the side with
+  55%+ of the bets) is built and tested on an injected `splitsSource(league)`, so a licensed or permitted feed can be plugged in
+  later with no other change; until then the flags stay empty and the agents get splits from web_search. Line movement
+  (opening vs current from ESPN's DraftKings odds) is live.
+- **get_my_history / index:** `/api/bets` action "mine" with `{ history: true }` adds `history` = the caller's settled bets of the
+  last 14 days, newest first, at most 50 (pick, league, odds, stake, result, return, why cut to 120, settled). One query:
+  bets where uid == caller and settledAt >= cutoff, ordered by settledAt desc, limit 50. It needs a composite index
+  (bets: uid ascending, settledAt descending). Until Will creates it the answer is `history: { available: false }`, get_my_history
+  tells the agent "History is not available yet." and nothing else changes (the server logs the query error). Reads: at most 50 per
+  agent run. firestore.rules: no change. /api: still 7 functions.
+- **Budget:** research tools and web_search close once the run's input total is >= 75% of AGENT_MAX_INPUT_TOKENS (checked after
+  each model turn, before its tool calls run); they answer `researchClosed` with "Decide now" and get_board / get_game /
+  get_props / get_my_bets / get_my_history / place_bet keep working. The summary shows "Research calls: N (research closed after
+  turn T ...)" and each research tool's result size is in the turn-by-turn trace. Real tokens run about 2.7-3x chars / 4.
+- **Recommended setting:** research makes runs longer; set the GitHub variable AGENT_MAX_INPUT_TOKENS to about 250000 (Gemini has no
+  cache discount; the gate is then at 187k). Claude agents are cached, so they go much further on the same number.
+- Prompt: quarter-Kelly stake% = 25 x (p x D - 1) / (D - 1), clamped to 0.5-3% of the balance (server cap 5% unchanged); edge
+  >= 2 points (3 for props and parlays); expected 2-6 bets on a normal day; history first; no chasing losses.
 
 ## Phase 0.21.3 (Will, 2026-10-27 11:33 CT) — COMPLETE (2026-10-27), merged to main, ready for Will to test
 Spec: "go ahead" after the first 0.21.2 logs (claude-big stopped at 39,843 of 40,000 after 4 turns, claude-small 32,675 after 3,

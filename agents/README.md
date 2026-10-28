@@ -1,10 +1,12 @@
-# AI agent players (0.21.0, leaner since 0.21.2, cached and traced since 0.21.3)
+# AI agent players (0.21.0, leaner since 0.21.2, cached and traced since 0.21.3, researching since 0.22.0)
 
 `node agents/run.mjs <claude-small | claude-big | openai | gemini>` plays one session for that agent and exits. It runs on
 GitHub Actions (`.github/workflows/agents.yml`): daily at 16:00 UTC, or Actions → Agents → Run workflow. Nothing here is
 deployed or bundled by Vite; it only calls the live site's `/api`, as that agent's player account.
 
-- `prompt.md`: the instructions, the same for every agent. `{{MAX_SEARCHES}}` and `{{MAX_TURNS}}` are filled in by the runner
+- `prompt.md`: the instructions (since 0.22.0 a daily routine: get_my_history, 2-3 leagues, a shortlist of 6-10, research, estimate vs the
+  no-vig fair probability, bet at an edge of 2+ points (3 for props and parlays), quarter-Kelly 0.5-3%, 2-6 bets on a normal day, `why`
+  = estimated vs fair probability plus the strongest reasons), the same for every agent. `{{MAX_SEARCHES}}` and `{{MAX_TURNS}}` are filled in by the runner
   from the run's settings (`renderPrompt` in `lib/runner.mjs`), so the prompt never disagrees with them.
 - `lib/tools.mjs`: the tools (get_leagues, get_board, get_game, get_props, get_my_bets, place_bet, web_search). Picks get short
   ids; place_bet builds the exact legs the app's bet slip sends. LINE_CHANGED / ODDS_CHANGED go back to the model with the new
@@ -15,6 +17,35 @@ deployed or bundled by Vite; it only calls the live site's `/api`, as that agent
   at the same line; get_props has `y` / `n` per threshold; get_leagues counts upcoming games, games within 36 h and games with a
   Kalshi price. Sizes on the test fixtures (chars / 4): about 1,000-1,500 tokens for NFL, NBA, MLB and NHL boards.
   The board only shows one source per market (DraftKings, else Kalshi), so the Kalshi-vs-DraftKings gap is in get_game.
+- Research (0.22.0, `lib/research.mjs`, exposed in `lib/tools.mjs`). Public ESPN data only, read from the runner (no Firestore, no
+  /api, nothing stored); one in-memory cache per run; every result is compact JSON of at most about 1,500 tokens (chars / 4) and a
+  failed, empty or malformed source gives a safe value (`{ available: false, error }`), never an exception. Times are Central.
+  - `get_matchup(league, gameId)`: per side `a` (away) / `h` (home): `rec` season record, `hm` home, `rd` road, `l10` the last 10
+    results (date, vs / @, opponent, W / L, score), `pf5 pa5 pf10 pa10` points (runs, goals) for / against per game over the last 5 / 10,
+    `rest` days off (0 = back-to-back); `h2h` this season; `inj` injuries per side (out first, at most 6); `prob` probable pitchers
+    (MLB) or goalies where ESPN lists them; `wx` weather (outdoor NFL / MLB / college football only); `ats` against-the-spread
+    records when ESPN has them; `mv` DraftKings opening (`o`) vs current (`c`): `sp` home spread, `tot` total, `ml` moneylines;
+    `sharp` flags (only with a splits source). Sources: team schedule, game summary, scoreboard event, core odds.
+  - `get_team_stats(league, team)` (abbreviation or name): season and last-10 points for / against, league ranks `rk` (1 = best, from
+    the standings), the last 10 game totals `tot10` and their average (to compare with a total line), and up to 6 ESPN offense and
+    defense stats per side (per-game or percentage values first).
+  - `get_player_trends(league, player, stat, line?)`: the player's last 10 games for the stat, newest first (date, vs / @, opponent,
+    value), `avg10`, season `avg`, home / away averages `hAvg` / `aAvg` and, with `line`, `over` = "7/10 over 24.5". The player
+    comes from the team that get_props showed him on (else the rosters are searched); names match ignoring case, punctuation and
+    Jr. Stats match by ESPN's names ("points", "rebounds", "assists", "threes", "passing yards", "strikeouts", ...); made-attempted
+    columns read the made number.
+  - `get_betting_splits(league)`: **no source is read.** DK Network's terms forbid automated collection and VSiN's data is
+    script-loaded, partly paywalled and its terms could not be read, so the tool answers `{ available: false, hint: "use web_search
+    for public and sharp betting splits" }`. With a permitted `splitsSource(league)` injected (a function returning
+    `{ games: [{ away, home, sp: {a, h}, tot: {o, u}, ml: {a, h} }] }` with `{ b: bets%, m: money% }` per side) it returns those splits
+    plus `sharp` flags, and get_matchup carries the same flags: money% at least 15 points above bets% on a side, and reverse line
+    movement (the line moves 0.5+ points, or 2+ implied points on the moneyline, against the side that has 55%+ of the bets).
+  - `get_my_history()`: your settled bets of the last 14 days (at most 50 fetched, 25 shown newest first) with won / lost counts,
+    staked and returned cents, from `/api/bets` action "mine" with `history: true` (needs the Firestore index bets: uid ascending,
+    settledAt descending; without it the tool says history is not available yet).
+  - The 75% rule: once the run's input total reaches 75% of AGENT_MAX_INPUT_TOKENS, the research tools and web_search answer
+    `researchClosed` ("Decide now") and the agent has to place its bets or pass; the other tools keep working. The summary shows
+    "Research calls: N" and when research closed; the turn trace lists each research tool's result size.
 - Adapters (Anthropic requests use prompt caching since 0.21.3: cache breakpoints on the system prompt and on the last block of the
   conversation, so what is re-sent each turn is a cache read at 0.1x and only the new text is a cache write at 1.25x; usage is
   reported as billed-equivalent input tokens, which is what the budget and the cost estimate use): Anthropic Messages, OpenAI Responses, Gemini generateContent, plain fetch. web_search is one request
