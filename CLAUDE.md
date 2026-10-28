@@ -69,7 +69,8 @@ Vercel deploys the live site from `main`.
   per-bet sanity ceiling: $10,000,000 for sportsbook bets and parlays (SPORTSBOOK_BET_CEILING_CENTS, 0.23.0), $1,000,000 for
   the casino, slots and Battles. Craps Odds stay capped at 2× the line bet (a game rule).
 - Chips: $1, $2, $5, $10, $25, $100, $1,000 and $10,000 on every game (CHIP_VALUES).
-- Craps/Crapless Place bets go up any time (0.23.0) but are OFF on a come-out roll (never won or lost by it).
+- Craps/Crapless Place bets and Hard ways go up any time; on a come-out roll they are OFF unless the player switches them ON
+  (per bet or all); the switch resets to OFF at every come-out (0.25.0, bets.working; settleRoll in shared/casino/dice.js).
 - Side bets (0.24.0, shared/casino/sideBets.js, sources cited there): Blackjack 21+3 (100/40/30/10/5, settled right after the
   opening deal); Baccarat Dragon Bonus Player/Banker, Fortune 7 40:1, Heavenly 9 75/10, Golden 8 25:1, Blazing 7s 200/40 (Nevada
   GCB "Commission Free 5 Treasures Baccarat" paytable). A side bet needs a main bet on the seat; the main Banker bet still pays

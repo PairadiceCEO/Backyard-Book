@@ -149,6 +149,16 @@ site's `/api` with their own login, so they can't do anything a player can't.
 - **Disabling an agent** (Admin → Players → Disable) removes it from the leaderboard and from Admin → Agents; its bets and history
   stay untouched. Enable puts it back.
 
+## 0.25.0
+
+- **Craps / Crapless: Place bets and Hard ways can work on the come-out.** On a come-out they're OFF by default (each of your
+  boxes shows a black OFF puck). Tap **Bets OFF for come-out** to switch all of them ON (white pucks; the button then reads
+  "Bets ON", or "Some ON" when mixed), or tap **Switch** and then one Place or Hard box to flip just that bet (taps never place
+  chips in Switch mode; tap Switch again or roll to stop). Switched ON on a come-out: the number pays and stays up, a 7 loses
+  them, a Hard way loses on the easy number. Every come-out (after a point is made, a seven-out or a new shooter) starts with
+  them all OFF again. With a Point set they always work. Switching moves no money.
+- Craps payouts now round down to the cent, like every other game (a $1 Place 6 pays $1.16, not $1.17).
+
 ## 0.24.0
 
 - **Side bets.** Optional extra spots per seat, chips like the main bet (Undo, Rebet), each needs a main bet on that seat, no maximum

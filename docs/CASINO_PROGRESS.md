@@ -28,7 +28,7 @@ come from Will's live testing.
 - Bets $1–$10, whole dollars; each spot holds at most $10 (Odds up to $10). Every bet carries a requestId.
 - Pass / Don't Pass (Craps only): placed before a come-out; taken down only before the come-out (never once a Point is set).
 - Odds (Pass only): after a Point is set; true odds 4/10 2:1, 5/9 3:2, 6/8 6:5; Crapless adds 2/12 5:1 (Will confirmed 5:1), 3/11 3:1.
-- Place: point phase only (0.23.0: any time, OFF on come-outs — see below); 4/10 9:5, 5/9 7:5, 6/8 7:6; Crapless adds 2/12 9:2, 3/11 11:4. A win pays and stays up; off on come-outs; loses on a seven-out.
+- Place: point phase only (0.23.0: any time, OFF on come-outs; 0.25.0: can be switched ON for the come-out — see below); 4/10 9:5, 5/9 7:5, 6/8 7:6; Crapless adds 2/12 9:2, 3/11 11:4. A win pays and stays up; off on come-outs; loses on a seven-out.
 - Field: any time, one roll: 3, 4, 9, 10, 11 pay 1:1; 2 and 12 pay 2:1; 5–8 lose.
 - Craps: come-out 7/11 win, 2/3/12 lose; Don't Pass wins 2/3, pushes 12. Crapless: come-out 7 wins, every other number is a point.
 - Roll: shooter only, needs a line bet, carries `rollSeq`; refused only if a roll already happened (another seat's bet in between never blocks it).
@@ -135,6 +135,23 @@ mute in localStorage 'backyardbook.casinoSound', useSyncExternalStore; AudioCont
 suspended while hidden, closed when the last page using it unmounts; navigator.vibrate(30) on win / bigWin). SoundToggle.jsx in every
 casino top bar and the lobby. Hooks: useChipBetting.place (chip), PlayingCard slide (card), ResultFx (win), CrapsPage (dice), Slots
 (reels, win, big win). Details in PROGRESS.md 0.20.0.
+
+## 0.25.0 (2026-10-28): come-out working switch (Craps, Crapless)
+- shared/casino/dice.js: bets.working { place: {n: true}, hard: {n: true} } (cloneBets keeps a flag only while its bet is up,
+  and leaves the key out when empty); isWorking / workingState / setWorking (WORKING_POINT_ON "Bets always work once a Point is
+  set."). settleRoll: on a come-out, ON Place n pays and stays on n, loses on 7; ON Hard n pays on the hard n (stays), loses on the
+  easy n and on 7; OFF bets untouched. Flags deleted on pointMade / sevenOut. Come Odds unchanged (returned on a come-out 7).
+- server/casino/crapsTable.js: action `working` { seat, kind, number, on } | { seat, all: true, on }, requestId (seat.reqs dupes);
+  refused with a point on (WORKING_NOT_ALLOWED); no ledger, no clock change. resetWorking when the dice go to a new shooter on a
+  come-out (onDeadline pass, afterSeatsChanged). router.js lists `working`.
+- shared/casino/constants.js winningsCents now rounds down (Math.floor), as CLAUDE.md says; only craps amounts change (7:6, the
+  inverse Odds); two tests that asserted round-half-up updated.
+- UI: CrapsFelt WorkPuck (black OFF / white ON) on my Place and Hard boxes during a come-out (the 0.23.0 OFF-on-every-box is
+  gone); CrapsPage: all-bets button + Switch mode (like Take down). Placement by size: upright 360 px+ in the tools row (Take down
+  on two lines, Roll 44 px+), upright < 360 a row of its own, wide sideways a row under the tools, 568 × 320 Switch in the rack's
+  ninth cell and the all-bets button beside Roll.
+- Tests: test/diceWorking.test.js, test/casino/casino10.test.mjs; interact.mjs come-out switch checks; shoot.mjs
+  cr-comeout-working, cr-comeout-switch, cx-comeout-working.
 
 ## 0.24.0 (2026-10-28): side bets
 - shared/casino/sideBets.js: 21+3 (twentyOne3Hand / ReturnCents), Baccarat baccaratSideOutcome / ReturnCents for dragonPlayer,
