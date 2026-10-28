@@ -176,29 +176,31 @@ export function parseInjuries(summary, awayTeam, homeTeam, max = 6) {
   return { a: sides.a.sort((x, y) => x.rank - y.rank).slice(0, max).map((x) => x.text), h: sides.h.sort((x, y) => x.rank - y.rank).slice(0, max).map((x) => x.text) };
 }
 
-export function parseProbables(summary) {
-  const competitors = summary?.header?.competitions?.[0]?.competitors ?? [];
+// Probable starters from a list of competitors (ESPN's scoreboard event or the summary header): { a, h } "Name (ERA 3.10 ...)".
+export function parseProbables(source) {
+  const competitors = Array.isArray(source) ? source : source?.header?.competitions?.[0]?.competitors ?? [];
   const out = {};
   for (const c of competitors) {
-    const list = Array.isArray(c?.probables) ? c.probables : [];
-    const p = list[0];
+    const p = (Array.isArray(c?.probables) ? c.probables : [])[0];
     const who = p?.athlete?.displayName ?? p?.athlete?.fullName;
     if (!who) continue;
-    const stat = (p.statistics ?? []).map((s) => s?.displayValue).filter(Boolean).slice(0, 3).join(' ');
+    const stat = (p.statistics ?? []).map((x) => (x?.abbreviation && x?.displayValue ? `${x.abbreviation} ${x.displayValue}` : x?.displayValue)).filter(Boolean).slice(0, 3).join(' ');
     out[c.homeAway === 'home' ? 'h' : 'a'] = `${who}${stat ? ` (${stat})` : ''}`;
   }
   return out;
 }
 
-export function parseWeather(summary, league) {
+// Weather for outdoor leagues: the summary's gameInfo.weather, else the scoreboard event's weather. Indoor venues have none.
+export function parseWeather(summary, league, event = null) {
   if (!['nfl', 'mlb', 'ncaaf'].includes(league)) return null;
-  const venue = summary?.gameInfo?.venue ?? summary?.header?.competitions?.[0]?.venue;
-  if (venue?.indoor === true) return null;
-  const w = summary?.gameInfo?.weather ?? summary?.header?.competitions?.[0]?.weather;
+  const venue = summary?.gameInfo?.venue ?? event?.competitions?.[0]?.venue ?? summary?.header?.competitions?.[0]?.venue;
+  if (venue?.indoor === true || event?.competitions?.[0]?.venue?.indoor === true) return null;
+  const w = summary?.gameInfo?.weather ?? event?.weather ?? event?.competitions?.[0]?.weather ?? summary?.header?.competitions?.[0]?.weather;
   if (!w) return null;
   const temp = num(w.temperature ?? w.highTemperature);
   const wind = num(w.windSpeed ?? w.gust);
-  const text = [temp !== null ? `${temp}F` : null, w.displayValue ?? w.conditionDescription, wind !== null ? `wind ${wind}` : null].filter(Boolean).join(' ');
+  const rain = num(w.precipitation);
+  const text = [temp !== null ? `${temp}F` : null, w.displayValue ?? w.conditionDescription, wind !== null ? `wind ${wind}` : null, rain ? `precip ${rain}%` : null].filter(Boolean).join(' ');
   return text || null;
 }
 
@@ -404,6 +406,36 @@ export function createResearch({ fetchImpl = fetch, now = () => new Date(), look
     return parseLineMovement(await getJson(`${CORE}/${sport}/leagues/${lg}/events/${gameId}/competitions/${gameId}/odds`));
   }
 
+  // The scoreboard event for a game (ESPN dates the scoreboard in Eastern time): probable starters and weather live there.
+  const etDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' });
+  async function scoreboardEvent(league, gameId, startMs) {
+    if (!['mlb', 'nhl', 'nfl', 'ncaaf'].includes(league) || !Number.isFinite(startMs)) return null;
+    const extra = league === 'ncaaf' ? '&groups=80&limit=300' : '';
+    const json = await getJson(`${SITE}/${pathOf(league)}/scoreboard?dates=${etDay.format(new Date(startMs)).replaceAll('-', '')}${extra}`);
+    return (Array.isArray(json?.events) ? json.events : []).find((e) => String(e?.id) === String(gameId)) ?? null;
+  }
+
+  // Standings give one-call league ranks for points scored and allowed per game: { teamId: { pf, pa, of } }, 1 = best.
+  async function standingsRanks(league) {
+    const json = await getJson(`https://site.api.espn.com/apis/v2/sports/${pathOf(league)}/standings`);
+    const entries = [];
+    const walk = (node) => {
+      for (const e of Array.isArray(node?.standings?.entries) ? node.standings.entries : []) entries.push(e);
+      for (const c of Array.isArray(node?.children) ? node.children : []) walk(c);
+    };
+    walk(json);
+    const rows = entries.map((e) => {
+      const st = Object.fromEntries((e.stats ?? []).map((x) => [x.name, num(x.value)]));
+      const gp = (st.wins ?? 0) + (st.losses ?? 0) + (st.ties ?? 0) + (st.otLosses ?? 0);
+      const pf = st.avgPointsFor ?? (st.pointsFor !== null && st.pointsFor !== undefined && gp ? st.pointsFor / gp : null);
+      const pa = st.avgPointsAgainst ?? (st.pointsAgainst !== null && st.pointsAgainst !== undefined && gp ? st.pointsAgainst / gp : null);
+      return { id: String(e.team?.id ?? ''), pf, pa };
+    }).filter((r) => r.id && r.pf !== null && r.pa !== null);
+    const out = {};
+    for (const r of rows) out[r.id] = { pf: 1 + rows.filter((x) => x.pf > r.pf).length, pa: 1 + rows.filter((x) => x.pa < r.pa).length, of: rows.length };
+    return out;
+  }
+
   async function splitsFor(league) {
     if (typeof splitsSource !== 'function') return null;
     try {
@@ -433,6 +465,9 @@ export function createResearch({ fetchImpl = fetch, now = () => new Date(), look
         getJson(`${SITE}/${path}/summary?event=${encodeURIComponent(gameId)}`),
         lineMovement(league, gameId),
       ]);
+      const needsBoard = !Object.keys(parseProbables(summary)).length && ['mlb', 'nhl'].includes(league);
+      const needsWeather = !parseWeather(summary, league) && ['nfl', 'mlb', 'ncaaf'].includes(league);
+      const event = needsBoard || needsWeather ? await scoreboardEvent(league, gameId, start) : null;
       const a = formOf(awaySched, start);
       const h = formOf(homeSched, start);
       const side = (f) => ({ rec: f.rec, hm: f.hm, rd: f.rd, l10: f.l10, pf5: f.pf5, pa5: f.pa5, pf10: f.pf10, pa10: f.pa10, rest: f.rest });
@@ -453,14 +488,14 @@ export function createResearch({ fetchImpl = fetch, now = () => new Date(), look
         h: side(h),
         h2h,
         inj,
-        prob: parseProbables(summary),
-        wx: parseWeather(summary, league),
+        prob: Object.keys(parseProbables(summary)).length ? parseProbables(summary) : parseProbables(event?.competitions?.[0]?.competitors ?? []),
+        wx: parseWeather(summary, league, event),
         ats: parseAts(summary, awayTeam, homeTeam),
         mv: mv ?? undefined,
         sharp: flags,
         keys: 'a away, h home. rec season record, hm home record, rd road record, l10 last 10 results (oldest first), pf5/pa5/pf10/pa10 points (runs, goals) for / against per game over the last 5 / 10, rest = days off since the last game (0 = back-to-back), h2h this season (home team first), inj injuries (out, dtd, q = questionable), mv DraftKings opening (o) vs current (c): sp home spread, tot total, ml moneylines, sharp = money / reverse-line-movement flags (only with a splits source).',
       };
-      if (!awaySched.length && !homeSched.length && !summary && !mv) return unavailable('ESPN returned no data for this game right now.');
+      if (!awaySched.length && !homeSched.length && !summary && !mv && !event) return unavailable('ESPN returned no data for this game right now.');
       return fit(result, [
         (o) => { if (o.ats) delete o.ats; },
         (o) => { if (o.h2h) o.h2h = o.h2h.slice(-1); },
@@ -476,25 +511,26 @@ export function createResearch({ fetchImpl = fetch, now = () => new Date(), look
       if (!path) return unavailable(`league must be one of ${Object.keys(LEAGUE_CONFIG).join(', ')}`);
       const t = await resolveTeam(league, team);
       if (!t) return unavailable(`No ${league} team matches "${team}". Use the abbreviation from get_board.`);
-      const [stats, sched] = await Promise.all([getJson(`${SITE}/${path}/teams/${t.id}/statistics`), scheduleOf(league, t.id)]);
+      const [stats, sched, ranks] = await Promise.all([getJson(`${SITE}/${path}/teams/${t.id}/statistics`), scheduleOf(league, t.id), standingsRanks(league)]);
       const f = formOf(sched, now().getTime() + 365 * DAY_MS);
-      const pick = (categories) => {
+      // ESPN's team statistics come in categories (general / offensive / defensive); take per-game and percentage stats first.
+      const pick = (re) => {
         const rows = [];
-        for (const cat of Array.isArray(categories) ? categories : []) {
-          for (const s of Array.isArray(cat?.stats) ? cat.stats : []) {
-            const value = num(s?.perGameValue ?? s?.value);
+        for (const cat of (stats?.results?.stats?.categories ?? stats?.stats?.categories ?? [])) {
+          if (!re.test(String(cat?.name ?? ''))) continue;
+          for (const x of Array.isArray(cat?.stats) ? cat.stats : []) {
+            const value = num(x?.perGameValue ?? x?.value);
             if (value === null) continue;
-            rows.push({ k: s.abbreviation ?? s.shortDisplayName ?? s.name, name: String(s.name ?? ''), v: r1(value), r: num(s.rank) ?? undefined });
+            rows.push({ k: x.abbreviation ?? x.shortDisplayName ?? x.name, name: String(x.name ?? ''), v: r1(value) });
           }
         }
-        // Per-game and efficiency numbers first, ranked ones before unranked.
-        const score = (x) => (/pergame|pct|percent|avg|average|rate|diff|efficiency/i.test(x.name) ? 0 : 2) + (x.r === undefined ? 1 : 0);
-        return rows.sort((x, y) => score(x) - score(y)).slice(0, 8).map(({ k, v, r }) => ({ k, v, r }));
+        const score = (x) => (/^avg|pergame|pct|percent|rate|efficiency/i.test(x.name) ? 0 : 1);
+        return rows.sort((p, q) => score(p) - score(q)).slice(0, 6).map(({ k, v }) => ({ k, v }));
       };
-      const res = stats?.results ?? stats;
-      const off = pick(res?.stats?.categories ?? res?.splits?.categories ?? stats?.stats?.categories);
-      const def = pick(res?.opponent?.categories ?? res?.opponent ?? stats?.opponent?.categories);
-      if (!f.games && !off.length && !def.length) return unavailable('ESPN returned no stats for this team right now.');
+      const off = pick(/offens|general|scoring|batting|passing|rushing|attack/i);
+      const def = pick(/defens|pitching|goalie|goalkeeping/i);
+      const rk = ranks[t.id];
+      if (!f.games && !off.length && !def.length && !rk) return unavailable('ESPN returned no stats for this team right now.');
       const result = {
         team: t.abbr ?? t.name,
         name: t.short || t.name,
@@ -503,13 +539,14 @@ export function createResearch({ fetchImpl = fetch, now = () => new Date(), look
         pa: f.pa,
         pf10: f.pf10,
         pa10: f.pa10,
+        rk: rk ? { pf: rk.pf, pa: rk.pa, of: rk.of } : undefined,
         tot10: f.tot10,
         avgTot10: round1(mean(f.tot10)),
         off,
         def,
-        keys: 'pf / pa points (runs, goals) for / against per game this season and over the last 10; tot10 the last 10 game totals (compare with today\'s total line); off / def ESPN team stats: k name, v value, r league rank when ESPN gives one.',
+        keys: 'pf / pa points (runs, goals) for / against per game this season and over the last 10; rk league rank (1 = best) out of "of" teams for scoring (pf) and for allowing points (pa); tot10 the last 10 game totals (compare with today\'s total line); off / def ESPN team stats: k name, v value (per game or percentage).',
       };
-      return fit(result, [(o) => { o.off = (o.off ?? []).slice(0, 5); o.def = (o.def ?? []).slice(0, 5); }, (o) => { delete o.keys; }, (o) => { delete o.off; delete o.def; }]);
+      return fit(result, [(o) => { o.off = (o.off ?? []).slice(0, 4); o.def = (o.def ?? []).slice(0, 4); }, (o) => { delete o.keys; }, (o) => { delete o.off; delete o.def; }]);
     },
 
     async playerTrends(league, player, stat, line) {
