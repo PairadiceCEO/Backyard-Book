@@ -13,8 +13,20 @@
 //   place_bet({ mode, legs: [{ pick, stakeCents }], stakeCents, why })   /api/bets place; LINE_CHANGED / ODDS_CHANGED come back
 //                              to the model with the new price (the catalog is updated, nothing is re-sent automatically)
 //   web_search(query)          the provider's own search, at most N per run (the runner counts them)
+// 0.22.0: research tools (agents/lib/research.mjs, ESPN public data, nothing stored), each result at most ~1,500 tokens:
+//   get_matchup(league, gameId)                  form, records, rest, head-to-head, injuries, probables, weather, DraftKings line movement
+//   get_team_stats(league, team)                 offense / defense values and ranks, points for and against, last 10 game totals
+//   get_player_trends(league, player, stat, line?)  last-10 game log of a stat, home / away averages, games over the line
+//   get_betting_splits(league)                   public bets% / money% with sharp flags, or { available: false, hint } (see research.mjs)
+//   get_my_history()                             the agent's own settled bets of the last 14 days (/api/bets action "mine" with history)
+// Once the runner closes research (75% of the input budget used) the research tools and web_search answer researchClosed and the
+// agent has to decide; get_board / get_game / get_props / get_my_bets / get_my_history / place_bet keep working.
 
 import { randomUUID } from 'node:crypto';
+import { createResearch } from './research.mjs';
+import { estimateTokens, r1 } from './util.mjs';
+
+export { estimateTokens };
 
 export const LEAGUES = ['nfl', 'nba', 'mlb', 'nhl', 'ncaaf'];
 const TOO_SOON_MS = 10 * 60 * 1000;
@@ -22,6 +34,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_BOARD_GAMES = 30;
 const MAX_PROP_PLAYERS = 25;
 const hasKalshi = (g) => Boolean(g.kalshi);
+export const RESEARCH_TOOLS = ['get_matchup', 'get_team_stats', 'get_player_trends', 'get_betting_splits', 'web_search'];
+export const RESEARCH_CLOSED_MESSAGE = 'Research budget used (75%). Decide now: place_bet for the candidates that clear the edge, or pass and say why. get_board, get_game, get_props, get_my_bets, get_my_history and place_bet still work.';
+const HISTORY_SHOWN = 25;
 
 export function toolDefs({ maxSearches } = {}) {
   return [
@@ -48,6 +63,31 @@ export function toolDefs({ maxSearches } = {}) {
   {
     name: 'get_my_bets',
     description: 'Your balance, your open bets and how many bet slips you have placed today (of 10).',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_matchup',
+    description: "Research one game: both teams' last-10 results, season / home / road records, points (runs, goals) for and against over the last 5 and 10, rest days, head-to-head this season, injuries, probable starters, weather and the DraftKings line movement (opening vs current), with sharp flags when splits exist.",
+    parameters: { type: 'object', properties: { league: { type: 'string', enum: LEAGUES }, gameId: { type: 'string' } }, required: ['league', 'gameId'] },
+  },
+  {
+    name: 'get_team_stats',
+    description: "One team's offense and defense: per-game values and league ranks, points for and against, and the last 10 game totals to compare with a total line.",
+    parameters: { type: 'object', properties: { league: { type: 'string', enum: LEAGUES }, team: { type: 'string', description: 'Abbreviation or name, as on the board.' } }, required: ['league', 'team'] },
+  },
+  {
+    name: 'get_player_trends',
+    description: "A player's last-10 game log for one stat (home / away, opponent), season average, home vs away averages and, with line, how many of the last 10 went over it. Use the player's name exactly as get_props shows it.",
+    parameters: { type: 'object', properties: { league: { type: 'string', enum: LEAGUES }, player: { type: 'string' }, stat: { type: 'string', description: 'e.g. points, rebounds, assists, threes, passing yards, receptions, strikeouts, hits, shots.' }, line: { type: 'number', description: 'The threshold to count games over.' } }, required: ['league', 'player', 'stat'] },
+  },
+  {
+    name: 'get_betting_splits',
+    description: "Public betting splits (% of bets and % of money per side) with sharp flags (money 15+ points above bets, reverse line movement). Says available: false when no permitted source exists; then use web_search.",
+    parameters: { type: 'object', properties: { league: { type: 'string', enum: LEAGUES } }, required: ['league'] },
+  },
+  {
+    name: 'get_my_history',
+    description: 'Your settled bets of the last 14 days (pick, odds, stake, result, your reason) with a won / lost summary: what has been working and what has not.',
     parameters: { type: 'object', properties: {}, required: [] },
   },
   {
@@ -83,8 +123,6 @@ export function centralTime(iso) {
   return Number.isNaN(d.getTime()) ? null : `${centralFmt.format(d)} CT`;
 }
 
-const r1 = (x) => Math.round(x * 10) / 10;
-
 // Implied probability (0..1) of American odds, vig included.
 function impl(american) {
   const a = Number(american);
@@ -102,11 +140,9 @@ export function fairPair(americanA, americanB) {
   return [fa, r1(100 - fa)];
 }
 
-// A rough token count of a tool result or request text (about 4 characters per token).
-export const estimateTokens = (value) => Math.ceil((typeof value === 'string' ? value : JSON.stringify(value) ?? '').length / 4);
-
 // The tools' state and executor. api: { get(path), post(path, body) } that throw { code, message, status, details }.
-export function createTools({ api, now = () => new Date(), search, limits }) {
+export function createTools({ api, now = () => new Date(), search, limits, fetchImpl, splitsSource = null, research: researchOverride }) {
+  let researchOpen = true;
   const picks = new Map(); // id → { leg, label, game, start }
   let nextPick = 1;
   const boards = new Map();
@@ -153,6 +189,18 @@ export function createTools({ api, now = () => new Date(), search, limits }) {
     if (marketType === 'total') return `${selection === 'over' ? 'Over' : 'Under'} ${line}`;
     return `${marketType} ${selection}`;
   }
+
+  // The board game with this id (any state), for the research tools.
+  async function lookupGame(league, gameId) {
+    if (!LEAGUES.includes(league)) return null;
+    try {
+      const b = await board(league);
+      return (b.games ?? []).find((g) => String(g.id) === String(gameId)) ?? null;
+    } catch {
+      return null;
+    }
+  }
+  const research = researchOverride ?? createResearch({ fetchImpl, now, lookupGame, splitsSource });
 
   const upcoming = (games) => games.filter((g) => g.state === 'pre' && !g.bettingClosed && new Date(g.startTime).getTime() - now().getTime() > TOO_SOON_MS);
 
@@ -264,6 +312,7 @@ export function createTools({ api, now = () => new Date(), search, limits }) {
       const d = await api.get(`/api/board?league=${encodeURIComponent(league)}&game=${encodeURIComponent(gameId)}&props=1`);
       const g = { ...d.game, league };
       if (!d.props?.open) return { open: false, reason: d.props?.reason ?? 'No props.' };
+      for (const tab of d.props.tabs ?? []) for (const p of tab.players.slice(0, MAX_PROP_PLAYERS)) research.notePlayer(league, p.name, p.team);
       return {
         gameId,
         game: `${g.away?.abbr ?? g.away?.shortName} @ ${g.home?.abbr ?? g.home?.shortName}`,
@@ -294,6 +343,54 @@ export function createTools({ api, now = () => new Date(), search, limits }) {
 
     async get_my_bets() {
       return api.post('/api/bets', { action: 'mine' });
+    },
+
+    async get_matchup({ league, gameId }) {
+      if (!LEAGUES.includes(league)) return { error: `league must be one of ${LEAGUES.join(', ')}` };
+      return research.matchup(league, String(gameId ?? ''));
+    },
+
+    async get_team_stats({ league, team }) {
+      if (!LEAGUES.includes(league)) return { error: `league must be one of ${LEAGUES.join(', ')}` };
+      return research.teamStats(league, team);
+    },
+
+    async get_player_trends({ league, player, stat, line }) {
+      if (!LEAGUES.includes(league)) return { error: `league must be one of ${LEAGUES.join(', ')}` };
+      return research.playerTrends(league, player, stat, line);
+    },
+
+    async get_betting_splits({ league }) {
+      if (!LEAGUES.includes(league)) return { error: `league must be one of ${LEAGUES.join(', ')}` };
+      let games = [];
+      try {
+        games = upcoming((await board(league)).games ?? []);
+      } catch {
+        games = [];
+      }
+      return research.bettingSplits(league, games);
+    },
+
+    async get_my_history() {
+      const r = await api.post('/api/bets', { action: 'mine', history: true });
+      const h = r?.history;
+      if (!h?.available) return { available: false, note: h?.reason ?? 'History is not available yet.' };
+      const bets = h.bets ?? [];
+      const won = bets.filter((b) => b.result === 'won');
+      const lost = bets.filter((b) => b.result === 'lost');
+      const staked = bets.reduce((n, b) => n + (b.stakeCents ?? 0), 0);
+      const returned = bets.reduce((n, b) => n + (b.returnCents ?? 0), 0);
+      return {
+        days: h.days,
+        n: bets.length,
+        won: won.length,
+        lost: lost.length,
+        stakedCents: staked,
+        returnedCents: returned,
+        keys: 'bets newest first: pick, league, odds, stakeCents, result (won, lost, push, void), returnCents, why (your earlier reason), settled.',
+        bets: bets.slice(0, HISTORY_SHOWN),
+        ...(bets.length > HISTORY_SHOWN ? { more: bets.length - HISTORY_SHOWN } : {}),
+      };
     },
 
     async place_bet({ mode, legs, stakeCents, why }) {
@@ -356,6 +453,7 @@ export function createTools({ api, now = () => new Date(), search, limits }) {
   async function run(name, args) {
     const handler = Object.prototype.hasOwnProperty.call(handlers, name) ? handlers[name] : null;
     if (!handler) return { error: `Unknown tool ${name}.` };
+    if (!researchOpen && RESEARCH_TOOLS.includes(name)) return { researchClosed: true, message: RESEARCH_CLOSED_MESSAGE };
     try {
       return await handler(args && typeof args === 'object' ? args : {});
     } catch (err) {
@@ -364,5 +462,5 @@ export function createTools({ api, now = () => new Date(), search, limits }) {
     }
   }
 
-  return { run, log, picks };
+  return { run, log, picks, setResearchOpen: (open) => { researchOpen = Boolean(open); }, isResearchOpen: () => researchOpen };
 }

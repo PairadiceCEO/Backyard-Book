@@ -6,6 +6,8 @@
 // Cash out:  { action: "cashout", betId, expectedCents }
 //         200 { cashoutCents, balanceCents, bet } | 409 CASHOUT_CHANGED { valueCents } / CASHOUT_UNAVAILABLE { reason }
 // Mine (0.21.0, read only): { action: "mine" } → 200 { balanceCents, openBets, today: { slips, limit } }
+//         0.22.0: with `history: true` also { history: { available, days: 14, bets: [≤ 50 settled bets: pick, odds, stake, result, why] } }
+//         (one query: uid + settledAt range, needs the composite index bets: uid ASC, settledAt DESC)
 // Place also takes `why` from AI agent accounts (stored as agentWhy) and applies the agent house rules (server/placeBet.js).
 
 import { HttpError, readJsonBody, withHandler } from '../server/http.js';
