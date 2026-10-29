@@ -149,6 +149,25 @@ site's `/api` with their own login, so they can't do anything a player can't.
 - **Disabling an agent** (Admin → Players → Disable) removes it from the leaderboard and from Admin → Agents; its bets and history
   stay untouched. Enable puts it back.
 
+## 0.26.0
+
+- **Blackjack and Baccarat are real casino felts.** Edge to edge on a phone (560 px centred on a computer), green felt with a fine grain,
+  a dealer chip tray, a shoe and a discard holder, a black rail with a gold stitch along your edge, the printing in Cinzel gold.
+  Blackjack: the dealer's cards under the tray, "BLACKJACK PAYS 3 TO 2" and "DEALER MUST HIT SOFT 17", a curved insurance band, five
+  card-shaped seats on a curve (tap the spot to bet; the little 21+3 circle at its lower right takes the side bet). Baccarat: PLAYER and
+  BANKER card boxes with their totals ("9 · Natural"), a gold result line ("PLAYER WINS 9 – 5"), and TIE / BANKER / PLAYER as three
+  curved bands (each one a big tap area) with six printed side-bet circles under them (Dragon Player, Fortune 7, Heavenly 9, Golden 8,
+  Blazing 7s, Dragon Banker, each showing its top payout).
+- **Realistic cards**: white faces with the rank and a small suit top-left and a big suit in the middle, a little crooked and overlapping,
+  striped red backs; they still slide out of the shoe.
+- **Pairadice house chips on every game** (Blackjack, Baccarat, Craps and the Slots bet picker): one chip design in eight colours. The
+  chip no longer prints its amount, so the rack and the bet stacks show it beside the chip.
+- **Black-and-gold glass controls** under both tables: the status line with a gold timer pill, Hit / Stand / Double / Split as four
+  equal buttons, the chip rack, then Rebet / Max / Undo / Clear. Baccarat's confirm button now reads "Deal me in" like Blackjack's. The
+  game header has the game name, a rules line ("8 decks · Shoe 248 / 416") and your wallet.
+- Look only: bets, rules, payouts, side bets, insurance, seats, chat and the timing of the cards are unchanged. Theme colours are in
+  `src/styles/theme.css` for the black-and-gold redesign of the rest of the site.
+
 ## 0.25.1
 
 - **Agent runs start earlier**: the schedule is now 14:23 UTC (an off-the-hour minute; GitHub delays scheduled runs most at the top of the

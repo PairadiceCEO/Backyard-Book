@@ -471,6 +471,68 @@
   }
 }
 
+/* ---------- Rebet and Max buttons (base rules; the glass look is under .cg below) ---------- */
+.rebet-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.rebet-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--gold, #f5c451);
+  background: rgba(245, 196, 81, 0.12);
+  color: var(--gold, #f5c451);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.rebet-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.max-btn {
+  margin-left: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.max-confirm {
+  flex: 1 1 100%;
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--gold, #f5c451);
+  border-radius: 12px;
+  background: rgba(245, 196, 81, 0.1);
+}
+
+.max-question {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.max-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 0.4rem;
+}
+
+.max-actions .btn {
+  min-height: 44px;
+  min-width: 0;
+}
+
 /* ===================== The black page around the table: header, status, controls ===================== */
 .cg-head {
   display: grid;
@@ -812,4 +874,126 @@
 
 .cg .watch-note {
   padding: 0.7rem 0.9rem;
+}
+
+/* ---------- The five seats under the Baccarat felt: glass tiles ---------- */
+.cg .seat-tile {
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  box-shadow: var(--glass-inset);
+  border-radius: 12px;
+  color: var(--ivory);
+}
+
+.cg .seat-tile.empty {
+  background: transparent;
+  border: 1px dashed rgba(216, 180, 90, 0.4);
+  box-shadow: none;
+}
+
+.cg .seat-tile.mine {
+  border-color: var(--gold-1);
+  box-shadow: inset 0 0 0 1px rgba(248, 227, 163, 0.5), 0 0 12px rgba(226, 189, 98, 0.35);
+}
+
+.cg .seat-tile.active {
+  border-color: var(--gold-2);
+}
+
+.cg .seat-num {
+  color: var(--muted);
+}
+
+.cg .seat-detail {
+  color: var(--muted);
+}
+
+.cg .seat-tile.ready .seat-detail,
+.cg .seat-tile.active .seat-detail {
+  color: var(--gold-text);
+}
+
+.cg .seat-tile.win .seat-detail {
+  color: var(--win);
+}
+
+.cg .seat-tile.lose .seat-detail {
+  color: var(--loss);
+}
+
+.cg .seat-sit {
+  color: var(--gold-text);
+  touch-action: manipulation;
+}
+
+/* ---------- The roads on the black page: onyx grids with gold lines (red and blue circles stay) ---------- */
+.cg .scoreboard.card {
+  background: var(--glass-bg);
+}
+
+.cg .score-pill {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+}
+
+.cg .score-pill strong {
+  color: var(--ivory);
+}
+
+.cg .score-pill.banker strong {
+  color: #ff8d8a;
+}
+
+.cg .score-pill.player strong {
+  color: #9bc2ff;
+}
+
+.cg .score-pill.tie strong {
+  color: var(--win);
+}
+
+.cg .road-tab {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--muted);
+}
+
+.cg .road-tab.active {
+  border-color: var(--gold-2);
+  color: var(--gold-text);
+  background: rgba(216, 180, 90, 0.1);
+}
+
+.cg .road-label {
+  color: var(--gold-text);
+  font-family: var(--font-felt);
+  letter-spacing: 0.06em;
+}
+
+.cg .road-scroll {
+  background: var(--onyx);
+  border: 1px solid rgba(216, 180, 90, 0.35);
+}
+
+.cg .road-grid {
+  background-image:
+    linear-gradient(to right, rgba(216, 180, 90, 0.3) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(216, 180, 90, 0.3) 1px, transparent 1px);
+}
+
+.cg .tie-slash {
+  background: var(--win);
+}
+
+.cg .tie-count {
+  color: var(--win);
+}
+
+.cg .bead-T::before {
+  background: #23a45c;
+}
+
+.cg .table-rules {
+  color: var(--muted);
 }

@@ -1,0 +1,376 @@
+/* ===================== Baccarat felt, 0.26.0 =====================
+   Drawn in a 390 × 560 box (BaccaratFelt.jsx); u = 1/390 of the felt's width (casinofelt.css). The bands' shapes and their buttons'
+   clip-paths come from src/lib/baccaratBands.js, so the printed bands and the tap areas always agree. */
+
+.bacf-felt {
+  aspect-ratio: 390 / 560;
+  --card-w: calc(42 * var(--u));
+}
+
+.cfelt > .bacf-print {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.bacf-band-text {
+  font-family: var(--font-felt);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 2.2px;
+}
+
+/* ---------- The two card boxes ---------- */
+.cfelt > .bacf-boxes {
+  position: absolute;
+  left: calc(18 * var(--u));
+  right: calc(18 * var(--u));
+  top: calc(50 * var(--u));
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(14 * var(--u));
+}
+
+.bact-box {
+  --ink: #b5d1ff;
+  position: relative;
+  box-sizing: border-box;
+  min-width: 0;
+  height: calc(112 * var(--u));
+  padding: calc(7 * var(--u)) calc(8 * var(--u)) 0;
+  border: 2px solid var(--gold-print);
+  border-radius: calc(10 * var(--u));
+  background: rgba(0, 0, 0, 0.16);
+  box-shadow: inset 0 0 calc(12 * var(--u)) rgba(0, 0, 0, 0.35);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.bact-box.banker {
+  --ink: #ffb0ad;
+}
+
+/* the winner glows like "my seat" */
+.bact-box.won {
+  border-color: var(--gold-1);
+  box-shadow: inset 0 0 calc(12 * var(--u)) rgba(0, 0, 0, 0.35), 0 0 calc(14 * var(--u)) rgba(248, 227, 163, 0.55), 0 0 0 1px rgba(248, 227, 163, 0.5);
+}
+
+.bact-box-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(6 * var(--u));
+  min-height: calc(22 * var(--u));
+}
+
+.bact-box-head > span:first-child {
+  font-family: var(--font-felt);
+  font-weight: 700;
+  font-size: max(10px, calc(12 * var(--u)));
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.bact-box .bac-total {
+  font-size: max(9.5px, calc(10.5 * var(--u)));
+}
+
+.bact-box .bac-cards {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(8 * var(--u));
+  height: calc(66 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bact-box .bac-cards .pcard + .pcard,
+.bact-box .bac-cards .pcard + .peel-card,
+.bact-box .bac-cards .peel-card + .pcard {
+  margin-left: calc(-16 * var(--u)); /* the second card overlaps the first */
+}
+
+/* ---------- The result line (or the hint) under the boxes ---------- */
+.cfelt > .bacf-result {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(170 * var(--u));
+  height: calc(36 * var(--u));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.bac-banner {
+  margin: 0;
+  font-family: var(--font-felt);
+  font-weight: 700;
+  font-size: max(13px, calc(15 * var(--u)));
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.15;
+}
+
+.bac-banner-me {
+  margin: 0;
+  font-size: max(10px, calc(11 * var(--u)));
+  letter-spacing: 0.06em;
+  color: var(--ivory);
+}
+
+.bacf-hint {
+  margin: 0;
+  font-family: var(--font-felt);
+  font-weight: 600;
+  font-size: max(9px, calc(9.5 * var(--u)));
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(246, 238, 214, 0.82);
+}
+
+/* ---------- The three bands as buttons ---------- */
+.cfelt > .bacf-spots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.bac-spot {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  pointer-events: none; /* the .bac-spot-hit shape inside takes the taps */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bac-spot-hit {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%; /* the height (the whole band down to its ends) is set inline */
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.bac-spot:disabled {
+  cursor: default;
+}
+
+.bac-spot:disabled .bac-spot-hit {
+  pointer-events: none;
+}
+
+/* tap, keyboard focus and "won" show inside the band's own shape (the clip-path would cut an outline) */
+.bac-spot:not(:disabled):active .bac-spot-hit {
+  background: rgba(248, 227, 163, 0.16);
+}
+
+.bac-spot:focus-visible {
+  outline: none;
+}
+
+.bac-spot:focus-visible .bac-spot-hit {
+  background: rgba(248, 227, 163, 0.22);
+}
+
+.bac-spot.won .bac-spot-hit {
+  background: rgba(248, 227, 163, 0.1);
+}
+
+/* my chips sit on the band at the anchor worked out for that arc */
+.bac-spot-chipwrap {
+  position: absolute;
+  left: var(--chip-x);
+  top: var(--chip-y);
+  width: calc(46 * var(--u));
+  height: calc(46 * var(--u));
+  margin: calc(-23 * var(--u)) 0 0 calc(-23 * var(--u));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.bac-spot .chip-stack,
+.bac-side .chip-stack {
+  --chip-size: calc(34 * var(--u));
+}
+
+.bac-spot .chip-stack-total {
+  font-size: max(8px, calc(9.5 * var(--u)));
+}
+
+.bac-spot.won .chip-stack {
+  filter: drop-shadow(0 0 calc(6 * var(--u)) rgba(248, 227, 163, 0.9));
+}
+
+/* ---------- The six side-bet circles ---------- */
+.cfelt > .bacf-sides {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: calc(10 * var(--u));
+  z-index: 4;
+}
+
+.bac-side {
+  flex: 0 0 auto;
+  width: max(44px, calc(52 * var(--u)));
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--gold-text);
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bac-side:disabled {
+  cursor: default;
+}
+
+.bac-side-disc {
+  position: relative;
+  box-sizing: border-box;
+  width: max(44px, calc(52 * var(--u)));
+  height: max(44px, calc(52 * var(--u)));
+  border-radius: 50%;
+  border: 2px solid var(--gold-print);
+  background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.07), rgba(0, 0, 0, 0.2));
+  box-shadow: inset 0 0 calc(8 * var(--u)) rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bac-side:not(:disabled):active .bac-side-disc,
+.bac-side:focus-visible .bac-side-disc {
+  border-color: var(--gold-1);
+  box-shadow: inset 0 0 calc(8 * var(--u)) rgba(0, 0, 0, 0.4), 0 0 calc(8 * var(--u)) rgba(248, 227, 163, 0.6);
+}
+
+.bac-side:focus-visible {
+  outline: none;
+}
+
+.bac-side-pays {
+  font-family: var(--font-felt);
+  font-weight: 700;
+  font-size: max(10px, calc(12 * var(--u)));
+  letter-spacing: 0;
+  color: var(--gold-text);
+  line-height: 1;
+}
+
+.bac-side.has-bet .bac-side-disc {
+  border-color: var(--gold-1);
+  box-shadow: inset 0 0 calc(8 * var(--u)) rgba(0, 0, 0, 0.4), 0 0 calc(8 * var(--u)) rgba(248, 227, 163, 0.5);
+}
+
+.bac-side.has-bet .bac-side-pays {
+  opacity: 0.18;
+}
+
+.bac-side .chip-stack {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  --chip-size: calc(32 * var(--u));
+  transform: translate(-50%, -50%);
+}
+
+.bac-side .chip-stack-total {
+  font-size: max(8px, calc(8.5 * var(--u)));
+}
+
+.bac-side-name {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--font-felt);
+  font-weight: 600;
+  font-size: max(7.5px, calc(8 * var(--u)));
+  letter-spacing: 0.06em;
+  line-height: 1.15;
+  text-transform: uppercase;
+  color: rgba(246, 238, 214, 0.86);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+}
+
+.bac-side-result {
+  position: absolute;
+  left: 50%;
+  top: calc(-8 * var(--u));
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 0 calc(5 * var(--u));
+  border-radius: 999px;
+  background: rgba(6, 6, 8, 0.92);
+  border: 1px solid var(--gold-print);
+  color: var(--ivory);
+  font-family: var(--font-felt);
+  font-weight: 700;
+  font-size: max(8px, calc(8.5 * var(--u)));
+  line-height: 1.5;
+  white-space: nowrap;
+  text-shadow: none;
+}
+
+.bac-side.won .bac-side-disc {
+  border-color: var(--win);
+  box-shadow: 0 0 0 2px rgba(87, 214, 141, 0.4), 0 0 calc(10 * var(--u)) rgba(87, 214, 141, 0.7);
+}
+
+.bac-side.won .bac-side-result {
+  color: var(--win);
+  border-color: var(--win);
+}
+
+.bac-side.lost .bac-side-result {
+  color: var(--loss);
+}
+
+.bac-side.lost .chip-stack {
+  opacity: 0.55;
+}
+
+/* ---------- Motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .bact-box {
+    transition: none;
+  }
+}

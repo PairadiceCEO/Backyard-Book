@@ -9,14 +9,13 @@ Battles (0.9.0), Challenges (0.10.0).
 Spec: "Blackjack and Baccarat rebuilt as real casino felts (full width, printed layout, realistic cards), Pairadice house chips on every
 game, black-and-gold glass controls" (attachment of 19:07). Only the look changes; server, rules, money, useChipBetting, reveal timing,
 Rebet/Max, side bets, insurance, seats and chat stay.
-Done so far (wip): src/styles/theme.css (tokens, imported in main.jsx), feltFont.js (Cinzel), HouseChip.jsx (shared SVG chip), Chips.jsx /
-FeltChip.jsx / chips.css (house chips, stacks 3 px apart, rack), cardLook.js + PlayingCard.jsx (tilt, `seat` size), FeltDecor.jsx (tray, shoe,
-discard, rail), casinofelt.css (shared felt, cards, header, glass panels), bjfelt.css + BlackjackFelt.jsx + BlackjackPage.jsx (new Blackjack
-felt: betting happens on the felt through portals into slotRef spans; 21+3 button is a 44 px tap area with a 24-unit painted circle),
-old Blackjack rules removed from index.css.
-In progress / next: BaccaratFelt.jsx + BaccaratPage.jsx (card boxes, three curved concentric bands as buttons, six side-bet circles, roads on the
-black page), Craps/Slots chip look check, remove the rest of the old pcard/bac/tablefelt CSS, update phone-check scripts (class names that
-changed), tests, version 0.26.0, docs/CASINO_PROGRESS.md, all CLAUDE.md checks, merge.
+Done so far (wip): theme.css, Cinzel, HouseChip + houseChipColors.js, Chips/FeltChip/chips.css, cardLook + PlayingCard, FeltDecor, casinofelt.css,
+Blackjack felt (BlackjackFelt.jsx, bjfelt.css, BlackjackPage.jsx; betting on the felt through portals), Baccarat felt (BaccaratFelt.jsx, bacfelt.css,
+src/lib/baccaratBands.js, BaccaratPage.jsx; bands are buttons with clip-path tap shapes), tablefelt.css removed, old pcard/bac/bj CSS pruned from
+index.css, baccaratSideTopPays in shared/casino/sideBets.js, test/feltLook.test.js, version 0.26.0, README + docs/CASINO_PROGRESS.md notes.
+In progress: running the checks (test:all, interact.mjs, dealcheck.mjs, tapcheck.mjs, shoot.mjs all screens, lint, build) and fixing what they
+report; look at Craps/Slots chips (shoot) and the 844 × 390 sideways screens.
+Next: finish checks, merge wip to main, tell Will the test steps.
 
 ## Phase 0.25.1 (Will, 2026-10-28 16:39 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: agent runs on time, OpenAI cached input counted like Anthropic's, one-pick-per-game rule in the prompt. From the 2026-10-28 run:
