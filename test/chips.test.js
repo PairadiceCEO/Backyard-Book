@@ -28,6 +28,8 @@ test('Chips.jsx still builds chipsFor from CHIP_VALUES (no list of its own)', as
   const { readFileSync } = await import('node:fs');
   const src = readFileSync(new URL('../src/components/casino/Chips.jsx', import.meta.url), 'utf8');
   assert.match(src, /const LARGEST_FIRST = \[\.\.\.CHIP_VALUES\]\.sort\(\(a, b\) => b - a\);/);
-  const css = readFileSync(new URL('../src/styles/chips.css', import.meta.url), 'utf8');
-  for (const d of CHIP_VALUES) assert.match(css, new RegExp(`\\.fc-${d} \\{`), `chips.css colours the $${d} chip`);
+  // 0.26.0: the house chip's colours come from one table with an entry for every chip value (HouseChip.jsx draws from it)
+  const { HOUSE_CHIP_COLORS } = await import('../src/lib/houseChipColors.js');
+  for (const d of CHIP_VALUES) assert.ok(HOUSE_CHIP_COLORS[d], `the house chip table colours the $${d} chip`);
+  assert.match(readFileSync(new URL('../src/components/casino/HouseChip.jsx', import.meta.url), 'utf8'), /HOUSE_CHIP_COLORS\[/);
 });
