@@ -5,12 +5,15 @@
 // ([data-shoe] on the page) into its place, about 250 ms, when it mounts at that moment. A card that mounts later (a
 // phone opening mid-hand, a tab coming back) just appears. prefers-reduced-motion: no slide, it just appears. Only the
 // arrival is animated; when a card shows is still the server's reveal time (useTimedReveal).
+// 0.26.0: a realistic face (rank and small suit top-left, a large suit in the middle, red suits #b8202a) lying a little
+// crooked (cardLook.js, the CSS `rotate` property so it composes with the slide); the back has diagonal red stripes.
 
 import { useLayoutEffect, useRef, useState } from 'react';
 import { cardFace, cardName, isRedCard } from '../../../shared/casino/cards.js';
 import { serverNow } from '../../lib/casino.js';
 import { prefersReducedMotion } from '../../lib/reducedMotion.js';
 import { playSound } from '../../lib/casinoSound.js';
+import { tiltStyle } from '../../lib/cardLook.js';
 
 export const SLIDE_MS = 250;
 const SLIDE_WINDOW_MS = 700; // the card slides only if it mounts within this of its reveal time
@@ -34,7 +37,7 @@ export function slideFromShoe(el) {
   return true;
 }
 
-export default function PlayingCard({ card, fresh = false, small = false, dealAt = null }) {
+export default function PlayingCard({ card, fresh = false, small = false, seat = false, dealAt = null }) {
   const ref = useRef(null);
   const slid = useRef(false);
   useLayoutEffect(() => {
@@ -46,12 +49,12 @@ export default function PlayingCard({ card, fresh = false, small = false, dealAt
   }, [card, dealAt]);
 
   if (!card) {
-    return <span className={small ? 'pcard back small' : 'pcard back'} aria-label="Face-down card" />;
+    return <span className={small ? 'pcard back small' : 'pcard back'} style={tiltStyle(null)} aria-label="Face-down card" />;
   }
   const face = cardFace(card);
-  const classes = ['pcard', isRedCard(card) ? 'red' : 'black', fresh ? 'fresh' : '', small ? 'small' : ''].filter(Boolean).join(' ');
+  const classes = ['pcard', isRedCard(card) ? 'red' : 'black', fresh ? 'fresh' : '', small ? 'small' : '', seat ? 'mcard' : '', seat && face.rank.length > 1 ? 'ten' : ''].filter(Boolean).join(' ');
   return (
-    <span ref={ref} className={classes} role="img" aria-label={cardName(card)}>
+    <span ref={ref} className={classes} style={tiltStyle(card)} role="img" aria-label={cardName(card)}>
       <span className="pcard-corner">
         {face.rank}
         <span className="pcard-corner-suit">{face.suit}</span>

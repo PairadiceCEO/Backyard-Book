@@ -1,9 +1,10 @@
-// The craps felt is lettered in Oswald (uppercase, 500–700). It is loaded from Google Fonts the first time a craps table
+// The craps felt is lettered in Oswald (uppercase, 500–700); since 0.26.0 the Blackjack and Baccarat felts, the game headers and
+// the house chips are lettered in Cinzel (600/700) from the same stylesheet. It is loaded from Google Fonts the first time a craps table
 // opens, not for the whole app: two preconnects and one stylesheet (display=swap, so the lettering shows at once in the
 // fallback font and swaps when Oswald arrives). The links stay in <head> afterwards (the browser caches the font), and
 // asking again adds nothing.
 
-export const FELT_FONT_HREF = 'https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap';
+export const FELT_FONT_HREF = 'https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Cinzel:wght@600;700&display=swap';
 
 export function ensureFeltFont() {
   if (typeof document === 'undefined' || document.head.querySelector('link[data-felt-font]')) return;

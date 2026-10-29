@@ -1,141 +1,110 @@
-/* ===================== Casino chips (0.19.0): one look for every game =====================
-   A round disc with a dashed edge, coloured by the largest chip in the amount ($1 white with a blue edge, $2 yellow,
-   $5 red, $10 blue, $25 green, $100 black with a gold edge, $1,000 yellow-orange with a black edge, $10,000 purple with a
-   gold edge), the amount printed on it. Used by the craps felt, the chip
-   rack and every bet spot in Blackjack, Baccarat and Slots (src/components/casino/FeltChip.jsx).
-   Size: set --chip-size on the chip or a parent. */
+/* ===================== Casino chips (0.19.0), the Pairadice house chip since 0.26.0 =====================
+   One chip look for every casino game (src/components/casino/FeltChip.jsx draws an SVG, HouseChip.jsx): the craps felt, the chip
+   rack and every bet spot in Blackjack, Baccarat and Slots. $1 white with blue inserts, $2 yellow, $5 red, $10 blue, $25 green,
+   $100 black with gold, $1,000 orange, $10,000 purple. The face prints no amount: the amount (or a Come bet's "C") sits on a
+   small label over the chip's lower edge (.fchip-face). Size: set --chip-size on the chip or a parent. */
+
+.house-chip {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.6));
+}
 
 .fchip {
-  --c: #f4f4ef;
-  --edge: #2f6fd6;
-  --ink: #1d2730;
   --chip-size: 28px;
   position: relative;
   flex: 0 0 auto;
   width: var(--chip-size);
   height: var(--chip-size);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--c);
-  color: var(--ink);
-  font-family: var(--felt-font, 'Oswald', 'Arial Narrow', 'Roboto Condensed', 'Helvetica Neue', Arial, sans-serif);
-  font-weight: 700;
-  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
-  text-transform: none;
-  letter-spacing: -0.02em;
+  display: inline-block;
   line-height: 1;
 }
 
-.fchip::before {
-  content: '';
+/* The amount label over the chip's lower edge */
+.fchip-face {
   position: absolute;
-  inset: 2px;
-  border-radius: 50%;
-  border: 2px dashed var(--edge);
+  left: 50%;
+  bottom: -3px;
+  transform: translateX(-50%);
+  padding: 0 calc(var(--chip-size) * 0.12);
+  border-radius: 999px;
+  background: rgba(6, 6, 8, 0.86);
+  border: 1px solid rgba(216, 180, 90, 0.7);
+  color: var(--gold-1, #f8e3a3);
+  font-family: var(--felt-font, 'Oswald', 'Arial Narrow', 'Roboto Condensed', 'Helvetica Neue', Arial, sans-serif);
+  font-weight: 700;
+  font-size: max(8px, calc(var(--chip-size) * 0.3));
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
 
-.fchip-face {
-  position: relative;
-  font-size: calc(var(--chip-size) * 0.36);
-}
-
-.fchip[data-len='4'] .fchip-face {
-  font-size: calc(var(--chip-size) * 0.3);
-}
-
-.fchip[data-len='5'] .fchip-face,
-.fchip[data-len='6'] .fchip-face,
-.fchip[data-len='7'] .fchip-face {
-  font-size: calc(var(--chip-size) * 0.24);
-}
-
-.fc-1 {
-  --c: #f4f4ef;
-  --edge: #2f6fd6;
-  --ink: #1d2730;
-}
-
-.fc-2 {
-  --c: #f5c451;
-  --edge: #fff;
-  --ink: #3b2600;
-}
-
-.fc-5 {
-  --c: #d93838;
-  --edge: #fff;
-  --ink: #fff;
-}
-
-.fc-10 {
-  --c: #2f6fd6;
-  --edge: #fff;
-  --ink: #fff;
-}
-
-.fc-25 {
-  --c: #1f8f4e;
-  --edge: #fff;
-  --ink: #fff;
-}
-
-.fc-100 {
-  --c: #1b1b1f;
-  --edge: #e9c46a;
-  --ink: #f5d27a;
-}
-
-/* 0.23.0: $1,000 yellow-orange with a black edge, $10,000 purple with a gold edge. */
-.fc-1000 {
-  --c: #f29d1f;
-  --edge: #1b1b1f;
-  --ink: #1b1b1f;
-}
-
-.fc-10000 {
-  --c: #6a35b8;
-  --edge: #e9c46a;
-  --ink: #fff3c4;
-}
-
-
-/* The chip rack (Blackjack, Baccarat, Slots) and the amount on a bet spot */
+/* ---------- The chip rack (Blackjack, Baccarat, Slots) ---------- */
 .chip-pick .fchip {
-  --chip-size: min(44px, 100%);
-  aspect-ratio: 1;
-  height: auto;
+  --chip-size: 42px;
   transition: transform 0.1s;
 }
 
-.chip-pick .fchip-face {
-  font-size: 15px;
-}
-
-.chip-pick .fchip[data-len='4'] .fchip-face {
-  font-size: 13px;
-}
-
 .chip-pick.active .fchip {
-  transform: translateY(-2px);
-  box-shadow: 0 0 0 3px var(--gold, #f5c451), 0 3px 5px rgba(0, 0, 0, 0.55);
+  transform: translateY(-4px);
+}
+
+.chip-pick.active .fchip::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid var(--gold-2, #e2bd62);
+  box-shadow: 0 0 8px rgba(226, 189, 98, 0.55);
+  pointer-events: none;
+}
+
+/* ---------- What a bet spot holds: a stack, 3 px per chip, the total on a label ---------- */
+.chip-stack {
+  --chip-size: 34px;
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: var(--chip-size);
+  height: calc(var(--chip-size) + (var(--stack-n, 1) - 1) * var(--stack-step, 3px));
+}
+
+.chip-stack-chips {
+  position: absolute;
+  inset: 0;
+}
+
+.chip-stack .spot-chip-disc {
+  position: absolute;
+  left: 0;
+  width: var(--chip-size);
+  height: var(--chip-size);
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.65));
+}
+
+.chip-stack-total {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--chip-size) * 0.62); /* over the lower part of the top chip */
+  transform: translate(-50%, 0);
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(6, 6, 8, 0.86);
+  border: 1px solid rgba(216, 180, 90, 0.7);
+  color: var(--gold-1, #f8e3a3);
+  font-family: var(--felt-font, 'Oswald', 'Arial Narrow', Arial, sans-serif);
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 1.25;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 
 .spot-chip {
   --chip-size: 34px;
-}
-
-.spot-chip .fchip-face {
-  font-size: 12px;
-}
-
-.spot-chip[data-len='4'] .fchip-face {
-  font-size: 10px;
-}
-
-.spot-chip[data-len='5'] .fchip-face,
-.spot-chip[data-len='6'] .fchip-face {
-  font-size: 8.5px;
 }

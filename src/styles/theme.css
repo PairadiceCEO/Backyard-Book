@@ -1,0 +1,46 @@
+/* ===================== Black-and-gold theme tokens (0.26.0) =====================
+   Imported once (main.jsx). The Blackjack and Baccarat tables use them now; the site-wide black-and-gold redesign that comes
+   next reuses them. Printed felt lettering and the brand are Cinzel (ensureFeltFont loads it with display=swap). */
+
+:root {
+  --bg-onyx: #060608; /* the page behind a casino table */
+  --onyx: #141416;
+  --ivory: #f4efe2;
+  --muted: #b9b2a0;
+  --muted-2: #8f887a;
+  --gold-1: #f8e3a3;
+  --gold-2: #e2bd62;
+  --gold-3: #a97b2c;
+  --gold-print: #d8b45a;
+  --gold-text: #e7c46a;
+  --win: #57d68d;
+  --loss: #ff6b6b;
+  --gold-grad: linear-gradient(180deg, #f1d283, #c49a3c); /* buttons; ink on them: */
+  --gold-ink: #1d1404;
+  --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.035));
+  --glass-border: 1px solid rgba(255, 255, 255, 0.1);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --font-felt: 'Cinzel', 'Trajan Pro', Georgia, 'Times New Roman', serif;
+}
+
+/* Glass: a panel on the black page. Blur only on fixed or overlay surfaces (many blurred cards are slow on phones). */
+.glass {
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  box-shadow: var(--glass-inset);
+  border-radius: 16px;
+}
+
+.glass-blur {
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+
+/* The page behind a casino table is black (the app's top bar and bottom tabs keep their own look until the next phase). */
+body.theme-onyx {
+  background: var(--bg-onyx);
+}
+
+body.theme-onyx .app-main {
+  background: var(--bg-onyx);
+}

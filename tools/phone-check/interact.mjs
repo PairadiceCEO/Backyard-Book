@@ -475,7 +475,8 @@ for (const game of ['craps', 'crapless']) {
 // ---------- every area is a button that places a chip on its bet ----------
 const spot = (page, key) => page.locator(`.craps-felt [data-spot="${key}"]:not([data-part="strip"])`);
 const stripSpot = (page, key) => page.locator(`.craps-felt [data-spot="${key}"][data-part="strip"]`);
-const chipText = async (btn) => (await btn.locator('.fa-chip').count()) ? (await btn.locator('.fa-chip').first().innerText()).trim() : '';
+// 0.26.0: the chip is an SVG whose ring prints its value, so the amount is read from the label on the chip (.fchip-face)
+const chipText = async (btn) => (await btn.locator('.fa-chip').count()) ? (await btn.locator('.fa-chip').first().locator('.fchip-face').innerText()).trim() : '';
 const lastBets = (calls) => calls.filter((c) => c.action === 'bets');
 
 for (const game of ['craps', 'crapless']) {
@@ -573,13 +574,13 @@ await check('craps: Odds stop at 2× the Pass bet (message on the felt), Undo an
 await check('craps: a Come bet that moved to a number shows as a chip marked C with its Odds beside it; tapping it adds Come Odds (capped at 2×)', async () => {
   const { page, context, calls } = await openCraps('/casino/craps', [crapsBlank('craps', { point: 6, bets: { pass: 500, comeOn: { 5: { bet: 500, odds: 500 }, 9: { bet: 300, odds: 0 } } } })], { width: 375, height: 667 });
   const five = spot(page, 'comeOdds:5');
-  assert.equal((await five.locator('.come-chip').innerText()).trim(), 'C');
-  assert.equal((await five.locator('.odds-chip').innerText()).trim(), '$5', 'its Odds chip');
+  assert.equal((await five.locator('.come-chip .fchip-face').innerText()).trim(), 'C');
+  assert.equal((await five.locator('.odds-chip .fchip-face').innerText()).trim(), '$5', 'its Odds chip');
   assert.match((await five.getAttribute('aria-label')) ?? '', /^Come bet \$5\.00 on 5, Odds \$5\.00; tap for Odds/);
   assert.equal(await spot(page, 'comeOdds:9').locator('.odds-chip').count(), 0, 'no Odds yet on 9');
   await page.getByRole('radio', { name: '$5 chip' }).click();
   await five.click();
-  assert.equal((await five.locator('.odds-chip').innerText()).trim(), '$10', 'Odds on 5 now $10 (2× the $5 Come bet)');
+  assert.equal((await five.locator('.odds-chip .fchip-face').innerText()).trim(), '$10', 'Odds on 5 now $10 (2× the $5 Come bet)');
   await five.click();
   assert.match(await page.locator('.cs-msg').innerText(), /2× your Come 5 bet/);
   await spot(page, 'comeOdds:9').click();
@@ -637,7 +638,7 @@ await check('craps: the lettering font loads once from Google Fonts (preconnect 
   const links = await page.evaluate(() => [...document.head.querySelectorAll('link[data-felt-font]')].map((l) => `${l.rel} ${l.href}`));
   assert.equal(links.length, 3);
   assert.ok(links.some((l) => /^preconnect https:\/\/fonts\.googleapis\.com/.test(l)) && links.some((l) => /^preconnect https:\/\/fonts\.gstatic\.com/.test(l)));
-  assert.ok(links.some((l) => /^stylesheet .*family=Oswald:wght@500;600;700&display=swap$/.test(l)), links.join('\n'));
+  assert.ok(links.some((l) => /^stylesheet .*family=Oswald:wght@500;600;700&family=Cinzel:wght@600;700&display=swap$/.test(l)), links.join('\n'));
   assert.equal(await page.locator('.craps-felt .fa').evaluateAll((els) => els.every((e) => e.tagName === 'BUTTON')), true, 'every area is a <button>');
   // Keyboard focus shows a gold ring.
   let ringed = null;
@@ -1985,7 +1986,8 @@ await check('blackjack: a seat circle only shows cards once they are face up (de
 
 await check('blackjack: a total pill beside every hand and the dealer (17, soft 17, BJ, bust)', async () => {
   const { page, context } = await openPage('/casino/blackjack', [bjTbl({}, { hands: [bjHand(['AH0', '6C0'])] })], noCasino);
-  const pills = async () => (await page.locator('.bj-total').allInnerTexts()).map((t) => t.trim());
+  // 0.26.0: the dealer's pill is .bj-total under the tray; each seat's pills (one per hand) sit above its spot on the felt (.bjt-mini-total)
+  const pills = async () => (await page.locator('.bj-total, .bjt-mini-total').allInnerTexts()).map((t) => t.trim());
   const first = await pills();
   assert.ok(first.includes('17') && first.includes('soft 17'), `dealer 17 and my soft 17 (${first})`);
   const where = await page.locator('.bj-total').first().evaluate((el) => !!el.closest('.bj-cards-row')?.querySelector('.bj-cards'));
@@ -1995,8 +1997,8 @@ await check('blackjack: a total pill beside every hand and the dealer (17, soft 
   assert.ok((await pills()).includes('BJ'), `BJ (${await pills()})`);
   await push(page, bjTbl({ version: 22 }, { hands: [bjHand(['KH0', 'QD0', '4S0'])] }));
   await page.waitForTimeout(300);
-  assert.ok((await pills()).includes('24'));
-  assert.equal(await page.locator('.bj-total.bust').getAttribute('aria-label'), 'bust 24');
+  assert.ok((await pills()).includes('bust 24'));
+  assert.equal((await page.locator('.bjt-mini-total.bust').first().innerText()).trim(), 'bust 24');
   await context.close();
 });
 
@@ -2004,7 +2006,10 @@ await check('blackjack: a total pill follows each card as it turns', async () =>
   const at = now() + 2300;
   const t = bjTbl({ dealer: { cards: [], holeDown: false }, lastDeal: { at, cards: [{ to: '1-0', i: 0, t: 0 }, { to: '1-0', i: 1, t: 1000 }] } }, { hands: [bjHand(['5S0', '9C0'])] });
   const { page, context } = await openPage('/casino/blackjack', [t], noCasino);
-  const mine = () => page.locator('.seat-panel .bj-total').first().innerText();
+  const mine = async () => {
+    const pill = page.locator('.bjt-seat.mine .bjt-mini-total').first();
+    return (await pill.count()) ? pill.innerText() : '';
+  };
   await page.waitForTimeout(Math.max(0, at - now() - 300));
   assert.ok(now() < at, 'sampled before the deal');
   assert.equal((await mine()).trim(), '', 'nothing face up yet');

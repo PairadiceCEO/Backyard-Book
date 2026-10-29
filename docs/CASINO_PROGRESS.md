@@ -136,6 +136,26 @@ suspended while hidden, closed when the last page using it unmounts; navigator.v
 casino top bar and the lobby. Hooks: useChipBetting.place (chip), PlayingCard slide (card), ResultFx (win), CrapsPage (dice), Slots
 (reels, win, big win). Details in PROGRESS.md 0.20.0.
 
+## 0.26.0 (2026-10-28): Blackjack and Baccarat as real casino felts, house chips everywhere
+
+Look only. Server, rules, money code, useChipBetting, useTimedReveal, Rebet, Max, side bets, insurance, seats and chat are untouched.
+- Theme tokens: `src/styles/theme.css` (imported once in main.jsx). Fonts: Cinzel 600/700 (`src/lib/feltFont.js`).
+- Felt (shared): `src/styles/casinofelt.css`, `FeltDecor.jsx` (tray, shoe, discard holder, rail). The felt is a container (`cqw`);
+  every size is a multiple of `--u` = 1/390 of its width, so it scales with the phone; edge to edge on phones via `100vw`.
+- Blackjack: `BlackjackFelt.jsx` + `bjfelt.css` (390 × 456). The real bet buttons (spot and 21+3 circle) are drawn INTO the felt
+  with createPortal (`slotRef`), so betting happens on the felt; the 21+3 button is a 44 px tap area with a 24-unit painted circle.
+- Baccarat: `BaccaratFelt.jsx` + `bacfelt.css` + `src/lib/baccaratBands.js` (390 × 560). The three bands are concentric arcs (centre
+  (195, 772), 56 thick, 6 apart: 56 × 320/390 = 46 px at the narrowest phone). Each band is a real `<button>` whose box is the band's top
+  strip (so its centre is on the band); the tap shape is a `.bac-spot-hit` span clipped to the band (clip-path polygon, which also
+  clips hit-testing), so the three never steal each other's taps. Side-bet circles print `baccaratSideTopPays(spot)` (new helper in
+  `shared/casino/sideBets.js`, read from the paytables).
+- Cards: `PlayingCard.jsx` + `src/lib/cardLook.js` (tilt −4° … +5° from the card id, CSS `rotate` so it composes with the slide).
+- Chips: `HouseChip.jsx` (SVG, ids from useId) + `src/lib/houseChipColors.js`; `FeltChip.jsx` wraps it (a label pill carries the amount);
+  `Chips.jsx` ChipStack (3 px apart, at most 6 drawn) and ChipRack; used by Craps and the Slots bet picker too.
+- Removed: `tablefelt.css` (wood-rail felts) and the old pcard / bac-* / bj-bet-spot / bj-side-spot rules in index.css.
+- Tests: `test/feltLook.test.js` (chip colours, card tilt, band geometry, side-bet top payouts). Phone check: the scripts' selectors for
+  Baccarat bets still work (`.bac-spot.player`, `.bact-sides [data-side]`); the Baccarat confirm button is now "Deal me in".
+
 ## 0.25.0 (2026-10-28): come-out working switch (Craps, Crapless)
 - shared/casino/dice.js: bets.working { place: {n: true}, hard: {n: true} } (cloneBets keeps a flag only while its bet is up,
   and leaves the key out when empty); isWorking / workingState / setWorking (WORKING_POINT_ON "Bets always work once a Point is

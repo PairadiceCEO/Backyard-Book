@@ -1,6 +1,7 @@
 // Baccarat table. Everything on screen comes from one live doc, casinoTables/baccarat; every tap is a
-// call to /api/casino. Top to bottom: status and countdown, the cards, the five seats, then (when
-// seated) one panel per seat you hold, then the scoreboard (roads).
+// call to /api/casino. Top to bottom: the game header, the felt (cards, result line, the three bet bands, the side-bet circles),
+// the status and countdown, the five seats, then (when seated) one panel per seat you hold, then the scoreboard (roads).
+// 0.26.0: the felt is a real casino felt (BaccaratFelt.jsx) and the controls are black-and-gold glass panels; the logic is unchanged.
 //
 // A player may hold several seats; each has its own Player / Banker / Tie bets and limits, its own
 // Confirm and its own Leave. Tabs switch between my seats; every action names its seat. Leaving the
@@ -69,14 +70,14 @@ function signedMoney(cents) {
 
 // One printed card box. `peel` = { card, startAt, gapMs } while this hand's third card is face down and turning (the squeeze);
 // `dealAtFor(name, i)` is the server time card i turns face up (it slides out of the shoe then).
-function Hand({ label, cards, visibleCount, total, winner, freshFrom, peel, dealAtFor }) {
+function Hand({ label, cards, visibleCount, total, winner, natural = false, freshFrom, peel, dealAtFor }) {
   const name = label.toLowerCase();
   return (
     <div className={winner ? `bact-box ${name} won` : `bact-box ${name}`}>
       <div className="bact-box-head">
         <span>{label}</span>
         <span className="bac-total" aria-live="polite">
-          {visibleCount > 0 ? total : ''}
+          {visibleCount > 0 ? (natural && visibleCount === 2 && total >= 8 ? `${total} · Natural` : total) : ''}
         </span>
       </div>
       <div className="bac-cards">
@@ -276,7 +277,7 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, slot, sidesS
         }
         extra={
           <button type="button" className="btn btn-primary" onClick={confirmBets} disabled={!canBet || myTotal === 0 || busy === 'confirm'}>
-            {seat.ready ? 'Confirmed ✓' : busy === 'confirm' ? 'Confirming…' : `Confirm ${myTotal ? formatMoney(myTotal) : ''}`.trim()}
+            {seat.ready ? 'Confirmed ✓' : busy === 'confirm' ? 'Confirming…' : `Deal me in ${myTotal ? formatMoney(myTotal) : ''}`.trim()}
           </button>
         }
       />
@@ -289,7 +290,7 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, slot, sidesS
         ) : seat.ready && phase === 'betting' ? (
           'Confirmed. The cards come out when every seat confirms or the clock runs out.'
         ) : phase === 'betting' ? (
-          `Pick a chip and tap Player, Banker or Tie on the table; each tap adds a chip. Side bets (the row above) need a main bet. ${BET_HELP_TEXT}`
+          `Pick a chip and tap Player, Banker or Tie on the table; each tap adds a chip. Side bets (the circles under the bands) need a main bet. ${BET_HELP_TEXT}`
         ) : (
           'Bet again when the next hand opens.'
         )}
@@ -307,7 +308,7 @@ export default function BaccaratPage() {
   const chat = useCasinoChat(GAME); // this game's chat room (0.17.0)
   const myUid = authUser?.uid ?? null;
   const balanceCents = Number(profile?.balanceCents) || 0;
-  const { setHeldCents, setPendingCents, reportBalance } = useWalletDisplay();
+  const { setHeldCents, setPendingCents, reportBalance, displayCents: walletShown } = useWalletDisplay();
   const { table, loading, error, accept } = useCasinoTable(GAME);
   const call = useTableCall(GAME, accept, reportBalance);
 
@@ -447,21 +448,55 @@ export default function BaccaratPage() {
   const scoreboardResults = revealing ? shoeResults.slice(0, -1) : shoeResults;
   const tableFull = seats.every(Boolean);
 
+  const rulesLine = `8 decks${table?.shoe ? ` · Shoe ${table.shoe.remaining} / ${table.shoe.total}` : ''}`;
+  const pTotal = handTotal(playerCards.slice(0, visible.player));
+  const bTotal = handTotal(bankerCards.slice(0, visible.banker));
+
   return (
-    <section className="page table-page">
-      <div className="slots-top">
-        <Link to="/casino" className="btn btn-ghost small">
-          ‹ Casino
+    <section className="page table-page cg">
+      <div className="cg-head">
+        <Link to="/casino" className="cg-back" aria-label="Back to the casino">
+          ‹<span className="cg-back-text"> Casino</span>
         </Link>
-        <h2 className="section-title">Baccarat</h2>
-        {table?.shoe ? (
-          <span className="muted small shoe-count">
-            Shoe {table.shoe.remaining}/{table.shoe.total}
-          </span>
-        ) : null}
+        <h2>Baccarat</h2>
         <SoundToggle />
-        <ChatButton chat={chat} />
+        <ChatButton chat={chat} compact />
+        <div className="cg-sub">
+          <span className="cg-rules">{rulesLine}</span>
+          <span className="cg-wallet" aria-label="Your wallet">
+            {formatMoney(walletShown(balanceCents))}
+          </span>
+        </div>
       </div>
+
+      <BaccaratFelt
+        winner={winner}
+        spotsRef={setSpotsSlot}
+        sidesRef={setSidesSlot}
+        watcherSides={
+          seated
+            ? null
+            : SIDE_ORDER.map((spot) => <SideSpot key={spot} spot={spot} disabled label={`${BACCARAT_SIDE_NAMES[spot]} side bet. Sit down to bet.`} />)
+        }
+        player={<Hand label="Player" cards={playerCards} visibleCount={visible.player} total={pTotal} winner={winner === 'player'} natural={Boolean(coup?.natural)} freshFrom={0} peel={peelFor('player')} dealAtFor={dealAtFor} />}
+        banker={<Hand label="Banker" cards={bankerCards} visibleCount={visible.banker} total={bTotal} winner={winner === 'banker'} natural={Boolean(coup?.natural)} freshFrom={0} peel={peelFor('banker')} dealAtFor={dealAtFor} />}
+        banner={
+          winner ? (
+            <div className={`bac-banner banner-${winner}`}>
+              <span>{`${WINNER_TEXT[winner]} ${Math.max(coup.playerTotal, coup.bankerTotal)} – ${Math.min(coup.playerTotal, coup.bankerTotal)}`}</span>
+              {myResult ? <span className="bac-banner-me">You {myResult.netCents === 0 ? 'push' : signedMoney(myResult.netCents)}</span> : null}
+            </div>
+          ) : null
+        }
+        hint={!coup && phase === 'betting' ? <p className="bacf-hint bact-hint">Cards are dealt when betting closes</p> : null}
+        watcherSpots={
+          seated
+            ? null
+            : SPOT_ORDER.map((spot) => (
+                <PrintedSpot key={spot} spot={spot} won={winner === spot} disabled label={watcherLabel(spot)} />
+              ))
+        }
+      />
 
       <div className={`card table-status phase-${phase}`} role="status">
         <span className="table-status-text">{status}</span>
@@ -472,35 +507,6 @@ export default function BaccaratPage() {
           </span>
         ) : null}
       </div>
-
-      <BaccaratFelt
-        spotsRef={setSpotsSlot}
-        sidesRef={setSidesSlot}
-        watcherSides={
-          seated
-            ? null
-            : SIDE_ORDER.map((spot) => <SideSpot key={spot} spot={spot} disabled label={`${BACCARAT_SIDE_NAMES[spot]} side bet. Sit down to bet.`} />)
-        }
-        player={<Hand label="Player" cards={playerCards} visibleCount={visible.player} total={handTotal(playerCards.slice(0, visible.player))} winner={winner === 'player'} freshFrom={0} peel={peelFor('player')} dealAtFor={dealAtFor} />}
-        banker={<Hand label="Banker" cards={bankerCards} visibleCount={visible.banker} total={handTotal(bankerCards.slice(0, visible.banker))} winner={winner === 'banker'} freshFrom={0} peel={peelFor('banker')} dealAtFor={dealAtFor} />}
-        banner={
-          winner ? (
-            <div className={`bac-banner banner-${winner}`}>
-              {WINNER_TEXT[winner]}
-              {coup.natural ? ' · natural' : ''}
-              {myResult ? <span className="bac-banner-me">You {myResult.netCents === 0 ? 'push' : signedMoney(myResult.netCents)}</span> : null}
-            </div>
-          ) : null
-        }
-        hint={!coup && phase === 'betting' ? <p className="bact-hint">Cards are dealt when betting closes.</p> : null}
-        watcherSpots={
-          seated
-            ? null
-            : SPOT_ORDER.map((spot) => (
-                <PrintedSpot key={spot} spot={spot} won={winner === spot} disabled label={watcherLabel(spot)} />
-              ))
-        }
-      />
 
       <TableSeats seats={seats} myUid={myUid} canSit sitting={busy === 'sit'} onSit={sit} detail={seatDetail} />
 

@@ -56,11 +56,11 @@ function bjDeal(at) {
 await check('Blackjack: 10 opening cards turn over one at a time, 1 s apart (seat 1, 2, 3, 5, dealer, twice)', async () => {
   const at = Date.now() + 1500; // the deal lands 1.5 s after the page opens
   const { page, context } = await openPage('/casino/blackjack', bjDeal(at));
-  // On screen: the dealer's cards and "Your hand" (seat 2). Deal order seat 1, 2, 3, 5, dealer, twice,
-  // 1 s apart → my cards at 1 s and 6 s, the dealer's at 4 s and 9 s (face down).
+  // On screen (0.26.0: all of them are on the felt): every seat's cards and the dealer's. Deal order seat 1, 2, 3, 5, dealer, twice,
+  // 1 s apart → one more card on the felt each second from the deal's first second to the tenth.
   const times = [-500, 500, 1500, 3500, 4500, 5500, 6500, 8500, 9500];
-  const counts = await sample(page, at, times, '.bj-cards .pcard');
-  assert.deepEqual(counts, [0, 0, 1, 1, 2, 2, 3, 3, 4], `cards on screen at ${times.join(', ')} ms: ${counts.join(', ')}`);
+  const counts = await sample(page, at, times, '.cfelt .pcard');
+  assert.deepEqual(counts, [0, 1, 2, 4, 5, 6, 7, 9, 10], `cards on screen at ${times.join(', ')} ms: ${counts.join(', ')}`);
   await context.close();
 });
 
@@ -104,9 +104,13 @@ await check('Blackjack: a phone that opens mid-deal shows the cards already deal
   const at = Date.now() - 4500; // 5 cards (t = 0…4 s) were already dealt
   const { page, context } = await openPage('/casino/blackjack', bjDeal(at));
   await page.waitForTimeout(400);
-  assert.equal(await page.locator('.bj-cards .pcard').count(), 2, 'my first card and the dealer up card are already down');
-  const counts = await sample(page, at, [5500, 6500, 8500, 9500], '.bj-cards .pcard');
-  assert.deepEqual(counts, [2, 3, 3, 4]);
+  // The deal is 1 s per card from `at`: whatever is already due when the page looks must be down, nothing more.
+  const early = Math.floor((Date.now() - at) / 1000) + 1;
+  const downNow = await page.locator('.cfelt .pcard').count();
+  const late = Math.floor((Date.now() - at) / 1000) + 1;
+  assert.ok(downNow >= early && downNow <= late && downNow >= 5, `the cards dealt so far are already down (${downNow} on the felt, ${early}…${late} due)`);
+  const counts = await sample(page, at, [5500, 6500, 8500, 9500], '.cfelt .pcard');
+  assert.deepEqual(counts, [6, 7, 9, 10]);
   await context.close();
 });
 
@@ -145,12 +149,12 @@ await check('Blackjack: a card that turns over slides from the shoe (an animatio
   const at = Date.now() + 2500;
   const { page, context } = await openPage('/casino/blackjack', bjDeal(at));
   await page.waitForTimeout(Math.max(0, at + 1000 + 40 - Date.now())); // my first card shows at +1 s
-  const info = await page.locator('.seat-panel .bj-cards .pcard').first().evaluate((el) => ({ n: el.getAnimations().length, timing: el.getAnimations().map((a) => a.effect.getComputedTiming().duration) }));
+  const info = await page.locator('.bjt-seat.mine .pcard').first().evaluate((el) => ({ n: el.getAnimations().length, timing: el.getAnimations().map((a) => a.effect.getComputedTiming().duration) }));
   assert.ok(info.n >= 1, 'a slide animation is running');
   assert.ok(info.timing.includes(250), `a 250 ms slide (${info.timing})`);
   await page.waitForTimeout(400);
-  const cards = await page.locator('.bj-cards .pcard').count();
-  assert.equal(cards, 1, 'still exactly the cards that are due (the dealer\'s first card is at 4 s)');
+  const cards = await page.locator('.cfelt .pcard').count();
+  assert.equal(cards, 2, 'still exactly the cards that are due (seat 1 at 0 s, mine at 1 s; the dealer\'s first card is at 4 s)');
   await context.close();
 });
 

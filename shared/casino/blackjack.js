@@ -54,6 +54,10 @@ export function dealerHits(cards) {
   return total < 17 || (total === 17 && soft);
 }
 
+// Does the dealer hit a soft 17 (Ace + 6)? Worked out from dealerHits itself, so the felt's printed rule line
+// ("DEALER MUST HIT SOFT 17") and the header's rules line can never disagree with the server's play (0.26.0).
+export const DEALER_HITS_SOFT_17 = dealerHits(['AS0', '6H0']);
+
 // The dealer peeks for blackjack when showing an Ace or a 10-value card.
 export function dealerPeeks(upCard) {
   return Boolean(upCard) && (cardRank(upCard) === 'A' || cardValue(upCard) === 10);

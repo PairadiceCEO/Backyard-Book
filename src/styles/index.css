@@ -2540,56 +2540,8 @@ body.no-scroll {
 }
 
 /* Playing cards */
-.pcard {
-  position: relative;
-  width: 46px;
-  height: 66px;
-  flex: 0 0 46px;
-  border-radius: 6px;
-  background: #fbfbf8;
-  border: 1px solid #c9c9c2;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #1b1b1b;
-  font-family: Georgia, 'Times New Roman', serif;
-}
-
-.pcard.red {
-  color: #c62828;
-}
-
-.pcard.back {
-  background: repeating-linear-gradient(45deg, #1f4f8a 0 4px, #2a62a6 4px 8px);
-  border-color: #163a66;
-}
-
-.pcard-corner {
-  position: absolute;
-  top: 3px;
-  left: 4px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  font-size: 0.85rem;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.pcard-corner-suit {
-  font-size: 0.7rem;
-}
-
-.pcard-pip {
-  font-size: 1.6rem;
-  margin-top: 0.6rem;
-}
 
 /* 0.19.0: the card slides out of the shoe (PlayingCard `dealAt`); this is only a short fade-in under it */
-.pcard.fresh {
-  animation: card-in 0.2s ease-out;
-}
 
 @keyframes card-in {
   from {
@@ -2600,57 +2552,7 @@ body.no-scroll {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .pcard.fresh {
-    animation: none;
-  }
-}
-
 /* ===================== Baccarat ===================== */
-
-.bac-cards {
-  display: flex;
-  min-height: 66px;
-}
-
-.bac-cards .pcard + .pcard {
-  margin-left: -12px;
-}
-
-.bac-banner {
-  text-align: center;
-  font-weight: 800;
-  font-size: 1.05rem;
-  padding: 0.45rem;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.35);
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.25rem 0.75rem;
-}
-
-.banner-player {
-  color: #8ec5ff;
-}
-
-.banner-banker {
-  color: #ff9a9a;
-}
-
-.banner-tie {
-  color: #8be0a8;
-}
-
-.bac-banner-me {
-  color: var(--gold);
-}
-
-.bac-felt-hint {
-  grid-column: 1 / -1;
-  margin: 0;
-  text-align: center;
-}
 
 .bac-controls {
   display: flex;
@@ -2676,17 +2578,6 @@ body.no-scroll {
 }
 
 @media (max-width: 360px) {
-  .pcard {
-    width: 40px;
-    height: 58px;
-    flex-basis: 40px;
-  }
-  .pcard-pip {
-    font-size: 1.35rem;
-  }
-  .bac-cards {
-    min-height: 58px;
-  }
   .seat-name {
     font-size: 0.7rem;
   }
@@ -2913,22 +2804,6 @@ body.no-scroll {
 
 /* ===================== Blackjack ===================== */
 
-.bj-felt {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  background: radial-gradient(ellipse at center, #1d5a3a 0%, #134029 70%, #0f3322 100%);
-  border-color: #24694a;
-  min-height: 132px;
-}
-
-.bj-spotlight,
-.bj-my-hands.split {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  gap: 0.5rem;
-}
-
 .bj-hand {
   display: flex;
   flex-direction: column;
@@ -2977,10 +2852,6 @@ body.no-scroll {
   min-width: 0;
 }
 
-.bj-hand-bet {
-  font-variant-numeric: tabular-nums;
-}
-
 .bj-cards {
   display: flex;
   min-height: 66px;
@@ -2989,25 +2860,6 @@ body.no-scroll {
 
 .bj-cards .pcard + .pcard {
   margin-left: -18px;
-}
-
-.bj-outcome {
-  font-weight: 800;
-  font-size: 0.9rem;
-}
-
-.bj-outcome.win,
-.bj-outcome.blackjack {
-  color: var(--gold);
-}
-
-.bj-outcome.lose,
-.bj-outcome.bust {
-  color: var(--danger);
-}
-
-.bj-outcome.push {
-  color: var(--text-muted);
 }
 
 .bj-controls {
@@ -3132,37 +2984,6 @@ body.no-scroll {
   align-items: center;
   gap: 0.3rem;
   min-height: 26px;
-}
-
-.bj-bet-spot {
-  min-height: 74px;
-  border-radius: 999px;
-  border: 2px dashed rgba(255, 255, 255, 0.4);
-  background: radial-gradient(ellipse at center, #1d5a3a 0%, #134029 80%);
-  color: #f3f3ee;
-  font: inherit;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.2rem;
-  cursor: pointer;
-}
-
-.bj-bet-spot.has-bet {
-  border-style: solid;
-  border-color: var(--gold);
-}
-
-.bj-bet-spot:disabled {
-  cursor: default;
-}
-
-.bj-bet-label {
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.75);
 }
 
 .slot-bet {
@@ -4889,67 +4710,6 @@ fieldset.field legend {
 }
 
 /* 0.24.0: Blackjack 21+3: a smaller circle beside the seat's betting spot (at least 44 × 44; 72 px here). */
-.bj-bet-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.bj-bet-row .bj-bet-spot {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.bj-side-spot {
-  flex: 0 0 72px;
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  border: 2px dashed rgba(245, 210, 122, 0.75);
-  background: radial-gradient(circle at center, #1d5a3a 0%, #134029 80%);
-  color: #f5d27a;
-  font: inherit;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 0;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.bj-side-spot.has-bet {
-  border-style: solid;
-  border-color: var(--gold);
-}
-
-.bj-side-spot:disabled {
-  cursor: default;
-}
-
-.bj-side-name {
-  font-family: var(--felt-font, inherit);
-  font-weight: 700;
-  font-size: 0.85rem;
-  letter-spacing: 0.04em;
-}
-
-.bj-side-empty {
-  font-size: 0.58rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.65);
-}
-
-.bj-side-spot .chip-stack {
-  min-height: 0;
-}
-
-.bj-side-spot .spot-chip {
-  --chip-size: 28px;
-}
 
 .bj-side-result.win {
   color: #8ff0b0;

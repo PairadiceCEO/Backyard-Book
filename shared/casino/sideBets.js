@@ -121,6 +121,13 @@ export const BACCARAT_SIDE_PAYTABLES = {
   ],
 };
 
+// The biggest payout (winnings per $1) a Baccarat side bet can make, read from the tables above (0.26.0: printed on the felt).
+export function baccaratSideTopPays(spot) {
+  if (spot === 'dragonPlayer' || spot === 'dragonBanker') return Math.max(...Object.values(DRAGON_MARGIN_PAYS));
+  const rows = BACCARAT_SIDE_PAYTABLES[spot] ?? [];
+  return rows.reduce((best, row) => Math.max(best, Number.parseInt(String(row[1]), 10) || 0), 0);
+}
+
 // One side bet's outcome for a coup ({ player, banker, playerTotal, bankerTotal, winner, natural }):
 // { pays: n } winnings n per $1, { push: true }, or null (loses).
 export function baccaratSideOutcome(spot, coup) {

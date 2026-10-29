@@ -109,7 +109,7 @@ async function runGame(game) {
   if (game === 'blackjack') await will.page.locator('[aria-label^="Seat 1 bet"]').first().click();
   else await will.page.getByRole('button', { name: /Player, pays/ }).click();
   await will.page.waitForTimeout(700);
-  await will.page.getByRole('button', { name: game === 'blackjack' ? /^Deal me in/ : /^Confirm/ }).click();
+  await will.page.getByRole('button', { name: /^Deal me in/ }).click();
   note('test', 'confirmed');
 
   // Blackjack: stand as soon as it's my move (or let the 15 s clock stand for me).
