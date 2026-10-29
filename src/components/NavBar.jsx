@@ -77,7 +77,7 @@ function AccountMenu({ name, onSignOut }) {
         className="avatar-btn"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Account: ${name || 'you'}`}
+        aria-label="Account menu"
         onClick={() => setOpen((v) => !v)}
       >
         {initial}
