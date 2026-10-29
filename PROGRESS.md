@@ -5,17 +5,26 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.26.0 (Will, 2026-10-28 19:07 CT) — IN PROGRESS
+## Phase 0.26.0 (Will, 2026-10-28 19:07 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: "Blackjack and Baccarat rebuilt as real casino felts (full width, printed layout, realistic cards), Pairadice house chips on every
-game, black-and-gold glass controls" (attachment of 19:07). Only the look changes; server, rules, money, useChipBetting, reveal timing,
-Rebet/Max, side bets, insurance, seats and chat stay.
-Done so far (wip): theme.css, Cinzel, HouseChip + houseChipColors.js, Chips/FeltChip/chips.css, cardLook + PlayingCard, FeltDecor, casinofelt.css,
-Blackjack felt (BlackjackFelt.jsx, bjfelt.css, BlackjackPage.jsx; betting on the felt through portals), Baccarat felt (BaccaratFelt.jsx, bacfelt.css,
-src/lib/baccaratBands.js, BaccaratPage.jsx; bands are buttons with clip-path tap shapes), tablefelt.css removed, old pcard/bac/bj CSS pruned from
-index.css, baccaratSideTopPays in shared/casino/sideBets.js, test/feltLook.test.js, version 0.26.0, README + docs/CASINO_PROGRESS.md notes.
-In progress: running the checks (test:all, interact.mjs, dealcheck.mjs, tapcheck.mjs, shoot.mjs all screens, lint, build) and fixing what they
-report; look at Craps/Slots chips (shoot) and the 844 × 390 sideways screens.
-Next: finish checks, merge wip to main, tell Will the test steps.
+game, black-and-gold glass controls". Look only: server, rules, money code, useChipBetting, reveal timing, Rebet, Max, side bets, insurance,
+seats and chat are unchanged. Details: docs/CASINO_PROGRESS.md 0.26.0, README 0.26.0.
+Files: src/styles/{theme,casinofelt,bjfelt,bacfelt,chips}.css (tablefelt.css removed; old pcard/bac/bj rules pruned from index.css),
+src/components/casino/{HouseChip,FeltChip,Chips,FeltDecor,PlayingCard,Shoe,BlackjackFelt,BaccaratFelt}.jsx, src/pages/casino/{BlackjackPage,BaccaratPage}.jsx,
+src/lib/{cardLook,houseChipColors,baccaratBands,feltFont}.js, shared/casino/{sideBets,blackjack}.js (baccaratSideTopPays, DEALER_HITS_SOFT_17),
+test/feltLook.test.js (+4), test/chips.test.js, tools/phone-check/{interact,dealcheck,tapcheck,tablesim}.mjs.
+Checks: test:all 443 pass (all suites), lint clean (scratch flat config), build ok, /api = 7, interact 88/88, dealcheck 8/8, tapcheck 14/14,
+shoot 166 screens clean (no sideways overflow, no small targets, no console errors) at 320 / 375 / 414 / 844 × 390 / 1280.
+No firestore.rules change, no index.
+Decisions:
+- Betting on the Blackjack felt: the real bet buttons are portaled into the felt's spots (the felt draws static chips only for seats that
+  aren't mine or when betting is closed); the old duplicate "my hands" list under the felt is gone (the felt's seat shows the cards and the total pill).
+- Baccarat bands: each band is a real button whose box is the band's top strip; the tap shape is a clipped child span (so the three never overlap
+  each other's taps). The band is 56 units thick, so at least 46 px at 320.
+- Side-bet circles print "N:1" (the top payout, read from the paytables) inside; the name sits under the circle (too small to print inside).
+- The Baccarat confirm button now reads "Deal me in" (Blackjack's already did). The result line shows the winner's total first ("PLAYER WINS 9 – 5").
+- The chip face prints no amount (as specified), so a label pill sits over its lower edge; harness checks read that label (.fchip-face).
+- tapcheck scrolls the spot to the middle of the screen before its forced taps (the Blackjack spot is on the felt now, above the chips).
 
 ## Phase 0.25.1 (Will, 2026-10-28 16:39 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: agent runs on time, OpenAI cached input counted like Anthropic's, one-pick-per-game rule in the prompt. From the 2026-10-28 run:
