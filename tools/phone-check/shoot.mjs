@@ -387,7 +387,14 @@ const TABLE_SIZES = [
   { w: 320, h: 640, shot: true }, { w: 375, h: 800, shot: true }, { w: 414, h: 896, shot: false },
   { w: 844, h: 390, shot: true }, { w: 1280, h: 800, shot: true },
 ];
-const PHONE_SIZES = [320, 375, 414].map((w) => ({ w, h: 800, shot: w === 375 }));
+// 0.27.0: the site screens are also checked sideways (844 × 390) and on a computer (1280 × 800); those two shoot a few key screens
+// (WIDE_SHOTS, saved as <name>-<w>x<h>.png) and the others are only measured.
+const PHONE_SIZES = [
+  ...[320, 375, 414].map((w) => ({ w, h: 800, shot: w === 375 })),
+  { w: 844, h: 390, wide: true },
+  { w: 1280, h: 800, wide: true },
+];
+const WIDE_SHOTS = /^(sportsbook|sportsbook-slip-bar|my-bets|casino-lobby|leaderboard|login|shop|game-detail|admin-players)$/;
 // A felt button is at least 44 × 44. The one documented exception: the Come-odds chips inside a number box on the shortest
 // screens (a box 47–60 px tall keeps its top for Place), they keep 44 wide.
 const FELT_BUTTON_EXCEPTION = '^comeOdds:';
@@ -411,7 +418,7 @@ for (const sc of scenarios) {
   report[sc.name] = {};
   for (const size of FELT_SCREEN.test(sc.name) ? FELT_SIZES : TABLE_SCREEN.test(sc.name) ? TABLE_SIZES : PHONE_SIZES) {
     const width = size.w;
-    const key = FELT_SCREEN.test(sc.name) || TABLE_SCREEN.test(sc.name) ? `${size.w}x${size.h}` : width;
+    const key = FELT_SCREEN.test(sc.name) || TABLE_SCREEN.test(sc.name) || size.wide ? `${size.w}x${size.h}` : width;
     const computer = size.w >= 1024;
     const context = await browser.newContext({ viewport: { width, height: size.h }, deviceScaleFactor: size.shot ? 2 : 1, isMobile: !computer, hasTouch: !computer });
     const page = await context.newPage();
@@ -436,6 +443,7 @@ for (const sc of scenarios) {
     report[sc.name][key] = { ...m, felt, errors };
     if (FELT_SCREEN.test(sc.name)) await page.screenshot({ path: `${out}/${sc.name}-${key}.png` });
     else if (TABLE_SCREEN.test(sc.name)) { if (size.shot) await page.screenshot({ path: `${out}/${sc.name}-${key}.png`, fullPage: true }); }
+    else if (size.wide) { if (WIDE_SHOTS.test(sc.name)) await page.screenshot({ path: `${out}/${sc.name}-${size.w}x${size.h}.png`, fullPage: true }); }
     else if (size.shot) await page.screenshot({ path: `${out}/${sc.name}.png`, fullPage: !/slip|confirm|preview|^chat-.*(open|typing|empty-room)/.test(sc.name) });
     await context.close();
   }

@@ -5,6 +5,18 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.27.0 (Will, 2026-10-28 20:42 CT) — IN PROGRESS on `wip` (not merged yet)
+Spec: "Pairadice Casino: rename from Backyard Book, new logo, and a black-and-gold 'liquid glass' design across the whole site". Only the look
+and the names change: no server, money, rules, data or route changes; Vercel Analytics untouched.
+Done so far (all on wip): rename (APP_NAME 'Pairadice Casino', index.html, manifest, StatusViews, RequireAuth, agents/prompt.md, README and CLAUDE.md
+headings); src/components/Brand.jsx (BrandMark / Wordmark / BrandLockup / BrandHero over the 0.26.0 dice mark); tools/render-icons.mjs (renders
+public/icon.svg, icons/{icon-512,icon-192,icon-maskable-512,apple-touch-icon,favicon-32}.png, favicon.ico and icons/favicon.svg; 32 px and smaller use
+stroke 3.6 / pips 3.3); src/styles/theme.css (tokens remap the old ones, glass, gold hairline, top bar, chips, game cards, Spotlight, bet slip bar, bottom
+tabs, modals, Slots machine, chat, crypto charts, craps chrome, solid fallback for no backdrop-filter / reduced transparency); Spotlight
+(src/components/Spotlight.jsx, spotlightGame + liveProgress in src/lib/board.js); NavBar with the avatar menu; BetSlip closed bar summary;
+test/pairadice.test.js (names, icons, Spotlight pick, contrast, tokens); shoot.mjs also measures 844 × 390 and 1280 × 800 for the site screens.
+Next: finish the screen review (shoot.mjs full run at all sizes), interact / dealcheck / tapcheck, then version bump, README, merge.
+
 ## Phase 0.26.0 (Will, 2026-10-28 19:07 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: "Blackjack and Baccarat rebuilt as real casino felts (full width, printed layout, realistic cards), Pairadice house chips on every
 game, black-and-gold glass controls". Look only: server, rules, money code, useChipBetting, reveal timing, Rebet, Max, side bets, insurance,
