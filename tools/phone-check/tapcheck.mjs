@@ -114,12 +114,18 @@ async function run(game, work, mode = 'plain') {
   await page.getByRole('radio', { name: '$5 chip' }).first().click();
   const spot = page.locator(G.sel).first();
   await spot.waitFor({ state: 'visible', timeout: 5000 });
+  await spot.evaluate((el) => el.scrollIntoView({ block: 'center' })); // the taps are forced (no scrolling of their own); since 0.26.0 the Blackjack spot is on the felt, above the chips
   // Every control a quick tap lands on: the spot, the chips, Undo and Clear. touch-action: manipulation is what stops an
   // iPhone from taking a second quick tap as a double-tap zoom (Chromium here has no double-tap zoom on this page).
   const touch = await page.evaluate((sel) => {
     const els = [document.querySelector(sel), ...document.querySelectorAll('[role="radio"][aria-label$=" chip"]'), ...[...document.querySelectorAll('button')].filter((b) => /^(Undo|Clear)$/.test(b.innerText.trim()))];
     return els.filter(Boolean).map((e) => `${e.getAttribute('aria-label')?.slice(0, 18) ?? e.innerText.trim()}=${getComputedStyle(e).touchAction}`);
   }, G.sel);
+  if (VERBOSE) {
+    // what a finger on the middle of the spot actually lands on
+    const hit = await spot.evaluate((el) => { const r = el.getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return `${t?.tagName}.${t?.className?.baseVal ?? t?.className} inside spot: ${el.contains(t)}; spot box ${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}`; });
+    note(`middle of the spot hits ${hit}`);
+  }
   const tapStart = Date.now();
   for (let i = 0; i < TAPS; i += 1) {
     await spot.tap({ force: true, timeout: 1000 }).catch((e) => note(`tap ${i + 1} failed: ${e.message.split('\n')[0]}`));
