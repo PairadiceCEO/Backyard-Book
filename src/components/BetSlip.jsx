@@ -50,6 +50,19 @@ function staleCopy(leg) {
   return { line: leg.line + 0.5, quotedAmerican: leg.american };
 }
 
+function slipSummary({ legs, mode, total, potential }) {
+  let title;
+  if (mode === 'parlay' && legs.length >= MIN_PARLAY_LEGS) {
+    title = `${legs.length}-leg parlay ${formatAmerican(combinedAmerican(legs.map((l) => l.decimal)))}`;
+  } else if (legs.length === 1) {
+    title = `${legs[0].label} ${formatAmerican(legs[0].american)}`;
+  } else {
+    title = `${legs.length} single bets`;
+  }
+  const sub = total > 0 ? `${formatMoney(total)} to win ${formatMoney(Math.max(0, potential - total))}` : 'Add a stake';
+  return { title, sub };
+}
+
 export default function BetSlip() {
   const { profile, isAdmin } = useAuth();
   const slip = useBetSlip();
@@ -84,6 +97,10 @@ export default function BetSlip() {
         ? payoutCents(parlayStakeCents, parlayDecimal)
         : 0
       : parsedLegs.reduce((sum, l) => sum + (l.stakeCents ? payoutCents(l.stakeCents, l.decimal) : 0), 0);
+
+  // The closed bar's text, from the same numbers the drawer shows: "2-leg parlay +264" and "$10 to win $26.40" (the win is the
+  // payout minus the stake).
+  const summary = slipSummary({ legs, mode, total, potential });
 
   const canSubmit = legs.length > 0 && problems.length === 0 && flagged.length === 0 && !submitting;
 
@@ -188,19 +205,36 @@ export default function BetSlip() {
             </div>
           ) : null}
           <button type="button" className="slip-bar" onClick={() => setOpen((v) => !v)} aria-expanded={isOpen}>
-            <span className="slip-bar-title">
-              <span className="slip-count" key={legs.length} aria-label={`${legs.length} pick${legs.length === 1 ? '' : 's'}`}>
-                {legs.length}
-              </span>
-              Bet slip
-              {flagged.length > 0 ? <span className="badge badge-danger">needs review</span> : null}
-            </span>
-            <span className="slip-bar-right">
-              {total > 0 ? formatMoney(total) : isOpen ? '' : 'Tap to review'}
-              <span className="slip-chevron" aria-hidden="true">
-                {isOpen ? '▾' : '▴'}
-              </span>
-            </span>
+            {isOpen ? (
+              <>
+                <span className="slip-bar-title">
+                  <span className="slip-count" key={legs.length} aria-label={`${legs.length} pick${legs.length === 1 ? '' : 's'}`}>
+                    {legs.length}
+                  </span>
+                  Bet slip
+                  {flagged.length > 0 ? <span className="badge badge-danger">needs review</span> : null}
+                </span>
+                <span className="slip-bar-right">
+                  {total > 0 ? formatMoney(total) : ''}
+                  <span className="slip-chevron" aria-hidden="true">
+                    ▾
+                  </span>
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="slip-count" key={legs.length} aria-label={`${legs.length} pick${legs.length === 1 ? '' : 's'}`}>
+                  {legs.length}
+                </span>
+                <span className="slip-summary">
+                  <span className="slip-summary-title">{summary.title}</span>
+                  <span className="slip-summary-sub">
+                    {flagged.length > 0 ? 'Needs review' : summary.sub}
+                  </span>
+                </span>
+                <span className="slip-open-cta">Bet slip</span>
+              </>
+            )}
           </button>
 
           {isOpen ? (

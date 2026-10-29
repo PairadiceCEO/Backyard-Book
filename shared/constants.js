@@ -1,6 +1,6 @@
 // Values shared by the browser and the /api functions.
 
-export const APP_NAME = 'Backyard Book';
+export const APP_NAME = 'Pairadice Casino';
 
 // Usernames map to a hidden Firebase Auth email: will -> will@backyardbook.app
 export const INTERNAL_EMAIL_DOMAIN = 'backyardbook.app';

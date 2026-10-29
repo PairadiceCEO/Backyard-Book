@@ -1,4 +1,4 @@
-# AI agent players (0.21.0): once a day each agent plays one session from its own Backyard Book account. The schedule is 14:23 UTC
+# AI agent players (0.21.0): once a day each agent plays one session from its own Pairadice Casino account. The schedule is 14:23 UTC
 # (9:23 AM Central in daylight time, 8:23 AM in standard time; 0.25.1): an off-the-hour minute, because GitHub delays scheduled runs at
 # busy times, worst at the top of the hour (the old 16:00 run started 4 h 40 min late). Even a late start lands before Sunday's noon
 # Central NFL games. GitHub may still start a scheduled run late; Actions → Agents → Run workflow starts one by hand.

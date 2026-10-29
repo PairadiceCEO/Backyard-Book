@@ -46,7 +46,7 @@ export default function RequireAuth({ children }) {
   if (!profile) {
     return (
       <FullPageMessage title="No player profile" actions={signOutButton}>
-        This login has no Backyard Book profile. Ask the admin to create your account.
+        This login has no Pairadice Casino profile. Ask the admin to create your account.
       </FullPageMessage>
     );
   }

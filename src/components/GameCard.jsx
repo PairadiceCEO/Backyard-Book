@@ -19,13 +19,13 @@ function initials(team) {
 
 // Logo image, or an initials badge when there is no logo or the link is broken.
 // failedSrc remembers which link failed, so a new link gets a fresh try without any effect.
-function TeamLogo({ team }) {
+export function TeamLogo({ team, size = 28 }) {
   const src = team.logoDark || team.logo;
   const [failedSrc, setFailedSrc] = useState(null);
   if (!src || failedSrc === src) {
     return (
       <span className="team-logo initials" aria-hidden="true">
-        {initials(team)}
+        <span>{initials(team)}</span>
       </span>
     );
   }
@@ -34,8 +34,8 @@ function TeamLogo({ team }) {
       className="team-logo"
       src={src}
       alt=""
-      width="28"
-      height="28"
+      width={size}
+      height={size}
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setFailedSrc(src)}
@@ -47,8 +47,11 @@ function StatusLine({ game }) {
   if (game.state === 'in') {
     return (
       <span className="game-status live">
-        <span className="live-dot" aria-hidden="true" />
-        {game.statusText || 'Live'}
+        <span className="live-pill">
+          <span className="live-dot" aria-hidden="true" />
+          LIVE
+        </span>
+        <span className="live-clock">{game.statusText || ''}</span>
       </span>
     );
   }
@@ -74,7 +77,10 @@ function TeamRow({ team, side, game, showScore }) {
     <div className="team-row">
       <div className="team-info">
         <TeamLogo team={team} />
-        <span className={won ? 'team-name winner' : 'team-name'}>{team.shortName}</span>
+        <span className="team-text">
+          <span className={won ? 'team-name winner' : 'team-name'}>{team.shortName}</span>
+          {team.record ? <span className="team-record">{team.record}</span> : null}
+        </span>
       </div>
       <span className="team-score">{showScore && team.score !== null ? team.score : ''}</span>
       <PickButton

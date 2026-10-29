@@ -1,4 +1,4 @@
-# Backyard Book
+# Pairadice Casino
 
 A play-money sportsbook for a few friends. React (Vite) on Vercel, Vercel Functions in `/api`, Firebase Auth and Firestore. No real money.
 
@@ -83,7 +83,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 ## Phones and the home screen (Phase 9)
 
 - On phones the tabs move to a bottom bar and the bet slip is a drawer above it (tap the green bar to open it).
-- **iPhone (Safari):** Share → **Add to Home Screen**. **Android (Chrome):** ⋮ menu → **Add to Home screen** / **Install app**. It opens full-screen as "Backyard Book" with its own icon.
+- **iPhone (Safari):** Share → **Add to Home Screen**. **Android (Chrome):** ⋮ menu → **Add to Home screen** / **Install app**. It opens full-screen as "Pairadice Casino" with its own icon.
 - Checking the daily settlement cron: Vercel project → **Settings → Cron Jobs** lists `/api/settle` at `0 11 * * *` (6 AM CDT / 5 AM CST); **Run** triggers it now, and **Logs** (filter by `/api/settle`) shows each run's result.
 
 ## Casino (casino phase 1: lobby + 7s slot)

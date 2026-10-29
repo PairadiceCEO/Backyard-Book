@@ -8,10 +8,11 @@ import CryptoBoard from './crypto/CryptoBoard.jsx';
 import CustomBoard from './battles/CustomBoard.jsx';
 import { useBattles } from '../context/BattlesContext.jsx';
 import GameCard from '../components/GameCard.jsx';
+import Spotlight from '../components/Spotlight.jsx';
 import UpdatedAgo from '../components/UpdatedAgo.jsx';
 import { EmptyState, ErrorState, LoadingState } from '../components/StatusViews.jsx';
 import { useBoard } from '../hooks/useBoard.js';
-import { groupByDay, groupByLeague } from '../lib/board.js';
+import { groupByDay, groupByLeague, spotlightGame } from '../lib/board.js';
 import { LEAGUES } from '../../shared/constants.js';
 
 const LEAGUE_STORAGE_KEY = 'backyardbook.league';
@@ -40,6 +41,8 @@ export default function SportsbookPage() {
     if (!games || custom) return [];
     return live ? groupByLeague(games, LEAGUES) : groupByDay(games);
   }, [games, custom, live]);
+  const spotlight = useMemo(() => (custom || crypto ? null : spotlightGame(games, { live })), [games, custom, crypto, live]);
+  const liveCount = live && games ? games.length : null;
   const leagueLabel = live ? 'live' : LEAGUES.find((l) => l.id === league)?.label ?? '';
 
   function changeLeague(id) {
@@ -71,7 +74,8 @@ export default function SportsbookPage() {
 
   return (
     <section className="page">
-      <LeagueTabs value={league} onChange={changeLeague} customBadge={needsMeCount} />
+      <Spotlight game={spotlight} />
+      <LeagueTabs value={league} onChange={changeLeague} customBadge={needsMeCount} liveCount={liveCount} />
 
       <div className="board-status">
         <UpdatedAgo timestamp={fetchedAt} />
@@ -110,7 +114,15 @@ export default function SportsbookPage() {
 
       {groups.map((group) => (
         <div key={group.key} className="day-group">
-          <h3 className="day-label">{group.label}</h3>
+          <h3 className="day-label">
+            <span className="day-label-main">
+              {live ? group.label : `${leagueLabel} · ${group.day || group.date}`}
+            </span>
+            <span className="day-label-count">
+              {!live && group.day ? `${group.date} · ` : ''}
+              {group.games.length} {group.games.length === 1 ? 'game' : 'games'}
+            </span>
+          </h3>
           {group.games.map((game) => (
             <GameCard key={game.id} game={game} />
           ))}
