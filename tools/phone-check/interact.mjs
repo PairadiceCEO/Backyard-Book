@@ -1997,7 +1997,7 @@ await check('blackjack: a total pill beside every hand and the dealer (17, soft 
   assert.ok((await pills()).includes('BJ'), `BJ (${await pills()})`);
   await push(page, bjTbl({ version: 22 }, { hands: [bjHand(['KH0', 'QD0', '4S0'])] }));
   await page.waitForTimeout(300);
-  assert.ok((await pills()).includes('24'));
+  assert.ok((await pills()).includes('bust 24'));
   assert.equal((await page.locator('.bjt-mini-total.bust').first().innerText()).trim(), 'bust 24');
   await context.close();
 });
