@@ -1223,3 +1223,16 @@ details.card > summary {
   display: flex;
   align-items: center;
 }
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+  .avatar-btn,
+  .btn,
+  .sub-tab,
+  .odds-cell {
+    transition: none;
+  }
+}
