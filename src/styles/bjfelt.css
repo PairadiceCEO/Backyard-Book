@@ -1,0 +1,469 @@
+/* ===================== Blackjack felt, 0.26.0 =====================
+   Drawn in a 390 × 456 box (BlackjackFelt.jsx); u = 1/390 of the felt's width (casinofelt.css). */
+
+.bjt-felt {
+  aspect-ratio: 390 / 456;
+  --seat-card-w: calc(34 * var(--u));
+}
+
+.cfelt > .bjt-print {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.bjt-pays {
+  font-family: var(--font-felt);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 2.2px;
+  fill: var(--gold-text);
+}
+
+.bjt-soft {
+  font-family: var(--font-felt);
+  font-weight: 600;
+  font-size: 8.5px;
+  letter-spacing: 1.6px;
+  fill: rgba(246, 238, 214, 0.82);
+}
+
+.bjt-band-text {
+  font-family: var(--font-felt);
+  font-weight: 600;
+  font-size: 9.5px;
+  letter-spacing: 2.4px;
+  fill: rgba(246, 238, 214, 0.85);
+}
+
+/* ---------- The dealer ---------- */
+.cfelt > .bjt-dealer {
+  position: absolute;
+  top: calc(42 * var(--u));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.bjt-dealer .bj-hand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.bjt-dealer .bj-hand-head {
+  display: none;
+}
+
+.bjt-dealer .bj-cards-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: calc(5 * var(--u));
+}
+
+.bjt-dealer .bj-cards {
+  display: flex;
+  justify-content: center;
+  min-height: calc(60 * var(--u));
+  min-width: calc(42 * var(--u));
+}
+
+.bjt-dealer .bj-cards-empty {
+  display: block;
+  width: calc(42 * var(--u));
+  height: calc(60 * var(--u));
+}
+
+.bjt-dealer .bj-total:not(:empty)::before {
+  content: 'Dealer ';
+  opacity: 0.75;
+  font-weight: 600;
+  margin-right: 0.3em;
+}
+
+.bjt-dealer .bj-total {
+  min-height: calc(18 * var(--u));
+}
+
+/* ---------- Seats ---------- */
+.cfelt > .bjt-seats {
+  position: absolute;
+  inset: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bjt-seat {
+  position: absolute;
+  width: calc(54 * var(--u));
+  margin-left: calc(-27 * var(--u));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-width: 0;
+}
+
+.bjt-circle-wrap {
+  position: relative;
+  width: 100%;
+  height: calc(72 * var(--u));
+  transform: rotate(var(--rot, 0deg));
+  transform-origin: 50% 50%;
+}
+
+.bjt-spot {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: 2px solid var(--gold-print);
+  border-radius: calc(7 * var(--u));
+  background: rgba(0, 0, 0, 0.16);
+  box-shadow: inset 0 0 calc(10 * var(--u)) rgba(0, 0, 0, 0.35);
+  padding: 0;
+  color: inherit;
+  font: inherit;
+}
+
+button.bjt-spot {
+  cursor: pointer;
+}
+
+button.bjt-spot:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.bjt-seat.empty .bjt-spot {
+  border-style: dashed;
+  border-color: rgba(216, 180, 90, 0.6);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.bjt-open {
+  font-family: var(--font-felt);
+  font-weight: 700;
+  font-size: max(9px, calc(10.5 * var(--u)));
+  letter-spacing: 0.14em;
+  color: rgba(246, 238, 214, 0.82);
+}
+
+.bjt-seat.mine .bjt-spot {
+  border-color: var(--gold-1);
+  box-shadow: 0 0 0 1px rgba(248, 227, 163, 0.35), 0 0 calc(14 * var(--u)) rgba(226, 189, 98, 0.6), inset 0 0 calc(12 * var(--u)) rgba(226, 189, 98, 0.2);
+}
+
+.bjt-seat.focused .bjt-spot {
+  background: rgba(226, 189, 98, 0.14);
+}
+
+.bjt-seat.active .bjt-spot {
+  box-shadow: 0 0 0 2px rgba(248, 227, 163, 0.7), 0 0 calc(18 * var(--u)) rgba(226, 189, 98, 0.85);
+}
+
+.bjt-seat.leaving {
+  opacity: 0.6;
+}
+
+.bjt-circle {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+button.bjt-circle {
+  cursor: pointer;
+}
+
+.bjt-circle .chip-stack,
+.bj-bet-spot .chip-stack {
+  --chip-size: calc(34 * var(--u));
+}
+
+.bjt-circle .chip-stack-total,
+.bj-bet-spot .chip-stack-total {
+  font-size: max(8px, calc(9.5 * var(--u)));
+}
+
+.bjt-num {
+  font-family: var(--font-felt);
+  font-weight: 700;
+  font-size: max(11px, calc(15 * var(--u)));
+  color: rgba(246, 238, 214, 0.38);
+}
+
+/* the portal targets: the real bet buttons are drawn into them */
+.bjt-slot {
+  position: absolute;
+  z-index: 4;
+}
+
+.bjt-bet-slot {
+  inset: 0;
+}
+
+.bjt-side-slot {
+  right: calc(-6 * var(--u));
+  bottom: calc(-6 * var(--u));
+  width: calc(24 * var(--u));
+  height: calc(24 * var(--u));
+}
+
+.bj-bet-spot {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: calc(7 * var(--u));
+  background: transparent;
+  color: var(--ivory);
+  font: inherit;
+  cursor: pointer;
+}
+
+.bj-bet-spot:disabled {
+  cursor: default;
+}
+
+.bj-bet-spot .bj-bet-hint {
+  font-family: var(--font-felt);
+  font-weight: 700;
+  font-size: max(9px, calc(10.5 * var(--u)));
+  letter-spacing: 0.14em;
+  color: rgba(246, 238, 214, 0.55);
+}
+
+/* ---------- The 21+3 circle: 24 drawn, a 44 px tap area when it is a button ---------- */
+.bjt-side,
+.bj-side-spot {
+  position: absolute;
+  right: calc(-6 * var(--u));
+  bottom: calc(-6 * var(--u));
+  box-sizing: border-box;
+  width: calc(24 * var(--u));
+  height: calc(24 * var(--u));
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--gold-print);
+  background: #0b3722;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  color: var(--gold-text);
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  pointer-events: none;
+}
+
+/* The button itself is the 44 px tap area; the 24-unit circle is painted by ::before. */
+.bj-side-spot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.bj-side-spot::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(24 * var(--u));
+  height: calc(24 * var(--u));
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 1.5px solid var(--gold-print);
+  background: #0b3722;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  z-index: 0;
+}
+
+.bj-side-spot > * {
+  position: relative;
+  z-index: 1;
+}
+
+.bj-side-spot:disabled {
+  cursor: default;
+}
+
+.bj-side-spot.has-bet::before {
+  border-color: var(--gold-1);
+  box-shadow: 0 0 calc(6 * var(--u)) rgba(226, 189, 98, 0.7);
+}
+
+.bjt-side:not(.idle) {
+  border-color: var(--gold-1);
+  box-shadow: 0 0 calc(6 * var(--u)) rgba(226, 189, 98, 0.7);
+}
+
+.bjt-side-label,
+.bj-side-label {
+  font-family: var(--font-felt);
+  font-weight: 700;
+  font-size: max(5.5px, calc(6.4 * var(--u)));
+  letter-spacing: 0;
+  color: var(--gold-text);
+  line-height: 1;
+  text-shadow: none;
+}
+
+.bjt-side .fchip,
+.bj-side-spot .fchip {
+  --chip-size: calc(18 * var(--u));
+}
+
+.bjt-side .fchip-face,
+.bj-side-spot .fchip-face {
+  display: none; /* too small to print the amount: the seat panel and the aria-label say it */
+}
+
+.bjt-side.win {
+  border-color: var(--win);
+  box-shadow: 0 0 0 2px rgba(87, 214, 141, 0.45), 0 0 calc(8 * var(--u)) rgba(87, 214, 141, 0.7);
+}
+
+.bjt-side.lose {
+  opacity: 0.5;
+}
+
+/* ---------- Name and result under the spot ---------- */
+.bjt-name {
+  margin-top: calc(5 * var(--u));
+  max-width: calc(66 * var(--u));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-felt);
+  font-weight: 700;
+  font-size: max(9px, calc(10 * var(--u)));
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.15;
+  color: rgba(246, 238, 214, 0.85);
+}
+
+.bjt-seat.mine .bjt-name {
+  color: var(--gold-text);
+}
+
+.bjt-detail {
+  max-width: calc(70 * var(--u));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-felt);
+  font-weight: 600;
+  font-size: max(9px, calc(9.5 * var(--u)));
+  line-height: 1.15;
+  min-height: 1.15em;
+  color: rgba(246, 238, 214, 0.82);
+  font-variant-numeric: tabular-nums;
+}
+
+.bjt-seat.win .bjt-detail {
+  color: var(--win);
+  font-weight: 700;
+}
+
+.bjt-seat.lose .bjt-detail {
+  color: var(--loss);
+}
+
+.bjt-seat.active .bjt-detail {
+  color: var(--gold-1);
+  font-weight: 700;
+}
+
+/* ---------- A seat's cards above its spot (34 × 48 at 390), a split's hands side by side ---------- */
+.bjt-hands {
+  --card-w: var(--seat-card-w);
+  --slot: calc(64 * var(--u));
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4 * var(--u));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: calc(4 * var(--u));
+  pointer-events: none;
+  z-index: 3;
+}
+
+.bjt-hands.split {
+  --card-w: calc(24 * var(--u));
+  --slot: calc(31 * var(--u));
+}
+
+.bjt-mini-hand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  padding: calc(2 * var(--u));
+  border-radius: calc(6 * var(--u));
+}
+
+.bjt-mini-hand.active {
+  box-shadow: 0 0 0 2px var(--gold-1), 0 0 calc(10 * var(--u)) rgba(226, 189, 98, 0.7);
+  background: rgba(226, 189, 98, 0.16);
+}
+
+.bjt-mini-cards {
+  display: flex;
+}
+
+/* a long hand squeezes together so it never reaches the next seat's cards */
+.cfelt .bjt-mini-cards .pcard + .pcard {
+  margin-left: calc(min(var(--card-w) * 0.5, (var(--slot) - var(--card-w)) / (var(--n) - 1)) - var(--card-w));
+}
+
+.bjt-mini-total {
+  font-size: max(9px, calc(10 * var(--u)));
+}
+
+/* ---------- Narrow phones: the bottom line of text stays above the rail ---------- */
+@media (max-width: 340px) {
+  .bjt-name {
+    letter-spacing: 0;
+  }
+}

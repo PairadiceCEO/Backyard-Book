@@ -9,13 +9,19 @@
 // The dealer's face-down card is never in the doc: it shows as a card back until the server turns it
 // over. Moves carry the hand's index and actionSeq, so a double tap can't play a hand twice.
 //
+// 0.26.0: a real casino felt (BlackjackFelt.jsx; casinofelt.css / bjfelt.css) on a black page, with a Pairadice-gold header. Only the
+// look changed. Betting happens on the felt: my seat's bet spot and its 21+3 circle are the real buttons (the seat panel draws them
+// into the felt with createPortal, see BlackjackFelt `slotRef`); the seat panel below holds the status, the moves, the chip rack
+// and Rebet / Max / Undo / Clear. Every seat's cards are on the felt, so there is no second copy of the hands under it.
 // 0.24.0: 21+3, a side bet per seat: a small circle beside the seat's betting spot, on the same chips (validation, Undo,
 // batching; it needs a main bet). The server settles it on the first two cards and the dealer's up card as soon as they're
 // dealt; the panel and the felt show its result once those three cards are face up. Rebet repeats it; Max stays on the main
 // bet and leaves 21+3 as it is.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChipRack, ChipStack } from '../../components/casino/Chips.jsx';
+import { FeltChip } from '../../components/casino/FeltChip.jsx';
 import { Link } from 'react-router-dom';
 import PlayingCard from '../../components/casino/PlayingCard.jsx';
 import BlackjackFelt from '../../components/casino/BlackjackFelt.jsx';
@@ -47,17 +53,20 @@ import { ChatButton, ChatDrawer } from '../../components/casino/CasinoChat.jsx';
 import SoundToggle from '../../components/casino/SoundToggle.jsx';
 import { useCasinoChat } from '../../hooks/useCasinoChat.js';
 import {
+  BLACKJACK_DECKS,
   BLACKJACK_INITIAL_GAP_MS,
+  DEALER_HITS_SOFT_17,
   canDouble,
   canSplit,
   handValue,
   isBlackjack,
+  cardValue,
   maxInsuranceCents,
+  totalLabel,
 } from '../../../shared/casino/blackjack.js';
 
 const GAME = 'blackjack';
 const NO_SEATS = [null, null, null, null, null];
-const OUTCOME_TEXT = { win: 'Win', lose: 'Lose', push: 'Push', bust: 'Bust', blackjack: 'Blackjack' };
 
 function signedMoney(cents) {
   if (cents > 0) return `+${formatMoney(cents)}`;
@@ -65,44 +74,28 @@ function signedMoney(cents) {
   return formatMoney(0);
 }
 
-// What a finished hand won or lost on its own.
-function handNet(hand) {
-  switch (hand.outcome) {
-    case 'win':
-      return hand.betCents;
-    case 'blackjack':
-      return Math.round((hand.betCents * 3) / 2);
-    case 'push':
-      return 0;
-    default:
-      return -hand.betCents;
-  }
-}
-
-// `handKey` ('d' for the dealer, 'seat-hand' for a player) and `dealAtFor(handKey, cardIndex)` tell each card when the
-// server turns it face up, so it can slide out of the shoe at that moment (PlayingCard `dealAt`). The total pill sits beside
-// the cards and follows the cards that are face up.
-function HandView({ label, cards, fromSplit, hiddenFrom, active, outcome, betCents, showOutcome, holeDown, handKey, dealAtFor }) {
+// The dealer's hand on the felt: the cards (the face-down one is a card back until the server turns it) and a "Dealer 9" total pill
+// under them. `dealAtFor('d', cardIndex)` tells each card when the server turns it face up, so it can slide out of the shoe then.
+function DealerHand({ cards, hiddenFrom, holeDown, dealAtFor }) {
   const visible = cards.slice(0, hiddenFrom);
   const showBack = holeDown && hiddenFrom > cards.length; // the face-down card, until it's turned over
   const value = handValue(visible);
   let total = '';
   if (visible.length) {
-    if (holeDown) total = `shows ${cardRank(visible[0]) === 'A' ? 'A' : value.total}`;
-    else if (isBlackjack(visible, fromSplit)) total = 'BJ';
+    if (holeDown) total = cardRank(visible[0]) === 'A' ? 'A' : String(value.total);
+    else if (isBlackjack(visible, false)) total = 'BJ';
     else total = value.soft && value.total < 21 ? `soft ${value.total}` : String(value.total);
   }
   const bust = visible.length > 0 && value.total > 21;
-  const finished = showOutcome && outcome;
   return (
-    <div className={['bj-hand', active ? 'active' : '', finished ? `outcome-${outcome}` : ''].filter(Boolean).join(' ')}>
+    <div className="bj-hand dealer-hand">
       <div className="bj-hand-head">
-        <span className="bj-hand-label">{label}</span>
+        <span className="bj-hand-label">Dealer</span>
       </div>
       <div className="bj-cards-row">
         <div className="bj-cards">
           {visible.map((card, k) => (
-            <PlayingCard key={card} card={card} fresh dealAt={dealAtFor ? dealAtFor(handKey, k) : null} />
+            <PlayingCard key={card} card={card} fresh dealAt={dealAtFor ? dealAtFor('d', k) : null} />
           ))}
           {showBack ? <PlayingCard card={null} /> : null}
           {!visible.length && !showBack ? <span className="bj-cards-empty" aria-hidden="true" /> : null}
@@ -111,14 +104,6 @@ function HandView({ label, cards, fromSplit, hiddenFrom, active, outcome, betCen
           {total}
         </span>
       </div>
-      {finished ? (
-        <div className={`bj-outcome ${outcome}`}>
-          {OUTCOME_TEXT[outcome] ?? outcome}
-          {betCents ? ` ${signedMoney(handNet({ outcome, betCents }))}` : ''}
-        </div>
-      ) : betCents ? (
-        <div className="bj-hand-bet muted small">Bet {formatMoney(betCents)}</div>
-      ) : null}
     </div>
   );
 }
@@ -133,13 +118,14 @@ function SeatPanel({
   turn,
   revealing,
   results,
-  hiddenFrom,
-  dealAtFor,
   call,
   roundId,
   balanceCents,
   chip,
   setChip,
+  betEl,
+  sideEl,
+  onTouch,
   onPending,
   onLocalBet,
   onLocalSide,
@@ -256,53 +242,43 @@ function SeatPanel({
         </strong>
         {myTurn && !revealing ? <span className="seat-panel-flag">Your turn</span> : null}
       </div>
-      {hands.length ? (
-        <div className={hands.length > 1 ? 'bj-my-hands split' : 'bj-my-hands'}>
-          {hands.map((h, j) => (
-            <HandView
-              key={j}
-              label={hands.length > 1 ? `Hand ${j + 1}` : 'Your hand'}
-              cards={h.cards}
-              fromSplit={h.fromSplit}
-              hiddenFrom={hiddenFrom(`${index}-${j}`, h.cards.length)}
-              handKey={`${index}-${j}`}
-              dealAtFor={dealAtFor}
-              active={myTurn && turn.hand === j}
-              outcome={h.outcome}
-              showOutcome={!revealing && (results || h.outcome === 'bust' || h.outcome === 'blackjack')}
-              betCents={h.betCents}
-            />
-          ))}
-        </div>
-      ) : null}
-
       {phase === 'betting' && !seat.leaving ? (
         <>
-          <div className="bj-bet-row">
-            <button
-              type="button"
-              className={myBetCents ? 'bj-bet-spot has-bet' : 'bj-bet-spot'}
-              onClick={() => chips.place('bet', chip * 100)}
-              disabled={!canBet}
-              aria-label={`Seat ${index + 1} bet ${formatMoney(myBetCents)}. Tap to add a $${chip} chip.`}
-            >
-              <span className="bj-bet-label">{seat.ready ? 'Bet locked in' : 'Tap to bet'}</span>
-              <span className="spot-chips">
-                <ChipStack cents={myBetCents} />
-                <strong>{myBetCents ? formatMoney(myBetCents) : '—'}</strong>
-              </span>
-            </button>
-            <button
-              type="button"
-              className={mySideCents ? 'bj-side-spot has-bet' : 'bj-side-spot'}
-              onClick={() => chips.place('side', chip * 100)}
-              disabled={!canBet}
-              aria-label={`Seat ${index + 1} 21+3 side bet ${formatMoney(mySideCents)}. Tap to add a $${chip} chip.`}
-            >
-              <span className="bj-side-name">{TWENTY_ONE_3_NAME}</span>
-              {mySideCents ? <ChipStack cents={mySideCents} /> : <span className="bj-side-empty">side bet</span>}
-            </button>
-          </div>
+          {betEl
+            ? createPortal(
+                <button
+                  type="button"
+                  className={myBetCents ? 'bj-bet-spot has-bet' : 'bj-bet-spot'}
+                  onClick={() => {
+                    onTouch();
+                    chips.place('bet', chip * 100);
+                  }}
+                  disabled={!canBet}
+                  aria-label={`Seat ${index + 1} bet ${formatMoney(myBetCents)}. Tap to add a $${chip} chip.`}
+                >
+                  {myBetCents ? <ChipStack cents={myBetCents} /> : <span className="bj-bet-hint">BET</span>}
+                </button>,
+                betEl,
+              )
+            : null}
+          {sideEl
+            ? createPortal(
+                <button
+                  type="button"
+                  className={mySideCents ? 'bj-side-spot has-bet' : 'bj-side-spot'}
+                  onClick={() => {
+                    onTouch();
+                    chips.place('side', chip * 100);
+                  }}
+                  disabled={!canBet}
+                  aria-label={`Seat ${index + 1} 21+3 side bet ${formatMoney(mySideCents)}. Tap to add a $${chip} chip.`}
+                  data-side-name={TWENTY_ONE_3_NAME}
+                >
+                  {mySideCents ? <FeltChip cents={mySideCents} className="bjt-side-chip" /> : <span className="bj-side-label">21+3</span>}
+                </button>,
+                sideEl,
+              )
+            : null}
           <ChipRack
             chip={chip}
             onChip={setChip}
@@ -388,7 +364,7 @@ function SeatPanel({
               <button
                 key={move}
                 type="button"
-                className={move === 'hit' || move === 'stand' ? 'btn btn-primary' : 'btn'}
+                className={move === 'hit' ? 'btn btn-primary' : 'btn'}
                 disabled={!legal || extra > balanceCents}
                 onClick={() => run(move, move, { hand: turn.hand, actionSeq: activeHand.seq })}
               >
@@ -419,7 +395,7 @@ export default function BlackjackPage() {
   const chat = useCasinoChat(GAME); // this game's chat room (0.17.0)
   const myUid = authUser?.uid ?? null;
   const balanceCents = Number(profile?.balanceCents) || 0;
-  const { setHeldCents, setPendingCents, reportBalance } = useWalletDisplay();
+  const { setHeldCents, setPendingCents, reportBalance, displayCents: walletShown } = useWalletDisplay();
   const { table, loading, error, accept } = useCasinoTable(GAME);
   const call = useTableCall(GAME, accept, reportBalance);
 
@@ -513,6 +489,23 @@ export default function BlackjackPage() {
     return localBetCallbacks.current.get(i);
   }, []);
 
+  // ---- the black page behind the table ----
+  useEffect(() => {
+    document.body.classList.add('theme-onyx');
+    return () => document.body.classList.remove('theme-onyx');
+  }, []);
+
+  // ---- the felt's betting targets: each of my seats' bet spot and 21+3 circle are drawn by its seat panel (createPortal) ----
+  const [slotEls, setSlotEls] = useState({});
+  const slotCallbacks = useRef(new Map());
+  const slotRef = useCallback((kind, i) => {
+    const key = `${kind}-${i}`;
+    if (!slotCallbacks.current.has(key)) {
+      slotCallbacks.current.set(key, (el) => setSlotEls((prev) => (prev[key] === (el ?? null) || (!el && !(key in prev)) ? prev : { ...prev, [key]: el ?? null })));
+    }
+    return slotCallbacks.current.get(key);
+  }, []);
+
   // ---- which seat's panel shows: the one that needs a decision, else the last one tapped ----
   const myTurn = phase === 'playing' && Boolean(turn) && mySeats.includes(turn.seat);
   const insuranceSeat = phase === 'insurance' && !revealing ? mySeats.find((i) => seats[i].betCents > 0 && seats[i].insurance === null) : undefined;
@@ -558,8 +551,15 @@ export default function BlackjackPage() {
   else if (revealing) status = 'Dealing…';
   else if (phase === 'insurance') status = 'Dealer shows an Ace. Insurance?';
   else if (phase === 'playing') {
-    const handNote = activeSeat?.hands?.length > 1 ? `, hand ${turn.hand + 1}` : '';
-    status = myTurn ? `Your turn: seat ${turn.seat + 1}${handNote}` : `${activeSeat?.name ?? 'Next seat'}'s turn (seat ${(turn?.seat ?? 0) + 1})`;
+    const handNote = activeSeat?.hands?.length > 1 ? ` · hand ${turn.hand + 1}` : '';
+    if (myTurn && activeSeat?.hands?.[turn.hand]) {
+      // "Your turn · Seat 3 · soft 17 vs 9"
+      const mineCards = activeSeat.hands[turn.hand].cards.slice(0, hiddenFrom(`${turn.seat}-${turn.hand}`, activeSeat.hands[turn.hand].cards.length));
+      const up = dealerShown.length ? (cardRank(dealerShown[0]) === 'A' ? 'A' : String(cardValue(dealerShown[0]))) : '';
+      status = `Your turn · Seat ${turn.seat + 1}${handNote}${mineCards.length ? ` · ${totalLabel(mineCards, activeSeat.hands[turn.hand].fromSplit)}${up ? ` vs ${up}` : ''}` : ''}`;
+    } else {
+      status = `${activeSeat?.name ?? 'Next seat'}'s turn · Seat ${(turn?.seat ?? 0) + 1}`;
+    }
   } else {
     const total = handValue(dealer.cards).total;
     status = table.finish === 'dealerBlackjack' ? 'Dealer blackjack' : total > 21 ? `Dealer busts with ${total}` : `Dealer has ${total}`;
@@ -591,7 +591,7 @@ export default function BlackjackPage() {
         else if (value.total > 21) total = `bust ${value.total}`;
         else total = value.soft && value.total < 21 ? `soft ${value.total}` : String(value.total);
       }
-      return { cards: visible, total, bust: value.total > 21, active: phase === 'playing' && turn?.seat === i && turn.hand === j && !revealing };
+      return { cards: visible, dealAts: visible.map((_, k) => dealAtFor(`${i}-${j}`, k)), total, bust: value.total > 21, active: phase === 'playing' && turn?.seat === i && turn.hand === j && !revealing };
     });
   }
 
@@ -617,9 +617,6 @@ export default function BlackjackPage() {
     return cents > 0 ? { cents, tone: '', text: '' } : null;
   }
 
-  // Someone else's turn: show their hand below the felt so everyone can follow.
-  const spotlight = phase === 'playing' && activeSeat && !mySeats.includes(turn.seat) ? { seat: activeSeat, index: turn.seat } : null;
-
   // What each of my seat tabs flags.
   function tabNote(i) {
     const seat = seats[i];
@@ -630,30 +627,24 @@ export default function BlackjackPage() {
     return '';
   }
 
-  return (
-    <section className="page table-page">
-      <div className="slots-top">
-        <Link to="/casino" className="btn btn-ghost small">
-          ‹ Casino
-        </Link>
-        <h2 className="section-title">Blackjack</h2>
-        {table?.shoe ? (
-          <span className="muted small shoe-count">
-            Shoe {table.shoe.remaining}/{table.shoe.total}
-          </span>
-        ) : null}
-        <SoundToggle />
-        <ChatButton chat={chat} />
-      </div>
+  const portalSeats = phase === 'betting' ? mySeats.filter((i) => !seats[i]?.leaving) : [];
+  const rulesLine = `${BLACKJACK_DECKS} decks · Dealer ${DEALER_HITS_SOFT_17 ? 'hits' : 'stands on'} soft 17${table?.shoe ? ` · Shoe ${table.shoe.remaining}/${table.shoe.total}` : ''}`;
 
-      <div className={`card table-status phase-${phase}`} role="status">
-        <span className="table-status-text">{status}</span>
-        {results && deadline ? <span className="muted small">Next hand in {seconds ?? 0}s</span> : null}
-        {showCountdown ? (
-          <span className={seconds !== null && seconds <= 5 ? 'countdown urgent' : 'countdown'} aria-hidden="true">
-            {seconds ?? 0}
+  return (
+    <section className="page table-page cg">
+      <div className="cg-head">
+        <Link to="/casino" className="cg-back" aria-label="Back to the casino">
+          ‹<span className="cg-back-text"> Casino</span>
+        </Link>
+        <h2>Blackjack</h2>
+        <SoundToggle />
+        <ChatButton chat={chat} compact />
+        <div className="cg-sub">
+          <span className="cg-rules">{rulesLine}</span>
+          <span className="cg-wallet" aria-label="Your wallet">
+            {formatMoney(walletShown(balanceCents))}
           </span>
-        ) : null}
+        </div>
       </div>
 
       <BlackjackFelt
@@ -670,29 +661,21 @@ export default function BlackjackPage() {
         sideFor={sideFor}
         results={results}
         roundKey={table?.roundId ?? 'r'}
-        dealer={<HandView label="Dealer" cards={dealer.cards} hiddenFrom={dealerHidden} holeDown={dealer.holeDown} fromSplit={false} handKey="d" dealAtFor={dealAtFor} />}
+        slotRef={slotRef}
+        portalSeats={portalSeats}
+        dealer={<DealerHand cards={dealer.cards} hiddenFrom={dealerHidden} holeDown={dealer.holeDown} dealAtFor={dealAtFor} />}
       />
-      {!dealerShown.length && phase === 'betting' ? <p className="muted small bac-felt-hint bjt-hint">Cards are dealt when betting closes. Dealer hits soft 17.</p> : null}
-      {spotlight ? (
-        <div className="card bj-felt bj-spotlight-card">
-          <div className="bj-spotlight">
-            {spotlight.seat.hands.map((h, j) => (
-              <HandView
-                key={j}
-                label={`${spotlight.seat.name}${spotlight.seat.hands.length > 1 ? ` · ${j + 1}` : ''}`}
-                cards={h.cards}
-                fromSplit={h.fromSplit}
-                hiddenFrom={hiddenFrom(`${spotlight.index}-${j}`, h.cards.length)}
-                handKey={`${spotlight.index}-${j}`}
-                dealAtFor={dealAtFor}
-                active={turn.hand === j}
-                betCents={h.betCents}
-              />
-            ))}
-          </div>
-        </div>
-      ) : null}
 
+      <div className={`card table-status phase-${phase}`} role="status">
+        <span className="table-status-text">{status}</span>
+        {results && deadline ? <span className="muted small">Next hand in {seconds ?? 0}s</span> : null}
+        {showCountdown ? (
+          <span className={seconds !== null && seconds <= 5 ? 'countdown urgent' : 'countdown'} aria-hidden="true">
+            {seconds ?? 0}
+          </span>
+        ) : null}
+      </div>
+      {!dealerShown.length && phase === 'betting' ? <p className="muted small bac-felt-hint bjt-hint">Cards are dealt when betting closes. Dealer {DEALER_HITS_SOFT_17 ? 'hits' : 'stands on'} soft 17.</p> : null}
       {seated ? (
         <>
           {mySeats.length > 1 ? (
@@ -726,13 +709,14 @@ export default function BlackjackPage() {
               turn={turn}
               revealing={revealing}
               results={results}
-              hiddenFrom={hiddenFrom}
-              dealAtFor={dealAtFor}
               call={call}
               roundId={table?.roundId ?? null}
               balanceCents={balanceCents}
               chip={chip}
               setChip={setChip}
+              betEl={slotEls[`bet-${i}`] ?? null}
+              sideEl={slotEls[`side-${i}`] ?? null}
+              onTouch={() => setFocus(i)}
               onPending={pendingFor(i)}
               onLocalBet={localBetFor(i)}
               onLocalSide={localSideFor(i)}

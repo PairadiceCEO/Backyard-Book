@@ -5,6 +5,19 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.26.0 (Will, 2026-10-28 19:07 CT) — IN PROGRESS
+Spec: "Blackjack and Baccarat rebuilt as real casino felts (full width, printed layout, realistic cards), Pairadice house chips on every
+game, black-and-gold glass controls" (attachment of 19:07). Only the look changes; server, rules, money, useChipBetting, reveal timing,
+Rebet/Max, side bets, insurance, seats and chat stay.
+Done so far (wip): src/styles/theme.css (tokens, imported in main.jsx), feltFont.js (Cinzel), HouseChip.jsx (shared SVG chip), Chips.jsx /
+FeltChip.jsx / chips.css (house chips, stacks 3 px apart, rack), cardLook.js + PlayingCard.jsx (tilt, `seat` size), FeltDecor.jsx (tray, shoe,
+discard, rail), casinofelt.css (shared felt, cards, header, glass panels), bjfelt.css + BlackjackFelt.jsx + BlackjackPage.jsx (new Blackjack
+felt: betting happens on the felt through portals into slotRef spans; 21+3 button is a 44 px tap area with a 24-unit painted circle),
+old Blackjack rules removed from index.css.
+In progress / next: BaccaratFelt.jsx + BaccaratPage.jsx (card boxes, three curved concentric bands as buttons, six side-bet circles, roads on the
+black page), Craps/Slots chip look check, remove the rest of the old pcard/bac/tablefelt CSS, update phone-check scripts (class names that
+changed), tests, version 0.26.0, docs/CASINO_PROGRESS.md, all CLAUDE.md checks, merge.
+
 ## Phase 0.25.1 (Will, 2026-10-28 16:39 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: agent runs on time, OpenAI cached input counted like Anthropic's, one-pick-per-game rule in the prompt. From the 2026-10-28 run:
 the cron '0 16 * * *' started 4 h 40 min late; GPT-6.1 Sol stopped on "token cap reached (176054 in of 200000)" (all input at full

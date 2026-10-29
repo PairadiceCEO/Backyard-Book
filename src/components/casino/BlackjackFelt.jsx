@@ -1,47 +1,54 @@
-// The Blackjack table (0.19.0): green felt in a wood rail, a half-moon with the dealer and the shoe at the top, the table's
-// rules printed in an arc across the middle (Oswald, uppercase) and the five seats as betting circles around the curve:
-// mine outlined in gold, other players' in white, an empty one dashed with "Sit". Each circle holds the seat's chips; the
-// player's name and a short status sit under it. Look only: every action still goes through the page's handlers.
+// The Blackjack table (0.26.0): a real casino felt, edge to edge (560 px on a computer), with the dealer's chip tray at the top
+// centre, the discard holder and the shoe in the corners, the dealer's cards and total pill under the tray, "BLACKJACK PAYS 3 TO 2"
+// and "DEALER MUST HIT SOFT 17" printed in Cinzel, a curved insurance band ("INSURANCE PAYS 2 TO 1" along its curve) and five
+// card-shaped betting spots on a curve (the centre one lowest, the outer ones higher and turned toward the centre), with the black
+// rail along the players' edge. Mine glow gold; an empty one is dashed with "OPEN". Above each spot are that seat's cards (a split's
+// hands side by side) under a total pill; the bet is a stack of chips in the spot; a small 21+3 circle sits at its lower right.
+// Look only: every action still goes through the page's handlers.
 //
 // Props: seats; myUid; mySeats (my seat numbers); focus (the seat whose panel shows); onFocus(i); sitting/onSit(i);
-// detail(seat, i) → { text, tone } for the line under a circle; betFor(seat, i) → cents to draw; dealer (the dealer's
-// HandView); results (cards that decide it are face up); roundKey (changes each hand).
-// 0.23.0: handsFor(seat, i) → [{ cards, total, bust, active }] for every hand the seat holds (cards = the ones face up now).
-// Every seat circle, mine and everyone else's, shows its cards as small overlapping card faces just above the circle, each
-// hand of a split side by side, with its total pill. The dealer's hole card is the dealer's HandView's business (it stays a
-// card back until the server turns it).
-// 0.24.0: sideFor(seat, i) → { cents, tone ('win' | 'lose' | ''), text } or null: a small printed 21+3 circle at the lower
-// outside edge of every seat's circle with that seat's side-bet chip, outlined green or dimmed once it's settled and face up.
-// Look only (you bet 21+3 on the seat panel's spot, a 44 px+ button).
+// detail(seat, i) → { text, tone } for the line under a spot; betFor(seat, i) → cents to draw; dealer (the dealer's HandView);
+// handsFor(seat, i) → [{ cards, dealAts, total, bust, active }] (the cards face up now, and when each turns, for the slide from
+// the shoe); sideFor(seat, i) → { cents, tone ('win' | 'lose' | ''), text } or null (21+3); results (cards that decide it are
+// face up); roundKey (changes each hand).
+// 0.26.0 betting on the felt: slotRef(kind, i) gives a callback ref for an empty target inside seat i's spot ('bet') or its 21+3
+// circle ('side'); the seat panel of my seat draws its real bet buttons into them (createPortal) while the table is taking
+// bets, so the spot and the 21+3 circle on the felt are the buttons. portalSeats = the seats whose targets are in use (the felt
+// then doesn't draw its own static chips there).
 
-import '../../styles/tablefelt.css';
 import { CASINO_SEATS } from '../../../shared/casino/constants.js';
-import { cardFace, cardName, isRedCard } from '../../../shared/casino/cards.js';
+import { DEALER_HITS_SOFT_17 } from '../../../shared/casino/blackjack.js';
+import { cardName } from '../../../shared/casino/cards.js';
+import FeltDecor from './FeltDecor.jsx';
 import { FeltChip } from './FeltChip.jsx';
+import { ChipStack } from './Chips.jsx';
+import PlayingCard from './PlayingCard.jsx';
 import ResultFx from './ResultFx.jsx';
-import Shoe from './Shoe.jsx';
+import '../../styles/casinofelt.css';
+import '../../styles/bjfelt.css';
 
-// Where each circle's centre sits, in the 300 × 310 drawing the arcs use (x, y).
-export const FELT_W = 300;
-export const FELT_H = 310;
-export const SEAT_XY = [
-  [42, 190],
-  [96, 226],
-  [150, 242],
-  [204, 226],
-  [258, 190],
-];
-const CIRCLE_R = 25.5;
-const SLOT_W = 18; // percent of the felt width each seat's column takes
-
-// The printed lines, top to bottom: [text, y of the arc's ends, class].
-export const FELT_LINES = [
-  ['BLACKJACK PAYS 3 TO 2', 96, 'gold'],
-  ['DEALER MUST HIT SOFT 17', 122, ''],
-  ['INSURANCE PAYS 2 TO 1', 146, ''],
+// The felt is drawn in a 390 × 456 box (everything scales with its width). Where each spot's centre-x and top-y sit, and how far
+// it is turned toward the centre (degrees).
+export const FELT_W = 390;
+export const FELT_H = 456;
+export const SEAT_POS = [
+  { x: 50, y: 280, rot: 13 },
+  { x: 123, y: 322, rot: 7 },
+  { x: 195, y: 338, rot: 0 },
+  { x: 267, y: 322, rot: -7 },
+  { x: 340, y: 280, rot: -13 },
 ];
 
-// A seat's hands as small card faces (look only; the label reads them out).
+// The insurance band: a smile from near the left edge to near the right edge (a quadratic curve, 28 thick).
+const BAND = 'M 12 170 Q 195 238 378 170';
+
+export const FELT_LINES = {
+  pays: 'BLACKJACK PAYS 3 TO 2',
+  soft17: DEALER_HITS_SOFT_17 ? 'DEALER MUST HIT SOFT 17' : 'DEALER STANDS ON SOFT 17',
+  insurance: 'INSURANCE PAYS 2 TO 1',
+};
+
+// A seat's hands as real cards (34 × 48 at 390), each hand under its total pill.
 function SeatHands({ hands }) {
   const shown = hands.filter((h) => h.cards.length);
   if (!shown.length) return null;
@@ -49,20 +56,14 @@ function SeatHands({ hands }) {
   return (
     <div className={shown.length > 1 ? 'bjt-hands split' : 'bjt-hands'} role="img" aria-label={label}>
       {shown.map((h, j) => (
-        <div key={j} className={['bjt-mini-hand', h.active ? 'active' : '', h.bust ? 'bust' : ''].filter(Boolean).join(' ')}>
-          <span className="bjt-mini-cards" aria-hidden="true">
-            {h.cards.map((card) => {
-              const face = cardFace(card);
-              return (
-                <span key={card} className={['mcard', isRedCard(card) ? 'red' : '', face.rank.length > 1 ? 'ten' : ''].filter(Boolean).join(' ')}>
-                  <span className="mcard-rank">{face.rank}</span>
-                  <span className="mcard-suit">{face.suit}</span>
-                </span>
-              );
-            })}
-          </span>
+        <div key={j} className={['bjt-mini-hand', h.active ? 'active' : '', h.bust ? 'bust' : ''].filter(Boolean).join(' ')} style={{ '--n': h.cards.length }}>
           <span className={h.bust ? 'bjt-mini-total bust' : 'bjt-mini-total'} aria-hidden="true">
             {h.total}
+          </span>
+          <span className="bjt-mini-cards" aria-hidden="true">
+            {h.cards.map((card, k) => (
+              <PlayingCard key={card} card={card} seat fresh dealAt={h.dealAts ? h.dealAts[k] ?? null : null} />
+            ))}
           </span>
         </div>
       ))}
@@ -70,42 +71,73 @@ function SeatHands({ hands }) {
   );
 }
 
-export default function BlackjackFelt({ seats, myUid, mySeats, focus, onFocus, sitting, onSit, detail, betFor, handsFor = null, sideFor = null, dealer, results, roundKey }) {
+export default function BlackjackFelt({
+  seats,
+  myUid,
+  mySeats,
+  focus,
+  onFocus,
+  sitting,
+  onSit,
+  detail,
+  betFor,
+  handsFor = null,
+  sideFor = null,
+  dealer,
+  results,
+  roundKey,
+  slotRef = null,
+  portalSeats = [],
+}) {
   const multi = mySeats.length > 1;
   return (
-    <div className="tfelt-rail bjt-rail">
-      <div className="tfelt bjt-felt" data-felt="blackjack">
-        <svg className="bjt-arcs" viewBox={`0 0 ${FELT_W} ${FELT_H}`} aria-hidden="true" focusable="false">
+    <div className="cfelt-box">
+      <div className="cfelt bjt-felt" data-felt="blackjack">
+        <FeltDecor />
+
+        <svg className="bjt-print" viewBox={`0 0 ${FELT_W} ${FELT_H}`} aria-hidden="true" focusable="false">
           <defs>
-            {FELT_LINES.map(([, y], k) => (
-              <path key={k} id={`bjt-arc-${k}`} d={`M 26 ${y} Q 150 ${y + 48} 274 ${y}`} fill="none" />
-            ))}
+            <linearGradient id="bjt-gold" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#a97b2c" />
+              <stop offset="50%" stopColor="#e2bd62" />
+              <stop offset="100%" stopColor="#a97b2c" />
+            </linearGradient>
+            <path id="bjt-band-path" d={BAND} fill="none" />
+            <mask id="bjt-band-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={FELT_W} height={FELT_H}>
+              <rect width={FELT_W} height={FELT_H} fill="#fff" />
+              <path d={BAND} fill="none" stroke="#000" strokeWidth="26.6" strokeLinecap="round" />
+            </mask>
           </defs>
-          {FELT_LINES.map(([text, , tone], k) => (
-            <text key={text} className={tone ? `bjt-arc-text ${tone}` : 'bjt-arc-text'}>
-              <textPath href={`#bjt-arc-${k}`} startOffset="50%" textAnchor="middle">
-                {text}
-              </textPath>
-            </text>
-          ))}
+          <text x="195" y="150" textAnchor="middle" className="bjt-pays">
+            {FELT_LINES.pays}
+          </text>
+          <text x="195" y="165" textAnchor="middle" className="bjt-soft">
+            {FELT_LINES.soft17}
+          </text>
+          <path d={BAND} fill="none" stroke="rgba(0,0,0,0.12)" strokeWidth="26.6" strokeLinecap="round" />
+          <path d={BAND} fill="none" stroke="url(#bjt-gold)" strokeWidth="28" strokeLinecap="round" mask="url(#bjt-band-mask)" />
+          <text className="bjt-band-text" dy="3.4">
+            <textPath href="#bjt-band-path" startOffset="50%" textAnchor="middle">
+              {FELT_LINES.insurance}
+            </textPath>
+          </text>
         </svg>
 
-        <div className="bjt-dealer" data-dealer-spot="">
-          {dealer}
-        </div>
-        <Shoe className="bjt-shoe" />
+        <div className="bjt-dealer">{dealer}</div>
 
         <ol className="bjt-seats" aria-label="Seats">
           {Array.from({ length: CASINO_SEATS }, (_, i) => {
             const seat = seats?.[i] ?? null;
-            const [x, y] = SEAT_XY[i];
-            const style = { left: `${(x / FELT_W) * 100}%`, top: `${((y - CIRCLE_R) / FELT_H) * 100}%`, width: `${SLOT_W}%`, marginLeft: `${-SLOT_W / 2}%` };
+            const pos = SEAT_POS[i];
+            const style = { left: `${(pos.x / FELT_W) * 100}%`, top: `${(pos.y / FELT_H) * 100}%`, '--rot': `${pos.rot}deg` };
             if (!seat) {
               return (
                 <li key={i} className="bjt-seat empty" style={style}>
-                  <button type="button" className="bjt-circle" onClick={() => onSit(i)} disabled={sitting} aria-label={`Sit in seat ${i + 1}`}>
-                    <span className="bjt-sit">Sit</span>
-                  </button>
+                  <div className="bjt-circle-wrap">
+                    <button type="button" className="bjt-circle bjt-spot" onClick={() => onSit(i)} disabled={sitting} aria-label={`Sit in seat ${i + 1}`}>
+                      <span className="bjt-open">OPEN</span>
+                    </button>
+                  </div>
                 </li>
               );
             }
@@ -113,28 +145,36 @@ export default function BlackjackFelt({ seats, myUid, mySeats, focus, onFocus, s
             const info = detail(seat, i);
             const cents = betFor(seat, i);
             const side = sideFor ? sideFor(seat, i) : null;
+            const portal = mine && portalSeats.includes(i);
             const label = `Seat ${i + 1}: ${seat.name}${mine ? ' (you)' : ''}${side ? `, 21+3 ${(side.cents / 100).toFixed(0)} dollars${side.tone ? (side.tone === 'win' ? ', won' : ', lost') : ''}` : ''}`;
             const classes = ['bjt-seat', mine ? 'mine' : 'other', seat.leaving ? 'leaving' : '', focus === i && multi ? 'focused' : '', info?.tone ?? ''].filter(Boolean).join(' ');
-            const inner = cents > 0 ? <FeltChip cents={cents} className="spot-chip" /> : <span className="bjt-num">{i + 1}</span>;
+            const stack = cents > 0 ? <ChipStack cents={cents} /> : <span className="bjt-num">{i + 1}</span>;
             return (
               <li key={i} className={classes} style={style} aria-label={label}>
                 <div className="bjt-circle-wrap">
                   {handsFor ? <SeatHands hands={handsFor(seat, i)} /> : null}
-                  {mine && multi ? (
-                    <button type="button" className="bjt-circle" onClick={() => onFocus(i)} aria-label={`${label}. Show this seat's controls.`}>
-                      {inner}
-                    </button>
+                  <div className="bjt-spot">
+                    {mine && slotRef ? <span className="bjt-slot bjt-bet-slot" ref={slotRef('bet', i)} /> : null}
+                    {portal ? null : mine && multi ? (
+                      <button type="button" className="bjt-circle" onClick={() => onFocus(i)} aria-label={`${label}. Show this seat's controls.`}>
+                        {stack}
+                      </button>
+                    ) : (
+                      <span className="bjt-circle" aria-hidden="true">
+                        {stack}
+                      </span>
+                    )}
+                  </div>
+                  {mine && slotRef ? <span className="bjt-slot bjt-side-slot" ref={slotRef('side', i)} /> : null}
+                  {portal ? null : side ? (
+                    <span className={['bjt-side', side.tone].filter(Boolean).join(' ')} data-side-marker="" aria-hidden="true">
+                      <FeltChip cents={side.cents} className="bjt-side-chip" />
+                    </span>
                   ) : (
-                    <span className="bjt-circle" aria-hidden="true">
-                      {inner}
+                    <span className="bjt-side idle" aria-hidden="true">
+                      <span className="bjt-side-label">21+3</span>
                     </span>
                   )}
-                  {side ? (
-                    <span className={['bjt-side', i >= 3 ? 'pos-right' : 'pos-left', side.tone].filter(Boolean).join(' ')} data-side-marker="" aria-hidden="true">
-                      <FeltChip cents={side.cents} className="bjt-side-chip" />
-                      {side.text === ' ' ? null : <span className="bjt-side-tag">{side.text || '21+3'}</span>}
-                    </span>
-                  ) : null}
                   {mine && seat.hands?.length && seat.result ? (
                     <ResultFx show={results} netCents={seat.result.netCents} stakeCents={cents} roundKey={`${roundKey}-${i}`} />
                   ) : null}

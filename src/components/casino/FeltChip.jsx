@@ -1,11 +1,12 @@
-// Casino chips for the craps felt (0.18.0): a round disc with a dashed edge, coloured by the largest chip in the amount
-// ($1 white with a blue edge, $2 yellow, $5 red, $10 blue, $25 green, $100 black with a gold edge; 0.23.0: $1,000
-// yellow-orange with a black edge, $10,000 purple with a gold edge) and the amount printed
-// on it ("$12", "$1.2k"). 0.19.0: this is the one chip look for every casino game (the rack, every bet spot, Slots); the
-// styles are in src/styles/chips.css.
+// Casino chips for every game (0.19.0), the Pairadice house chip since 0.26.0 (HouseChip.jsx, an SVG; the colours per
+// denomination are in HOUSE_CHIP_COLORS: $1 white with blue inserts, $2 yellow, $5 red, $10 blue, $25 green, $100 black with
+// gold, $1,000 orange, $10,000 purple). A spot's chip is coloured by the largest chip in its amount. The chip face no longer
+// prints the amount, so the amount sits on a small label over the chip's lower edge ("$12", "$1.2k"); a rack chip labels its
+// value the same way. The styles are in src/styles/chips.css.
 
 import '../../styles/chips.css';
 import { CHIP_VALUES } from '../../../shared/casino/constants.js';
+import HouseChip from './HouseChip.jsx';
 import { chipsFor } from './Chips.jsx';
 
 // 1200 → "$1.2k", 1000 → "$1k", 12 → "$12"; rounded down, so a chip never shows more than the spot holds.
@@ -23,13 +24,13 @@ export function chipTier(cents) {
 }
 
 // One chip. Pass `cents` (a spot's amount, coloured by its largest chip) or `dollars` (a rack chip, e.g. 25). `mark`
-// replaces the printed amount (a Come bet's "C").
+// replaces the label (a Come bet's "C").
 export function FeltChip({ cents, dollars, mark = null, className = '' }) {
   const tier = dollars ?? chipTier(cents);
-  // A rack chip prints its value the same way a spot does: "$25", "$1k", "$10k".
   const label = mark ?? chipAmountLabel(dollars !== undefined ? dollars * 100 : cents);
   return (
     <span className={['fchip', `fc-${tier}`, className].filter(Boolean).join(' ')} data-len={label.length} aria-hidden="true">
+      <HouseChip dollars={tier} />
       <span className="fchip-face">{label}</span>
     </span>
   );

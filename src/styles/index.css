@@ -2913,22 +2913,6 @@ body.no-scroll {
 
 /* ===================== Blackjack ===================== */
 
-.bj-felt {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  background: radial-gradient(ellipse at center, #1d5a3a 0%, #134029 70%, #0f3322 100%);
-  border-color: #24694a;
-  min-height: 132px;
-}
-
-.bj-spotlight,
-.bj-my-hands.split {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  gap: 0.5rem;
-}
-
 .bj-hand {
   display: flex;
   flex-direction: column;
@@ -2977,10 +2961,6 @@ body.no-scroll {
   min-width: 0;
 }
 
-.bj-hand-bet {
-  font-variant-numeric: tabular-nums;
-}
-
 .bj-cards {
   display: flex;
   min-height: 66px;
@@ -2989,25 +2969,6 @@ body.no-scroll {
 
 .bj-cards .pcard + .pcard {
   margin-left: -18px;
-}
-
-.bj-outcome {
-  font-weight: 800;
-  font-size: 0.9rem;
-}
-
-.bj-outcome.win,
-.bj-outcome.blackjack {
-  color: var(--gold);
-}
-
-.bj-outcome.lose,
-.bj-outcome.bust {
-  color: var(--danger);
-}
-
-.bj-outcome.push {
-  color: var(--text-muted);
 }
 
 .bj-controls {
@@ -3132,37 +3093,6 @@ body.no-scroll {
   align-items: center;
   gap: 0.3rem;
   min-height: 26px;
-}
-
-.bj-bet-spot {
-  min-height: 74px;
-  border-radius: 999px;
-  border: 2px dashed rgba(255, 255, 255, 0.4);
-  background: radial-gradient(ellipse at center, #1d5a3a 0%, #134029 80%);
-  color: #f3f3ee;
-  font: inherit;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.2rem;
-  cursor: pointer;
-}
-
-.bj-bet-spot.has-bet {
-  border-style: solid;
-  border-color: var(--gold);
-}
-
-.bj-bet-spot:disabled {
-  cursor: default;
-}
-
-.bj-bet-label {
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.75);
 }
 
 .slot-bet {
@@ -4889,67 +4819,6 @@ fieldset.field legend {
 }
 
 /* 0.24.0: Blackjack 21+3: a smaller circle beside the seat's betting spot (at least 44 × 44; 72 px here). */
-.bj-bet-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.bj-bet-row .bj-bet-spot {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.bj-side-spot {
-  flex: 0 0 72px;
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  border: 2px dashed rgba(245, 210, 122, 0.75);
-  background: radial-gradient(circle at center, #1d5a3a 0%, #134029 80%);
-  color: #f5d27a;
-  font: inherit;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 0;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.bj-side-spot.has-bet {
-  border-style: solid;
-  border-color: var(--gold);
-}
-
-.bj-side-spot:disabled {
-  cursor: default;
-}
-
-.bj-side-name {
-  font-family: var(--felt-font, inherit);
-  font-weight: 700;
-  font-size: 0.85rem;
-  letter-spacing: 0.04em;
-}
-
-.bj-side-empty {
-  font-size: 0.58rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.65);
-}
-
-.bj-side-spot .chip-stack {
-  min-height: 0;
-}
-
-.bj-side-spot .spot-chip {
-  --chip-size: 28px;
-}
 
 .bj-side-result.win {
   color: #8ff0b0;
