@@ -1194,3 +1194,32 @@ a {
     backdrop-filter: none;
   }
 }
+
+/* ---------- Every control at least 44 × 44, on a computer too ---------- */
+.icon-button {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: var(--muted);
+}
+
+.field input,
+.field select,
+.stake-field input,
+.leg-override,
+select {
+  min-height: 44px;
+}
+
+.history-toggle {
+  min-height: 44px;
+}
+
+details.card > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
