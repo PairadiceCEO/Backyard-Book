@@ -19,7 +19,7 @@ export function LoadingState({ label = 'Loading…', rows = 2 }) {
 // Friendly wording for errors that are common on phones.
 export function friendlyError(message) {
   const text = String(message || '');
-  if (/network|failed to fetch|reach the server|offline/i.test(text)) return "Couldn't reach Backyard Book. Check your connection.";
+  if (/network|failed to fetch|reach the server|offline/i.test(text)) return "Couldn't reach Pairadice Casino. Check your connection.";
   if (/index/i.test(text)) return 'This list needs a database index that is still being built. Try again in a minute.';
   if (/permission|insufficient/i.test(text)) return "You don't have access to this. Try signing out and back in.";
   return text || 'Something went wrong.';

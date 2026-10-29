@@ -1,12 +1,14 @@
-// Top bar (brand, wallet, sign out) plus the main tabs: across the top on wide screens,
-// as a thumb-friendly bottom tab bar with icons on phones (CSS decides which one shows).
+// Top bar (0.27.0): the Pairadice mark and wordmark (tag line SPORTSBOOK or CASINO by section), the wallet in a glass pill with a
+// gold hairline, and a round gold avatar button (first initial) that opens the account menu (name, Sign out). Then the main tabs:
+// across the top on wide screens, as a glass bottom tab bar with line icons on phones (CSS decides which one shows).
 
-import { NavLink } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useWalletDisplay } from '../context/WalletDisplayContext.jsx';
 import { useBattles } from '../context/BattlesContext.jsx';
 import { formatMoney } from '../lib/format.js';
-import { APP_NAME } from '../../shared/constants.js';
+import { BrandLockup } from './Brand.jsx';
 
 const ICONS = {
   book: (
@@ -46,8 +48,56 @@ function bottomClass({ isActive }) {
   return isActive ? 'bottom-tab active' : 'bottom-tab';
 }
 
+// The round avatar: opens a small menu with the account name and Sign out. Escape or a tap outside closes it.
+function AccountMenu({ name, onSignOut }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const initial = (String(name || '?').trim()[0] || '?').toUpperCase();
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    const onPointer = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, [open]);
+
+  return (
+    <div className="account-menu" ref={wrapRef}>
+      <button
+        type="button"
+        className="avatar-btn"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Account menu"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {initial}
+      </button>
+      {open ? (
+        <div className="account-pop glass glass-blur" role="menu">
+          <span className="account-name">{name}</span>
+          <button type="button" className="btn btn-ghost small" role="menuitem" onClick={onSignOut}>
+            Sign out
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function NavBar() {
   const { profile, isAdmin, signOut } = useAuth();
+  const { pathname } = useLocation();
+  const tag = pathname.startsWith('/casino') ? 'CASINO' : 'SPORTSBOOK';
   const { displayCents } = useWalletDisplay();
   const shownCents = displayCents(Number(profile?.balanceCents) || 0);
   const tabs = isAdmin ? [...TABS, ADMIN_TAB] : TABS;
@@ -64,15 +114,12 @@ export default function NavBar() {
     <>
       <header className="navbar">
         <div className="navbar-top">
-          <span className="brand">{APP_NAME}</span>
+          <BrandLockup tag={tag} />
           <div className="navbar-account">
-            <span className="wallet" title="Wallet balance">
+            <span className="wallet gold-hairline" title="Wallet balance">
               {formatMoney(shownCents)}
             </span>
-            <span className="muted small account-name">{profile?.displayName || profile?.username}</span>
-            <button type="button" className="btn btn-ghost small" onClick={() => signOut()}>
-              Sign out
-            </button>
+            <AccountMenu name={profile?.displayName || profile?.username} onSignOut={() => signOut()} />
           </div>
         </div>
         <nav className="nav-tabs" aria-label="Main">

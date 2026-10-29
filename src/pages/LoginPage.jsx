@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import FullPageMessage from '../components/FullPageMessage.jsx';
+import { BrandHero } from '../components/Brand.jsx';
 import { APP_NAME, normalizeUsername } from '../../shared/constants.js';
 
 function friendlyAuthError(err) {
@@ -62,7 +63,8 @@ export default function LoginPage() {
   return (
     <div className="center-page">
       <form className="card narrow" onSubmit={handleSubmit} noValidate>
-        <h1 className="card-title">{APP_NAME}</h1>
+        <BrandHero />
+        <h1 className="visually-hidden">{APP_NAME}</h1>
         <p className="muted">Sign in to place your bets.</p>
 
         <label className="field">

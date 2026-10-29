@@ -1,4 +1,4 @@
-# Backyard Book
+# Pairadice Casino
 
 A play-money sportsbook for a few friends. React (Vite) on Vercel, Vercel Functions in `/api`, Firebase Auth and Firestore. No real money.
 
@@ -83,7 +83,7 @@ Open bets on **My Bets** show a cash out value, refreshed every 30 seconds:
 ## Phones and the home screen (Phase 9)
 
 - On phones the tabs move to a bottom bar and the bet slip is a drawer above it (tap the green bar to open it).
-- **iPhone (Safari):** Share → **Add to Home Screen**. **Android (Chrome):** ⋮ menu → **Add to Home screen** / **Install app**. It opens full-screen as "Backyard Book" with its own icon.
+- **iPhone (Safari):** Share → **Add to Home Screen**. **Android (Chrome):** ⋮ menu → **Add to Home screen** / **Install app**. It opens full-screen as "Pairadice Casino" with its own icon.
 - Checking the daily settlement cron: Vercel project → **Settings → Cron Jobs** lists `/api/settle` at `0 11 * * *` (6 AM CDT / 5 AM CST); **Run** triggers it now, and **Logs** (filter by `/api/settle`) shows each run's result.
 
 ## Casino (casino phase 1: lobby + 7s slot)
@@ -148,6 +148,32 @@ site's `/api` with their own login, so they can't do anything a player can't.
   1M tokens). The Gemini agent was dropped in 0.23.1 (Google's paid tier needs a prepayment and the free tier ran out of quota).
 - **Disabling an agent** (Admin → Players → Disable) removes it from the leaderboard and from Admin → Agents; its bets and history
   stay untouched. Enable puts it back.
+
+## 0.27.0
+
+**Pairadice Casino.** The site is renamed from Backyard Book and redesigned in black and gold "liquid glass", every screen. Only the look and the names
+changed: no server, money, rules, data or route changes.
+
+- **Name:** the top bar, login and setup pages, page title, home-screen name ("Pairadice"; the app's full name is "Pairadice Casino"), messages and the
+  AI agents' prompt. Nothing stored or internal was renamed: Firestore collections and fields, the internal username e-mail domain, the `backyardbook.*`
+  browser-storage keys, API routes, environment variables, the repository name.
+- **Logo and icons:** the two-dice mark (the 0.26.0 house-chip mark, one component: `src/components/Brand.jsx`) and the PAIRADICE wordmark (Cinzel, gold
+  gradient) with the tag line SPORTSBOOK or CASINO under it (login: "CASINO · SPORTSBOOK"). `node tools/render-icons.mjs` (needs Playwright; the copy in
+  `tools/phone-check/node_modules` works) draws `public/icon.svg` and renders the PNGs (512, 192, maskable 512, Apple touch 180, favicon 32) and
+  `favicon.ico`; 32 px and smaller use thicker strokes. **Add the site to the home screen again to get the new icon and name.**
+- **Theme:** `src/styles/theme.css` (loaded after `index.css`) redefines the old colour tokens and restyles the shared pieces; fonts Inter (UI) and Cinzel
+  (brand, headings, felt lettering) from Google Fonts with `display=swap` (in `index.html`). Cards are glass (gradient fill, hairline border, inset
+  highlight); blur only on the top bar, bottom tabs, bet slip, sheets and modals. With no `backdrop-filter`, or "reduce transparency" on, everything is solid
+  `#141416`. Gold hairlines only on the wallet pill, the Spotlight and the bet slip bar.
+- **Sportsbook home:** the top bar (mark, wordmark, wallet pill, round gold avatar button that opens a small menu with your name and **Sign out**), the
+  **Spotlight** card (the next upcoming game of the selected league with both moneyline prices; on the Live tab the live game closest to finishing; hidden when
+  there is none; taken from the board already loaded, no extra reads), the league chips (Live shows a glowing dot and, on the Live tab, the count), a section
+  header ("MLB · TODAY", game count), game cards with the LIVE pill and clock, 46 px price buttons (line above price; a picked one turns gold), and the bet
+  slip as a floating glass bar ("2-leg parlay +264", "$10 to win $26.40", gold **Bet slip** button) above the glass bottom tabs.
+- **Records:** the cards show a team's record under its name when the board has one; the board does not carry records yet, so none show (adding them is a
+  one-line change to `normalizeTeam` in `server/sources/espn.js`, left out because this phase changes no server code).
+- **Checks:** `test/pairadice.test.js` (names, icons, Spotlight pick, contrast of every text colour on its surfaces, tokens); `shoot.mjs` now also measures the
+  site screens sideways (844 × 390) and on a computer (1280 × 800).
 
 ## 0.26.0
 

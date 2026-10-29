@@ -1,6 +1,6 @@
-# CLAUDE.md — standing rules for Backyard Book
+# CLAUDE.md — standing rules for Pairadice Casino
 
-Backyard Book is a play-money sportsbook and casino for a group of friends. Repo: PairadiceCEO/Backyard-Book.
+Pairadice Casino (formerly Backyard Book) is a play-money sportsbook and casino for a group of friends. Repo: PairadiceCEO/Backyard-Book.
 Vercel deploys the live site from `main`.
 
 ## Start of every session

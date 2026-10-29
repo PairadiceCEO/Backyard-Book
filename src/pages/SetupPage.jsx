@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { BrandHero } from '../components/Brand.jsx';
 import { adminAction } from '../lib/api.js';
 import {
   DISPLAY_NAME_MAX_LENGTH,
@@ -118,6 +119,7 @@ export default function SetupPage() {
   return (
     <div className="center-page">
       <form className="card narrow" onSubmit={handleSubmit} noValidate>
+        <BrandHero />
         <h1 className="card-title">Create the admin account</h1>
         <p className="muted small">This works once. After it succeeds, this page locks itself.</p>
 

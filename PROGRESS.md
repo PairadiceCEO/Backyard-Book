@@ -5,6 +5,35 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.27.0 (Will, 2026-10-28 20:42 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
+Spec: "Pairadice Casino: rename from Backyard Book, new logo, and a black-and-gold 'liquid glass' design across the whole site". Only the look
+and the names changed: no server, money, rules, data or route changes; Vercel Analytics untouched (`<Analytics />` still rendered once in App.jsx). Details: README 0.27.0.
+Files: src/components/Brand.jsx (BrandMark / Wordmark / BrandLockup / BrandHero over the 0.26.0 dice mark), src/components/Spotlight.jsx,
+src/components/{NavBar,BetSlip,GameCard,LeagueTabs}.jsx, src/pages/{SportsbookPage,LoginPage,SetupPage}.jsx, src/lib/board.js (spotlightGame, liveProgress,
+group.day / group.date), src/styles/theme.css (the theme: tokens, glass, hairline, top bar, chips, cards, buttons, game cards, Spotlight, slip bar, bottom tabs,
+sheets, Slots machine, chat, crypto charts, craps chrome, 44 px controls, reduced motion, solid fallback), index.html (Inter + Cinzel, icons, names),
+public/{manifest.webmanifest,icon.svg,favicon.ico}, public/icons/*, tools/render-icons.mjs (committed icon script), test/pairadice.test.js (+5),
+tools/phone-check/shoot.mjs (site screens also at 844 × 390 and 1280 × 800).
+Checks: test:all 448 pass (all suites), lint clean (scratch flat config), build ok, /api = 7, interact 88/88, dealcheck 8/8, tapcheck 14/14,
+shoot 166 screens clean (no sideways overflow, no small targets, no console errors, Analytics loaded once) at 320 / 375 / 414 / 844 × 390 / 1280 × 800
+(the craps screens at their eight sizes: still no page scroll). Every screen was looked at (contact sheets). No firestore.rules change, no index.
+Decisions:
+- Old colour tokens are remapped in theme.css (loaded after index.css) instead of rewriting index.css: --accent is gold now; the places where the old green meant
+  "win" (profit, WON, winner, accepted, success text) are overridden to --win green. Chart line gold, target / strike lines ivory.
+- Bet slip bar text comes from the real slip state: "N-leg parlay +odds" in parlay mode, the pick (and price) for one pick, "N single bets" for singles;
+  "$10 to win $26.40" = stake and payout − stake. The slip's mode defaults to singles, so two picks read "2 single bets" until Parlay is chosen.
+- Live chip count shows only while the Live board is the loaded one (the other boards aren't loaded, so nothing is guessed). No Spotlight on Crypto / Custom.
+- The avatar button (first initial) opens a small menu (name, Sign out) instead of the old inline Sign out button; its accessible name is "Account menu".
+- Records under team names: the board data has none, so none show. Adding them is a one-line server change (ESPN competitor records[0].summary in
+  normalizeTeam), left out because this phase changes no server code. Ask Will if he wants it.
+- Every control is 44 px tall on a computer too (icon buttons, inputs, selects, summaries), not only on phones.
+- Contrast is tested in test/pairadice.test.js: muted-2 (#8f887a) only on cards and the plain page (4.5:1), never on the Spotlight or under the top-right glow.
+Left on purpose (a grep of "Backyard" after the rename; none is shown to a user except where noted): shared/constants.js INTERNAL_EMAIL_DOMAIN 'backyardbook.app' and
+the agents' test e-mail; localStorage keys `backyardbook.*` (league, finishedView, casinoSound, slotBet); server/crypto.js User-Agent 'BackyardBook/1.0'; package.json /
+package-lock name "backyard-book"; the repo name and path (PairadiceCEO/Backyard-Book, the `backyard-book` folder in README's upload steps); CLAUDE.md line 3
+("formerly Backyard Book"); test fixtures ("Backyard Bears" custom team in tests and the phone-check fixtures); docs/CASINO_PROGRESS.md's title of the Claude Docs plan; old PROGRESS entries.
+Test steps for Will: see the final message of this phase.
+
 ## Phase 0.26.0 (Will, 2026-10-28 19:07 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: "Blackjack and Baccarat rebuilt as real casino felts (full width, printed layout, realistic cards), Pairadice house chips on every
 game, black-and-gold glass controls". Look only: server, rules, money code, useChipBetting, reveal timing, Rebet, Max, side bets, insurance,
