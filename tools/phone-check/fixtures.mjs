@@ -449,3 +449,59 @@ export function walletActivity(mode = 'ok', { cursor = null } = {}) {
   void cursor;
   return { ...base, entries, nextCursor: null, summary, missingIndexes: [] };
 }
+
+// ---------- 0.28.0: the VIP slot ----------
+// A fake /api/casino for vipStatus / vipUnlock / vipSpin, built on the real machine (shared/casino/vipSlots.js) so the screens show
+// real windows and wins. HARNESS_VIP_PASSWORD is a harness-only value (the real password lives only as a hash on the server).
+import { VIP_BONUS_REELS as VIP_BR, VIP_REELS as VIP_R, evaluateVipWindow as vipEval, playVipSpin as vipPlay, vipWindow as vipWin } from '../../shared/casino/vipSlots.js';
+
+export const HARNESS_VIP_PASSWORD = 'harness-only-vip';
+const vipStopsWhere = (reels, test) => {
+  for (let a = 0; a < 40; a += 1) for (let b = 0; b < 40; b += 1) for (let c = 0; c < 40; c += 1) {
+    const r = vipEval(vipWin([a, b, c], reels));
+    if (test(r)) return [a, b, c];
+  }
+  return [0, 0, 0];
+};
+const VIP_STOPS_FOR = {
+  loss: vipStopsWhere(VIP_R, (r) => r.tenths === 0 && r.dice < 3),
+  lines: vipStopsWhere(VIP_R, (r) => r.lines.length >= 2 && r.tenths >= 20 && r.dice < 3),
+  bonus: vipStopsWhere(VIP_R, (r) => r.dice >= 3),
+};
+const VIP_BONUS_WIN = vipStopsWhere(VIP_BR, (r) => r.tenths >= 15 && r.dice < 3);
+const VIP_BONUS_LOSS = vipStopsWhere(VIP_BR, (r) => r.tenths === 0 && r.dice < 3);
+
+// One spin reply: kind 'loss' | 'lines' | 'bonus' (10 free spins, every other one a win).
+export function vipSpinReply(kind, betCents, balanceCents) {
+  const values = [...VIP_STOPS_FOR[kind]];
+  if (kind === 'bonus') for (let i = 0; i < 10; i += 1) values.push(...(i % 2 ? VIP_BONUS_LOSS : VIP_BONUS_WIN));
+  let i = 0;
+  const spin = vipPlay(() => values[i++] ?? 0, betCents);
+  const record = { ...spin, betCents, lines: spin.lines.map(({ line, row, id, tenths }) => ({ line, row, id, tenths })) };
+  return { ok: true, duplicate: false, spin: record, betCents, winCents: spin.winCents, balanceCents: balanceCents - betCents + spin.winCents, serverNow: Date.now() };
+}
+
+// mode: { setUp = true, script = ['lines', …], balanceCents = 9640, lockAfter = Infinity } → a handler for VIP casino actions, or null.
+export function vipRoute(mode = {}) {
+  const state = { spins: [], unlocks: [] };
+  let balance = mode.balanceCents ?? 9640;
+  const handle = (body) => {
+    if (body?.action === 'vipStatus') return [200, { ok: true, setUp: mode.setUp !== false, serverNow: Date.now() }];
+    if (body?.action === 'vipUnlock') {
+      state.unlocks.push(body.password);
+      if (mode.setUp === false) return [409, { error: { code: 'VIP_NOT_SET_UP', message: "VIP isn't set up yet" } }];
+      if (body.password !== HARNESS_VIP_PASSWORD) return [403, { error: { code: 'VIP_WRONG_PASSWORD', message: 'Wrong password' } }];
+      return [200, { ok: true, pass: 'harness.pass', expiresAt: Date.now() + 2 * 3600 * 1000, serverNow: Date.now() }];
+    }
+    if (body?.action === 'vipSpin') {
+      state.spins.push({ at: Date.now(), body });
+      if (body.pass !== 'harness.pass' || state.spins.length > (mode.lockAfter ?? Infinity)) return [403, { error: { code: 'VIP_LOCKED', message: 'VIP is locked. Enter the password to play.' } }];
+      const kind = (mode.script ?? ['lines'])[state.spins.length - 1] ?? 'loss';
+      const reply = vipSpinReply(kind, body.amount * 100, balance);
+      balance = reply.balanceCents;
+      return [200, reply];
+    }
+    return null;
+  };
+  return { state, handle };
+}

@@ -36,20 +36,20 @@ export function WinCount({ cents }) {
   );
 }
 
-export function BigWin({ cents, onDone }) {
+export function BigWin({ cents, onDone, title = 'Big win!' }) {
   useEffect(() => {
     const timer = setTimeout(onDone, BIG_WIN_MS);
     return () => clearTimeout(timer);
   }, [onDone]);
   return (
-    <button type="button" className="big-win" onClick={onDone} aria-label={`Big win: ${formatMoney(cents)}. Tap to skip.`}>
+    <button type="button" className="big-win" onClick={onDone} aria-label={`${title.replace(/!$/, '')}: ${formatMoney(cents)}. Tap to skip.`}>
       <span className="big-win-coins" aria-hidden="true">
         {Array.from({ length: COINS }, (_, i) => (
           <span key={i} className="coin" style={{ '--x': `${(i * 53) % 100}%`, '--d': `${(i % 6) * 0.16}s`, '--s': `${0.8 + (i % 4) * 0.12}`, '--r': `${(i % 2 ? 1 : -1) * (200 + i * 20)}deg` }} />
         ))}
       </span>
       <span className="big-win-banner">
-        <span className="big-win-title">Big win!</span>
+        <span className="big-win-title">{title}</span>
         <WinCount cents={cents} />
         <span className="big-win-skip">Tap to skip</span>
       </span>

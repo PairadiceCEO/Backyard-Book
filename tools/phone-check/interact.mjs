@@ -2401,6 +2401,151 @@ await check('admin agents: Sportsbook profit is the main number, rows sorted by 
   await context.close();
 });
 
+// ---------- 0.28.0: the VIP slot ----------
+async function openVip(mode = {}, { path = '/casino/vip', reducedMotion = 'no-preference' } = {}) {
+  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true, reducedMotion });
+  const page = await context.newPage();
+  const vip = F.vipRoute(mode);
+  await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: [] } });
+  await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
+  await page.route('**/api/**', async (route) => {
+    const body = route.request().postDataJSON?.() ?? {};
+    const r = new URL(route.request().url()).pathname === '/api/casino' ? vip.handle(body) : null;
+    if (r) return json(route, r[0], r[1]);
+    return json(route, 200, { ok: true, serverNow: now() });
+  });
+  await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(600);
+  return { page, context, vip };
+}
+const vipUnlockNow = async (page, password = F.HARNESS_VIP_PASSWORD) => {
+  await page.locator('input[name="vip-password"]').fill(password);
+  await page.getByRole('button', { name: 'Unlock' }).click();
+};
+const noPassStored = async (page, context) => {
+  const stored = await page.evaluate(() => JSON.stringify({ l: { ...localStorage }, s: { ...sessionStorage }, c: document.cookie }));
+  const cookies = JSON.stringify(await context.cookies());
+  for (const secret of ['harness.pass', F.HARNESS_VIP_PASSWORD]) {
+    assert.ok(!stored.includes(secret) && !cookies.includes(secret), `${secret} is stored in the browser`);
+  }
+};
+
+await check('vip: the lobby tile is the last game, shown locked; the password is asked on every visit and again after a reload', async () => {
+  const { page, context, vip } = await openVip({}, { path: '/casino' });
+  const last = page.locator('.lobby-list > li').last();
+  assert.ok(await last.evaluate((el) => el.classList.contains('lobby-vip')), 'VIP is last');
+  assert.ok(await last.locator('[aria-label="Locked"]').count(), 'shown locked');
+  await last.getByRole('link', { name: /Enter VIP/ }).click();
+  await page.waitForSelector('input[name="vip-password"]');
+  const input = page.locator('input[name="vip-password"]');
+  assert.equal(await input.getAttribute('type'), 'password');
+  assert.equal(await input.getAttribute('autocomplete'), 'off');
+  assert.equal(await page.locator('.vip-machine').count(), 0, 'no machine before unlocking');
+  await vipUnlockNow(page);
+  await page.waitForSelector('.vip-machine');
+  assert.equal(await input.count(), 0);
+  await noPassStored(page, context);
+  // reload: locked again
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('input[name="vip-password"]');
+  assert.equal(await page.locator('.vip-machine').count(), 0, 'locked after a reload');
+  // leave and come back: locked again
+  await vipUnlockNow(page);
+  await page.waitForSelector('.vip-machine');
+  await page.getByRole('link', { name: '‹ Casino' }).click();
+  await page.waitForSelector('.lobby-vip');
+  await page.locator('.lobby-vip a').click();
+  await page.waitForSelector('input[name="vip-password"]');
+  assert.equal(vip.state.unlocks.length, 2);
+  await context.close();
+});
+
+await check('vip: a wrong password is refused and the field is emptied; not set up says "VIP isn\'t set up yet"', async () => {
+  const { page, context } = await openVip();
+  await vipUnlockNow(page, 'not-the-password');
+  await page.waitForSelector('.vip-lock .error-text');
+  assert.equal((await page.locator('.vip-lock .error-text').innerText()).trim(), 'Wrong password');
+  assert.equal(await page.locator('input[name="vip-password"]').inputValue(), '');
+  assert.equal(await page.locator('.vip-machine').count(), 0);
+  await context.close();
+  const off = await openVip({ setUp: false });
+  await off.page.waitForSelector('.vip-lock-text');
+  assert.match(await off.page.locator('.vip-lock').innerText(), /VIP isn't set up yet/);
+  assert.equal(await off.page.locator('input[name="vip-password"]').count(), 0);
+  await off.context.close();
+});
+
+await check('vip: a base spin sends the bet and the pass, lands on the server\'s window, lights its lines and shows their amounts', async () => {
+  const { page, context, vip } = await openVip({ script: ['lines'] });
+  await vipUnlockNow(page);
+  await page.waitForSelector('.vip-machine');
+  await page.locator('.spin-btn').click();
+  await page.waitForSelector('.vip-line-win', { timeout: 6000 });
+  const sent = vip.state.spins[0].body;
+  assert.equal(sent.pass, 'harness.pass');
+  assert.equal(sent.amount, 1);
+  const expected = F.vipSpinReply('lines', 100, 9640).spin;
+  const lit = await page.locator('.vip-mark.lit').count();
+  assert.equal(lit, expected.lines.length * 2, 'each winning line is lit at both edges');
+  const amounts = await page.locator('.vip-line-amount').allInnerTexts();
+  assert.deepEqual(amounts, expected.lines.map((l) => `+$${((100 * l.tenths) / 10 / 100).toFixed(2)}`));
+  await noPassStored(page, context);
+  await context.close();
+});
+
+await check('vip: a bonus plays one free spin at a time with the counter and running total; the wallet waits for the end', async () => {
+  const { page, context } = await openVip({ script: ['bonus'] });
+  await vipUnlockNow(page);
+  await page.waitForSelector('.vip-machine');
+  const before = await wallet(page);
+  await page.locator('.spin-btn').click();
+  const reply = F.vipSpinReply('bonus', 100, 9640).spin;
+  await page.waitForFunction(() => /Free spin 1 \/ 10 · ×3/.test(document.querySelector('.vip-bonus-count')?.textContent ?? ''), null, { timeout: 8000 });
+  const held = await wallet(page);
+  assert.equal(held, `$${(Number(before.replace(/[$,]/g, '')) - 1).toFixed(2)}`, 'held at the old balance minus the bet');
+  await page.waitForFunction(() => /Free spin 5 \/ 10/.test(document.querySelector('.vip-bonus-count')?.textContent ?? ''), null, { timeout: 12000 });
+  assert.equal(await wallet(page), held, 'still held mid-bonus');
+  await page.waitForSelector('.big-win', { timeout: 15000 });
+  assert.match(await page.locator('.big-win-title').textContent(), /Bonus win/);
+  assert.equal((await page.locator('.vip-bonus-total').innerText()).trim(), `$${(reply.bonus.cents / 100).toFixed(2)}`);
+  await page.locator('.big-win').click();
+  await page.waitForFunction((h) => document.querySelector('.wallet')?.textContent !== h, held, { timeout: 4000 });
+  await context.close();
+});
+
+await check('vip: Skip to total jumps a playing bonus to its total', async () => {
+  const { page, context } = await openVip({ script: ['bonus'] });
+  await vipUnlockNow(page);
+  await page.waitForSelector('.vip-machine');
+  await page.locator('.spin-btn').click();
+  await page.waitForSelector('.vip-bonus-count', { timeout: 8000 });
+  await page.getByRole('button', { name: 'Skip to total' }).click();
+  await page.waitForSelector('.big-win', { timeout: 2000 });
+  assert.match(await page.locator('.vip-bonus-count').innerText(), /Free spin 10 \/ 10/);
+  await context.close();
+});
+
+await check('vip autospin: waits while a bonus plays and carries on after it; stops (and locks) when the server says VIP_LOCKED', async () => {
+  const { page, context, vip } = await openVip({ script: ['loss', 'bonus', 'loss', 'loss'], lockAfter: 3 });
+  await vipUnlockNow(page);
+  await page.waitForSelector('.vip-machine');
+  await startAuto(page, 10, "Don't stop");
+  await page.waitForSelector('.vip-bonus-count', { timeout: 12000 });
+  const atBonus = vip.state.spins.length;
+  assert.equal(atBonus, 2);
+  await page.waitForTimeout(4000);
+  assert.equal(vip.state.spins.length, 2, 'no spin while the bonus plays');
+  await page.locator('.big-win').click({ timeout: 15000 });
+  // spin 3 goes after the bonus; spin 4 is refused with VIP_LOCKED
+  await page.waitForSelector('input[name="vip-password"]', { timeout: 15000 });
+  assert.equal(vip.state.spins.length, 4);
+  assert.match(await page.locator('.vip-lock').innerText(), /locked again/i);
+  // spins never closer than 2 s apart
+  const at = vip.state.spins.map((s) => s.at);
+  for (let i = 1; i < at.length; i += 1) assert.ok(at[i] - at[i - 1] >= 2000, `spins ${i} and ${i + 1}: ${at[i] - at[i - 1]} ms apart`);
+  await context.close();
+});
+
 await browser.close();
 console.log(results.join('\n'));
 if (results.some((r) => r.startsWith('FAIL'))) process.exit(1);

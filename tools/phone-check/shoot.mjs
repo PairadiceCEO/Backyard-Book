@@ -13,6 +13,7 @@ const fsDefault = { users: F.users, bets: F.bets, ledger: F.ledger, customGames:
 const json = (route, status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
 async function routeApi(page, mode) {
+  const vipFake = F.vipRoute(mode.vip ?? {}); // fresh for every page (every size)
   await page.route('**/api/**', async (route) => {
     const req = route.request();
     const u = new URL(req.url());
@@ -30,6 +31,11 @@ async function routeApi(page, mode) {
       return json(route, 200, F.board(u.searchParams.get('league')));
     }
     if (u.pathname === '/api/settle') return json(route, 200, body?.preview || body?.force ? F.settlePreview : { ran: false });
+    if (u.pathname === '/api/casino' && /^vip/.test(body?.action ?? '')) {
+      const [status, reply] = vipFake.handle(body);
+      if (body.action === 'vipSpin' && mode.vip?.slow) await new Promise((r) => setTimeout(r, mode.vip.slow));
+      return json(route, status, reply);
+    }
     if (u.pathname === '/api/casino') {
       if (body?.action === 'bet' || body?.action === 'bets') await new Promise((r) => setTimeout(r, 4000)); // chips stay 'pending' on screen
       if (body?.action !== 'spin') return json(route, 200, { ok: true, applied: false, seat: 1, seated: true, serverNow: Date.now() });
@@ -58,6 +64,7 @@ async function routeApi(page, mode) {
     if (u.pathname === '/api/admin' && /^challenge(Settle|Void)$/.test(body?.action ?? '')) return json(route, 200, body.confirm ? { ok: true, settlement: { settled: 6, stillOpen: 1 } } : F.challengeSettlePreview);
     if (u.pathname === '/api/admin' && /^challenge/.test(body?.action ?? '')) return json(route, 200, { ok: true, challengeId: body.challengeId });
     if (u.pathname === '/api/admin' && /^battle/.test(body?.action ?? '')) return json(route, 200, F.battlePreview);
+    if (u.pathname === '/api/admin' && body?.action === 'vipStatus') return json(route, 200, { ok: true, setUp: true, updatedAt: '2026-11-01T18:30:00.000Z' });
     if (u.pathname === '/api/admin' && body?.action === 'walletActivity') return json(route, 200, F.walletActivity(mode.activity ?? 'ok'));
     if (u.pathname === '/api/admin') {
       if (body?.action === 'gradeBet' || body?.action === 'setLegResult') return json(route, 200, F.regradePreview);
@@ -132,6 +139,11 @@ const crSolo = () => crTable('craps', { point: 8, deadline: null, shooter: 1, se
 const crDont = () => crTable('craps', { point: 4, deadline: Date.now() + 9000, seats: [null, crSeat('u1', 'Mike', { dontPass: 1000, dontOdds: 500 }), null, null, null] });
 
 
+async function vipUnlockAct(p) {
+  await p.locator('input[name="vip-password"]').fill(F.HARNESS_VIP_PASSWORD);
+  await p.getByRole('button', { name: 'Unlock' }).click();
+  await p.waitForSelector('.vip-machine');
+}
 const S = (name, path, opts = {}) => ({ name, path, user: 'u0', admin: true, fs: fsDefault, ...opts });
 const scenarios = [
   S('login', '/login', { user: null }),
@@ -213,6 +225,15 @@ const scenarios = [
   S('casino-slots-chips', '/casino/slots', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.slot-bet').click(); await p.getByRole('radio', { name: '$2 chip' }).click(); await p.locator('.slot-bet').click(); await p.waitForTimeout(100); } }),
   S('casino-slots-spinning', '/casino/slots', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('button', { name: /^Spin/ }).click(); await p.waitForTimeout(300); } }),
   S('casino-slots-win', '/casino/slots', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('radio', { name: '$1 chip' }).click(); await p.locator('.slot-bet').click(); await p.getByRole('button', { name: /^Spin/ }).click(); await p.waitForTimeout(2200); } }),
+  // 0.28.0: the VIP slot (password sheet every visit, the machine, a multi-line win, the bonus playing, the paytable, Admin → VIP)
+  S('vip-lock', '/casino/vip', { admin: false, user: 'u1' }),
+  S('vip-not-set-up', '/casino/vip', { admin: false, user: 'u1', vip: { setUp: false } }),
+  S('vip-wrong', '/casino/vip', { admin: false, user: 'u1', act: async (p) => { await p.locator('input[name="vip-password"]').fill('not-it'); await p.getByRole('button', { name: 'Unlock' }).click(); await p.waitForSelector('.vip-lock .error-text'); } }),
+  S('vip-machine', '/casino/vip', { admin: false, user: 'u1', act: vipUnlockAct }),
+  S('vip-win', '/casino/vip', { admin: false, user: 'u1', vip: { script: ['lines'] }, act: async (p) => { await vipUnlockAct(p); await p.locator('.spin-btn').click(); await p.waitForSelector('.vip-line-wins', { timeout: 8000 }); await p.waitForTimeout(1200); } }),
+  S('vip-bonus', '/casino/vip', { admin: false, user: 'u1', vip: { script: ['bonus'] }, act: async (p) => { await vipUnlockAct(p); await p.locator('.spin-btn').click(); await p.waitForFunction(() => /Free spin [3-9] \//.test(document.querySelector('.vip-bonus-count')?.textContent ?? ''), null, { timeout: 15000 }); } }),
+  S('vip-paytable', '/casino/vip', { admin: false, user: 'u1', act: async (p) => { await vipUnlockAct(p); await p.getByRole('button', { name: 'Paytable' }).click(); await p.getByRole('dialog', { name: 'VIP paytable' }).waitFor(); } }),
+  S('admin-vip', '/admin', { act: async (p) => { await p.getByRole('tab', { name: 'VIP' }).click(); await p.waitForSelector('.vip-admin'); } }),
   
   S('admin-players', '/admin'),
   S('bj-two-seats-betting', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bjTwo.betting) }),
@@ -394,7 +415,7 @@ const PHONE_SIZES = [
   { w: 844, h: 390, wide: true },
   { w: 1280, h: 800, wide: true },
 ];
-const WIDE_SHOTS = /^(sportsbook|sportsbook-slip-bar|my-bets|casino-lobby|leaderboard|login|shop|game-detail|admin-players)$/;
+const WIDE_SHOTS = /^(sportsbook|sportsbook-slip-bar|my-bets|casino-lobby|leaderboard|login|shop|game-detail|admin-players|vip-machine|vip-win|vip-bonus)$/;
 // A felt button is at least 44 × 44. The one documented exception: the Come-odds chips inside a number box on the shortest
 // screens (a box 47–60 px tall keeps its top for Place), they keep 44 wide.
 const FELT_BUTTON_EXCEPTION = '^comeOdds:';

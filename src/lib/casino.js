@@ -48,6 +48,20 @@ export function spinSlots(amountDollars) {
   return casinoAction('spin', { amount: amountDollars, requestId: makeRequestId() });
 }
 
+// The VIP slot (0.28.0). The password goes only to vipUnlock; the pass it returns lives in the VIP page's memory and goes with
+// every spin.
+export function vipStatus() {
+  return casinoAction('vipStatus');
+}
+
+export function vipUnlock(password) {
+  return casinoAction('vipUnlock', { password });
+}
+
+export function spinVip(amountDollars, pass) {
+  return casinoAction('vipSpin', { amount: amountDollars, requestId: makeRequestId(), pass });
+}
+
 // Table actions: sit, leave, heartbeat, tick, and each game's own (bet, confirm, …).
 export function tableAction(game, action, fields = {}) {
   return casinoAction(action, { game, ...fields });
