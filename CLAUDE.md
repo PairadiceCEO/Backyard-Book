@@ -16,7 +16,7 @@ Vercel deploys the live site from `main`.
   (with file names), what's next, open questions, decisions. A new session must be able to continue from it.
 - Push to `main` once per phase, as one merge of `wip`, only after all of these pass:
   - the full test suite: `npm run test:all` (rules, casino engines, cash out, sportsbook server, Battles,
-    Challenges)
+    Challenges, and since 0.28.0 the VIP slot server: `npm run test:vip`)
   - the production build (`npx vite build` with dummy `VITE_FIREBASE_*` env vars)
   - lint (`npx eslint src`)
   - the phone check at 320 / 375 / 414 px (`tools/phone-check/`: `shoot.mjs`, `interact.mjs`, `dealcheck.mjs`, and since 0.23.0
@@ -97,6 +97,18 @@ Vercel deploys the live site from `main`.
   players otherwise and bet only through /api with their own Firebase login.
 - stats.stakedCents / returnedCents / settledBets / byLeague are kept for everyone by settlement, cash out and regrades
   (shared/perfStats.js); pushes and voids return the stake, a cash out returns its amount, Battles never count.
+- VIP slot (0.28.0, shared/casino/vipSlots.js): generous on purpose (play money). Total RTP 209.80% = lines 123.00% + Golden Dice
+  bonus 86.80%, something back on 81.4% of paid spins, 5× or more on 10.6% (a spin's line wins plus the bonus it triggers), bonus
+  once every 29.63 spins, all proven exactly in the file and test/vipSlots.test.js. Don't "fix" the RTP, the strips or the paytable.
+  Also on purpose: "Any 3 Diamonds, Gold Bars or Bells" (1.5×) leaves out Crowns and Gold 7s, and the bonus strips have more premiums
+  and fewer blanks than the base but almost no Cherries, so a raw bonus spin returns less than a base spin (× 3 makes it about
+  twice as much); with all premiums in the mixed line, or richer raw bonus strips, the total can't stay under 220%. A paid spin never
+  pays more than 10,000× the bet (unreachable by the strips: 7,700× at most; the server caps anyway). At most one paid VIP spin
+  every 2 s per player (vipRate/{uid}).
+- VIP lock: the password is asked on every visit, set by the admin in Admin → VIP and stored only as a salted scrypt hash in
+  meta/vipSlots (server-only). The VIP pass is an HMAC-signed { uid, password version, expiresAt } (2 h, keyed from the stored
+  hash) kept only in the VIP page's React state, never in storage, cookies, Firestore or the user doc; every VIP spin checks it
+  first (403 VIP_LOCKED). 5 wrong tries per 15 minutes per player (429). Never write a VIP password in code, tests, docs or logs.
 
 ## Working with Will
 - Will works in the browser only (no terminal). Claude pushes to GitHub.

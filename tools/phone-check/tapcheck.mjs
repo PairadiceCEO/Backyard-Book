@@ -43,7 +43,9 @@ const GAMES = {
   craps: { sel: '.craps-felt [data-spot="pass"]:not([data-part="strip"])', label: /\$([\d,]+\.\d{2}) on it/, server: () => seatOf('craps', 'u1').bets.pass },
   crapless: { sel: '.craps-felt [data-spot="place:6"]', label: /\$([\d,]+\.\d{2}) on it/, server: () => seatOf('crapless', 'u1').bets.place?.[6] ?? 0 },
   slots: { sel: '.slot-bet', label: /^Bet \$([\d,]+(?:\.\d{2})?)/, server: null }, // the bet is local until Spin: the spin carries it
+  vip: { sel: '.slot-bet', label: /^Bet \$([\d,]+(?:\.\d{2})?)/, server: null }, // 0.28.0: the same, after the password sheet
 };
+const LOCAL_BET = new Set(['slots', 'vip']);
 const PLACE6 = { sel: '.craps-felt [data-spot="place:6"]', label: /\$([\d,]+\.\d{2}) on it/ };
 
 async function run(game, work, mode = 'plain') {
@@ -79,7 +81,7 @@ async function run(game, work, mode = 'plain') {
     await server('u2', { action: 'sit', game, seat: 0 });
     await server('u2', { action: 'bets', game, seat: 0, changes: [{ kind: 'pass', cents: 500 }], requestId: 'tapcheck-u2-pass-1' });
     await server('u1', { action: 'sit', game, seat: 1 });
-  } else if (game !== 'slots') await server('u1', { action: 'sit', game, seat: 0 });
+  } else if (!LOCAL_BET.has(game)) await server('u1', { action: 'sit', game, seat: 0 });
   const context = await browser.newContext({ viewport: { width: 375, height: 760 }, isMobile: true, hasTouch: true });
   page = await context.newPage();
   const initial = fake.get(`casinoTables/${game}`);
@@ -90,6 +92,12 @@ async function run(game, work, mode = 'plain') {
     const u = new URL(route.request().url());
     if (u.pathname !== '/api/casino') return json(route, 200, { ok: true, ran: false });
     const body = route.request().postDataJSON() ?? {};
+    if (body.action === 'vipStatus') return json(route, 200, { ok: true, setUp: true, serverNow: Date.now() });
+    if (body.action === 'vipUnlock') return json(route, 200, { ok: true, pass: 'tapcheck.pass', expiresAt: Date.now() + 7_200_000, serverNow: Date.now() });
+    if (body.action === 'vipSpin') {
+      spins.push(body);
+      return json(route, 200, F.vipSpinReply('loss', body.amount * 100, START_CENTS));
+    }
     if (body.action === 'spin') {
       spins.push(body);
       return json(route, 200, { ok: true, stops: [1, 2, 3], symbols: ['BL', 'B1', 'CH'], line: null, betCents: body.amount * 100, winCents: 0, balanceCents: START_CENTS - body.amount * 100, serverNow: Date.now() });
@@ -107,10 +115,15 @@ async function run(game, work, mode = 'plain') {
   });
   await page.goto(`${BASE}/casino/${game}`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(1200);
+  if (game === 'vip') {
+    await page.locator('input[name="vip-password"]').fill('tapcheck-only');
+    await page.getByRole('button', { name: 'Unlock' }).click();
+    await page.waitForSelector('.vip-machine');
+  }
 
   const G = mode === 'roll' ? { ...GAMES[game], ...PLACE6, server: () => seatOf(game, 'u1').bets.place?.[6] ?? 0 } : GAMES[game];
   const screen = async () => G.label.exec((await page.locator(G.sel).first().getAttribute('aria-label')) ?? '')?.[1] ?? '0.00';
-  if (game === 'slots') await page.getByRole('button', { name: 'Clear' }).click().catch(() => {});
+  if (LOCAL_BET.has(game)) await page.getByRole('button', { name: 'Clear' }).click().catch(() => {});
   await page.getByRole('radio', { name: '$5 chip' }).first().click();
   const spot = page.locator(G.sel).first();
   await spot.waitFor({ state: 'visible', timeout: 5000 });
@@ -142,7 +155,7 @@ async function run(game, work, mode = 'plain') {
   await page.waitForTimeout(Math.max(1500, work * 4 + 1200));
   const shown = await screen();
   let serverCents = null;
-  if (game === 'slots') {
+  if (LOCAL_BET.has(game)) {
     await page.getByRole('button', { name: /^Spin/ }).click();
     await page.waitForTimeout(400);
     serverCents = spins.length ? spins.at(-1).amount * 100 : 0;
