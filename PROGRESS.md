@@ -5,15 +5,18 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
-## Phase 0.28.1 (Will, 2026-11-02 16:34 CT) — IN PROGRESS on wip (not merged to main yet)
+## Phase 0.28.1 (Will, 2026-11-02 16:34 CT) — COMPLETE (2026-11-02), merged to main, ready for Will to test
 Spec: "VIP slot fixes: Stop always works, the trigger spin stays on screen before the bonus, Spin button above the bet". Only
 src/pages/casino/VipSlotsPage.jsx, src/styles/vip.css and tests/harness changed: no server, payout, strip or paytable change. Details: README 0.28.1.
 Done (all on wip): the three fixes, the new phone-harness checks (tools/phone-check/interact.mjs, `ONLY='vip 0.28.1'`, 6 checks), the dev-only
 draw assertion (compiled out of production: 0 matches in dist), version 0.28.1 (package.json + lockfile), README / phone-check README.
-Checks so far: test:all 465 pass (12 suites), lint clean (scratch flat config with react-hooks rules, --max-warnings 0), build ok, /api = 7,
-the 6 new checks and the 6 old VIP checks pass; each new check also fails on a deliberately broken copy (old Stop, old bonus strips,
-wrong strips drawn).
-Still to do: full phone suite (interact, shoot, dealcheck, tapcheck) at 320 / 375 / 414 and 844 × 390, then merge wip to main and tell Will.
+Checks: test:all 465 pass (12 suites, incl. test:vip), lint clean (scratch flat config with react-hooks rules, --max-warnings 0), build ok,
+/api = 7, interact 100/100 (6 new `vip 0.28.1` checks + the 6 earlier VIP ones), shoot 174 screens clean (incl. vip-* and admin-vip; 320 / 375 / 414 /
+844 × 390 / 1280 × 800, craps at its eight sizes), dealcheck 8/8, tapcheck 16/16 (incl. VIP). Each new check also fails on a deliberately broken copy
+of the page (old Stop, old bonus strips, wrong strips drawn), so they really test the fixes. The dev-only draw assertion is not in the production
+build (0 matches in dist). No firestore.rules change, no index, no new /api function.
+Test steps for Will: (1) Open VIP, unlock, tap Spin then Stop right away, 10 times: every one stops at once. (2) Play until a bonus: the trigger spin
+stays with all three Golden Dice glowing, with the "3 Golden Dice! 10 free spins" banner, before the free spins start. (3) The Spin button is above the bet.
 Fixes:
 - Stop: stopRequestedRef is set by any tap while a spin is busy. Before, finishRef was set only after spinVip() resolved, so a tap during the 2 s
   gap wait or the request was ignored. When the reply arrives with it set the page lands at once (all three reels, no MIN_SPIN_MS / REEL_GAP_MS);
