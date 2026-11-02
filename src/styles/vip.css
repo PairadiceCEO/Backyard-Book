@@ -153,6 +153,41 @@
   border: 1px solid rgba(248, 227, 163, 0.6);
 }
 
+/* The trigger spin: the bar turns into a banner and the Golden Dice on the landed window glow and pulse until the first free spin. */
+.vip-bonus-bar.trigger {
+  border-color: #f8e3a3;
+  box-shadow: 0 0 0 3px rgba(248, 227, 163, 0.22), 0 0 22px rgba(226, 189, 98, 0.55);
+  animation: vip-banner-pulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes vip-banner-pulse {
+  from {
+    box-shadow: 0 0 0 2px rgba(248, 227, 163, 0.15), 0 0 12px rgba(226, 189, 98, 0.35);
+  }
+  to {
+    box-shadow: 0 0 0 4px rgba(248, 227, 163, 0.32), 0 0 28px rgba(226, 189, 98, 0.75);
+  }
+}
+
+.vip-cell.dice {
+  background: radial-gradient(circle, rgba(255, 226, 138, 0.38), rgba(226, 189, 98, 0.1) 70%);
+  box-shadow: inset 0 0 0 2px #ffe08a, 0 0 14px rgba(255, 214, 102, 0.75);
+}
+
+.vip-cell.dice .vsym svg {
+  filter: drop-shadow(0 0 7px rgba(255, 224, 138, 0.95)) drop-shadow(0 0 14px rgba(255, 190, 60, 0.7));
+  animation: vip-dice-pulse 0.7s ease-in-out infinite alternate;
+}
+
+@keyframes vip-dice-pulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.14);
+  }
+}
+
 .vip-bonus-count {
   font-family: var(--font-felt);
   font-weight: 700;
@@ -184,6 +219,21 @@
 
 .vip-session {
   margin: 0;
+}
+
+/* ---------- Spin above the bet, Auto below the chip rack (0.28.1) ---------- */
+.vip-machine .spin-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.vip-auto-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.vip-auto-row .auto-btn {
+  min-height: 48px;
+  width: 100%;
 }
 
 /* ---------- Symbols ---------- */
@@ -349,7 +399,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .vip-win-line,
-  .vip-bonus-added {
+  .vip-bonus-added,
+  .vip-bonus-bar.trigger,
+  .vip-cell.dice .vsym svg {
     animation: none;
   }
   .vip-cell {

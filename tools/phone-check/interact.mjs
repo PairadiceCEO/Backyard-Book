@@ -3,6 +3,7 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import * as F from './fixtures.mjs';
+import { VIP_BONUS_REELS, VIP_REELS, vipWindow } from '../../shared/casino/vipSlots.js';
 
 const BASE = 'http://localhost:5199';
 const json = (route, status, body) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -2402,16 +2403,24 @@ await check('admin agents: Sportsbook profit is the main number, rows sorted by 
 });
 
 // ---------- 0.28.0: the VIP slot ----------
-async function openVip(mode = {}, { path = '/casino/vip', reducedMotion = 'no-preference' } = {}) {
-  const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true, reducedMotion });
+// replyDelayMs: the mocked server holds every vipSpin reply this long (0.28.1); vip.state.replies has the time each reply left it.
+async function openVip(mode = {}, { path = '/casino/vip', reducedMotion = 'no-preference', viewport = { width: 375, height: 800 }, replyDelayMs = 0 } = {}) {
+  const context = await browser.newContext({ viewport, isMobile: true, hasTouch: true, reducedMotion });
   const page = await context.newPage();
   const vip = F.vipRoute(mode);
+  vip.state.replies = [];
   await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: [] } });
   await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
   await page.route('**/api/**', async (route) => {
     const body = route.request().postDataJSON?.() ?? {};
     const r = new URL(route.request().url()).pathname === '/api/casino' ? vip.handle(body) : null;
-    if (r) return json(route, r[0], r[1]);
+    if (r) {
+      if (body.action === 'vipSpin') {
+        if (replyDelayMs) await new Promise((res) => setTimeout(res, replyDelayMs));
+        vip.state.replies.push(Date.now());
+      }
+      return json(route, r[0], r[1]);
+    }
     return json(route, 200, { ok: true, serverNow: now() });
   });
   await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
@@ -2544,6 +2553,261 @@ await check('vip autospin: waits while a bonus plays and carries on after it; st
   const at = vip.state.spins.map((s) => s.at);
   for (let i = 1; i < at.length; i += 1) assert.ok(at[i] - at[i - 1] >= 2000, `spins ${i} and ${i + 1}: ${at[i] - at[i - 1]} ms apart`);
   await context.close();
+});
+
+// ---------- 0.28.1: VIP Stop on every tap, the trigger spin stays as it landed, Spin above the bet ----------
+// Real timers, the mocked VIP server (fixtures.mjs vipRoute) on the real machine. vipRecorder logs what is DRAWN on every change of
+// the page: how many reels spin, the 3 × 3 symbols (data-sym of each stopped cell), the lit Golden Dice cells, the bonus bar and
+// its text, and the symbols in a spinning blur. A state that stays on screen stays true until the next entry.
+const showWin = (w) => (w ? w.map((r) => r.join(' ')).join(' / ') : 'spinning');
+const sameWin = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const blurOf = (strips, reel) => [...new Set(strips[reel].slice(0, 10))].sort();
+async function vipRecorder(page) {
+  await page.evaluate(() => {
+    const log = (window.__vipLog = []);
+    const read = () => {
+      const reels = [...document.querySelectorAll('.vip-reels .vip-reel')];
+      const spun = (r) => r.classList.contains('spinning');
+      const cols = reels.map((r) => (spun(r) ? null : [...r.querySelectorAll('.vip-cell')].map((c) => c.getAttribute('data-sym'))));
+      const bar = document.querySelector('.vip-bonus-bar');
+      log.push({
+        t: Date.now(),
+        spinning: reels.filter(spun).length,
+        window: cols.length === 3 && cols.every(Boolean) ? [0, 1, 2].map((row) => cols.map((c) => c[row])) : null,
+        blur: reels.map((r) => (spun(r) ? [...new Set([...r.querySelectorAll('.reel-cell')].map((c) => c.getAttribute('data-sym')))].sort() : null)),
+        dice: document.querySelectorAll('.vip-cell.dice').length,
+        bar: Boolean(bar),
+        trigger: Boolean(bar?.classList.contains('trigger')),
+        count: document.querySelector('.vip-bonus-count')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+      });
+    };
+    new MutationObserver(read).observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+    read();
+  });
+}
+const vipLog = (page) => page.evaluate(() => window.__vipLog);
+const vipMismatches = (page) => page.evaluate(() => window.__vipDrawMismatch || 0); // the dev-only draw assertion in VipSlotsPage.jsx
+const waitSpinIdle = (page, ms = 20000) => page.waitForFunction(() => /^Spin/.test(document.querySelector('.spin-btn')?.textContent ?? ''), null, { timeout: ms });
+const vipReady = async (page) => {
+  await vipUnlockNow(page);
+  await page.waitForSelector('.vip-machine');
+  await vipRecorder(page);
+};
+// From the Spin tap at `fromT`: when every reel had stopped, and whether they ever stopped one by one (1 or 2 still spinning).
+function landingOf(log, fromT) {
+  const after = log.filter((e) => e.t >= fromT);
+  const s = after.findIndex((e) => e.spinning === 3);
+  if (s < 0) return { error: 'the reels never spun' };
+  const l = after.findIndex((e, i) => i > s && e.spinning === 0);
+  if (l < 0) return { error: 'the reels never stopped' };
+  const oneByOne = after.slice(s + 1, l).some((e) => e.spinning === 1 || e.spinning === 2);
+  return { at: after[l].t, oneByOne };
+}
+const STOP_LAND_MS = 300; // from the reply (or the tap, if it came later) to all three reels stopped; unaided it takes 1.6 s or more
+
+await check('vip 0.28.1: Stop works on every tap: a tap before the reply lands the spin when it arrives, 20 of 20 (also in the 2 s wait), never a second spin', async () => {
+  const { page, context, vip } = await openVip({ script: [] });
+  await vipReady(page);
+  const bad = [];
+  for (let i = 0; i < 20; i += 1) {
+    const spinT = Date.now();
+    await page.locator('.spin-btn').click(); // Spin
+    const stopT = Date.now();
+    await page.locator('.spin-btn').click(); // Stop, right away: from the 2nd spin on this is inside the 2 s wait
+    await waitSpinIdle(page, 8000);
+    const reply = vip.state.replies[i];
+    const land = landingOf(await vipLog(page), spinT);
+    if (land.error) bad.push(`spin ${i + 1}: ${land.error}`);
+    else if (land.at - Math.max(reply, stopT) > STOP_LAND_MS) bad.push(`spin ${i + 1}: landed ${land.at - Math.max(reply, stopT)} ms after the reply`);
+    else if (land.oneByOne) bad.push(`spin ${i + 1}: the reels stopped one by one`);
+  }
+  assert.deepEqual(bad, [], bad.join('; '));
+  assert.equal(vip.state.spins.length, 20, 'a Stop tap never starts a second spin');
+  await context.close();
+});
+
+await check('vip 0.28.1: Stop with a reply held 1.5 s: a tap at any moment before it lands the spin when it arrives; three quick taps are still one spin', async () => {
+  const { page, context, vip } = await openVip({ script: [] }, { replyDelayMs: 1500 });
+  await vipReady(page);
+  const offsets = [0, 300, 900, 1400];
+  const bad = [];
+  for (let i = 0; i < offsets.length; i += 1) {
+    const spinT = Date.now();
+    await page.locator('.spin-btn').click();
+    await page.waitForTimeout(offsets[i]);
+    const stopT = Date.now();
+    await page.locator('.spin-btn').click();
+    if (i === offsets.length - 1) {
+      await page.waitForTimeout(40);
+      await page.locator('.spin-btn').click();
+      await page.waitForTimeout(40);
+      await page.locator('.spin-btn').click();
+    }
+    await waitSpinIdle(page, 10000);
+    const reply = vip.state.replies[i];
+    const land = landingOf(await vipLog(page), spinT);
+    if (land.error) bad.push(`tap at +${offsets[i]} ms: ${land.error}`);
+    else if (land.at - Math.max(reply, stopT) > STOP_LAND_MS) bad.push(`tap at +${offsets[i]} ms: landed ${land.at - Math.max(reply, stopT)} ms after the reply`);
+    else if (land.oneByOne) bad.push(`tap at +${offsets[i]} ms: the reels stopped one by one`);
+  }
+  assert.deepEqual(bad, [], bad.join('; '));
+  assert.equal(vip.state.spins.length, offsets.length, 'the extra taps started no extra spin');
+  await context.close();
+});
+
+// The trigger spin, the free spins and the next paid spin in one session, judged from what was drawn.
+await check('vip 0.28.1: the trigger spin stays as landed for the whole BONUS_START_MS (its stops on the base strips, 3 Golden Dice lit, banner); every free spin and the next paid spin are drawn on their own strips', async () => {
+  const { page, context } = await openVip({ script: ['bonus', 'lines'] });
+  await vipReady(page);
+  const trig = F.vipSpinReply('bonus', 100, 9640).spin;
+  const paid = vipWindow(trig.stops, VIP_REELS);
+  const diceInPaid = paid.flat().filter((s) => s === 'GD').length;
+  assert.ok(diceInPaid >= 3, 'the fixture trigger shows its Golden Dice');
+  const free = trig.bonus.spins.map((s) => vipWindow(s.stops, VIP_BONUS_REELS));
+  const nextStops = F.vipSpinReply('lines', 100, 9640).spin.stops;
+  const next = vipWindow(nextStops, VIP_REELS);
+  assert.ok(!sameWin(next, vipWindow(nextStops, VIP_BONUS_REELS)), 'the next spin is told apart by its strips');
+
+  await page.locator('.spin-btn').click();
+  await page.waitForSelector('.big-win', { timeout: 30000 }); // the bonus is over
+  await page.locator('.big-win').click();
+  await waitSpinIdle(page);
+  const afterBonusT = Date.now();
+  await page.locator('.spin-btn').click(); // the next paid spin, on the base strips again
+  await page.waitForFunction(() => document.querySelector('.vip-line-win'), null, { timeout: 15000 });
+  const log = await vipLog(page);
+  const problems = [];
+
+  // (b) the trigger spin
+  const L = log.findIndex((e) => e.bar && e.spinning === 0 && e.window);
+  const Fs = log.findIndex((e, i) => i > L && e.spinning > 0);
+  assert.ok(L >= 0 && Fs > L, 'the trigger spin landed and then the first free spin started');
+  const held = log[Fs].t - log[L].t;
+  if (held < 1200) problems.push(`the trigger spin stayed on screen only ${held} ms (BONUS_START_MS is 1300)`);
+  for (let i = L; i < Fs; i += 1) {
+    const e = log[i];
+    if (!sameWin(e.window, paid)) problems.push(`trigger window was ${showWin(e.window)}, not the paid spin's ${showWin(paid)} (entry ${i - L}, +${e.t - log[L].t} ms)`);
+    else if (e.dice !== diceInPaid) problems.push(`${e.dice} Golden Dice cells lit, the window has ${diceInPaid} (+${e.t - log[L].t} ms)`);
+    else if (!e.trigger || !new RegExp(`${diceInPaid} Golden Dice! 10 free spins`).test(e.count ?? '')) problems.push(`no "${diceInPaid} Golden Dice! 10 free spins" banner (+${e.t - log[L].t} ms): ${e.count}`);
+    if (problems.length) break;
+  }
+
+  // (c) every free spin's window is its stops on the bonus strips; the blur uses the strips of the spin that runs
+  const seen = new Set();
+  const afterTrigger = log.slice(L);
+  for (const e of afterTrigger) {
+    const m = /^Free spin (\d+) \/ \d+/.exec(e.count ?? '');
+    if (m && e.spinning === 0 && e.window) {
+      seen.add(Number(m[1]));
+      if (!sameWin(e.window, free[Number(m[1]) - 1])) problems.push(`free spin ${m[1]} showed ${showWin(e.window)}, not ${showWin(free[Number(m[1]) - 1])}`);
+    }
+    if (e.dice && e.t > log[Fs].t) problems.push('Golden Dice glow outside the trigger spin');
+  }
+  for (let k = 1; k <= 10; k += 1) if (!seen.has(k)) problems.push(`free spin ${k} was never drawn`);
+  for (const e of log) {
+    e.blur.forEach((set, reel) => {
+      if (!set) return;
+      const strips = e.bar ? VIP_BONUS_REELS : VIP_REELS;
+      if (!sameWin(set, blurOf(strips, reel))) problems.push(`reel ${reel + 1} blurred symbols ${set.join(',')} of the ${e.bar ? 'bonus' : 'base'} strip ${blurOf(strips, reel).join(',')}`);
+    });
+  }
+
+  // (d) after the bonus the next paid spin is drawn on the base strips; the idle window before it is the last free spin
+  const lastFree = log.filter((e) => e.t > afterBonusT - 3000 && e.t < afterBonusT && e.spinning === 0 && e.window && !e.blur.some(Boolean));
+  if (lastFree.length && !sameWin(lastFree[lastFree.length - 1].window, free[9])) problems.push('the window between the bonus and the next spin is not the last free spin');
+  const tail = log.filter((e) => e.t >= afterBonusT && e.spinning === 0 && e.window);
+  if (!tail.length || !sameWin(tail[tail.length - 1].window, next)) problems.push(`the next paid spin showed ${showWin(tail[tail.length - 1]?.window)}, not ${showWin(next)}`);
+  if (tail.some((e) => e.bar)) problems.push('the bonus bar was still up on the next paid spin');
+
+  assert.deepEqual(problems.slice(0, 4), [], problems.slice(0, 4).join(' | '));
+  assert.equal(await vipMismatches(page), 0, 'the dev draw assertion fired');
+  await context.close();
+});
+
+await check('vip 0.28.1: a Stop tap during the trigger spin lands it first (Golden Dice lit); the bonus still starts, and a tap after that skips it to the total', async () => {
+  const { page, context, vip } = await openVip({ script: ['bonus'] }, { replyDelayMs: 800 });
+  await vipReady(page);
+  const trig = F.vipSpinReply('bonus', 100, 9640).spin;
+  const paid = vipWindow(trig.stops, VIP_REELS);
+  await page.locator('.spin-btn').click();
+  await page.waitForTimeout(150);
+  await page.locator('.spin-btn').click(); // Stop, before the reply
+  await page.waitForSelector('.vip-bonus-bar.trigger', { timeout: 4000 });
+  const log = await vipLog(page);
+  const L = log.findIndex((e) => e.trigger && e.spinning === 0);
+  assert.ok(sameWin(log[L].window, paid), `landed on ${showWin(log[L].window)}`);
+  assert.ok(log[L].t - vip.state.replies[0] <= STOP_LAND_MS, 'landed at once when the reply arrived');
+  assert.ok(log[L].dice >= 3, 'the Golden Dice are lit');
+  assert.equal(await page.locator('.big-win').count(), 0, 'the Stop tap did not skip the bonus');
+  await page.waitForFunction(() => /Free spin 1 \/ 10/.test(document.querySelector('.vip-bonus-count')?.textContent ?? ''), null, { timeout: 6000 });
+  assert.equal(await page.locator('.big-win').count(), 0, 'the bonus is playing');
+  await page.getByRole('button', { name: 'Skip to total' }).click();
+  await page.waitForSelector('.big-win', { timeout: 2000 });
+  assert.equal(vip.state.spins.length, 1);
+  assert.equal(await vipMismatches(page), 0, 'the dev draw assertion fired');
+  await context.close();
+});
+
+await check('vip 0.28.1: with reduced motion the trigger spin still stays as landed and every free spin is its own window', async () => {
+  const { page, context } = await openVip({ script: ['bonus'] }, { reducedMotion: 'reduce' });
+  await vipReady(page);
+  const trig = F.vipSpinReply('bonus', 100, 9640).spin;
+  const paid = vipWindow(trig.stops, VIP_REELS);
+  const free = trig.bonus.spins.map((s) => vipWindow(s.stops, VIP_BONUS_REELS));
+  await page.locator('.spin-btn').click();
+  await page.waitForSelector('.big-win', { timeout: 20000 });
+  const log = await vipLog(page);
+  const problems = [];
+  const L = log.findIndex((e) => e.bar && e.spinning === 0 && e.window);
+  const nextChange = log.findIndex((e, i) => i > L && /^Free spin 1 /.test(e.count ?? ''));
+  assert.ok(L >= 0 && nextChange > L);
+  if (log[nextChange].t - log[L].t < 1200) problems.push(`the trigger spin stayed only ${log[nextChange].t - log[L].t} ms`);
+  for (let i = L; i < nextChange; i += 1) if (!sameWin(log[i].window, paid)) problems.push(`trigger window ${showWin(log[i].window)}`);
+  for (const e of log.slice(nextChange)) {
+    const m = /^Free spin (\d+) /.exec(e.count ?? '');
+    if (m && e.window && !sameWin(e.window, free[Number(m[1]) - 1])) problems.push(`free spin ${m[1]} showed ${showWin(e.window)}`);
+  }
+  assert.deepEqual(problems.slice(0, 3), [], problems.slice(0, 3).join(' | '));
+  assert.equal(await vipMismatches(page), 0, 'the dev draw assertion fired');
+  await context.close();
+});
+
+await check('vip 0.28.1: layout top to bottom is machine, win info, Spin, bet spot, chip rack with Max, Auto; every control 44 px or more; no sideways scroll at 320 / 375 / 414 and 844 × 390', async () => {
+  const sizes = [[320, 640], [375, 800], [414, 896], [844, 390]];
+  for (const [width, height] of sizes) {
+    const { page, context } = await openVip({}, { viewport: { width, height } });
+    await vipUnlockNow(page);
+    await page.waitForSelector('.vip-machine');
+    const r = await page.evaluate(() => {
+      const box = (sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return null;
+        const b = el.getBoundingClientRect();
+        return { top: b.top + window.scrollY, bottom: b.bottom + window.scrollY, left: b.left, right: b.right, h: b.height, w: b.width };
+      };
+      return {
+        frame: box('.vip-frame'),
+        result: box('.slot-result'),
+        spin: box('.spin-btn'),
+        bet: box('.slot-bet'),
+        rack: box('.chip-rack'),
+        max: box('.chip-main button'),
+        auto: box('.auto-btn'),
+        scrollW: document.documentElement.scrollWidth,
+        innerW: window.innerWidth,
+      };
+    });
+    const at = `${width}×${height}`;
+    for (const k of ['frame', 'result', 'spin', 'bet', 'rack', 'max', 'auto']) assert.ok(r[k], `${k} missing at ${at}`);
+    assert.ok(r.frame.bottom <= r.result.top + 2 && r.result.bottom <= r.spin.top + 2, `Spin is not right under the win info at ${at}`);
+    assert.ok(r.spin.bottom <= r.bet.top + 2, `Spin is not above the bet spot at ${at}`);
+    assert.ok(r.bet.bottom <= r.rack.top + 2, `the bet spot is not above the chip rack at ${at}`);
+    assert.ok(r.max.top >= r.rack.top && r.auto.top >= r.max.bottom - 2, `Auto is not after Max at ${at}`);
+    for (const k of ['spin', 'bet', 'max', 'auto']) assert.ok(r[k].h >= 44 && r[k].w >= 44, `${k} is ${Math.round(r[k].w)}×${Math.round(r[k].h)} at ${at}`);
+    assert.ok(r.scrollW <= r.innerW, `the page scrolls sideways at ${at} (${r.scrollW} > ${r.innerW})`);
+    for (const k of ['spin', 'bet', 'auto']) assert.ok(r[k].left >= 0 && r[k].right <= r.innerW, `${k} runs off the screen at ${at}`);
+    await context.close();
+  }
 });
 
 await browser.close();
