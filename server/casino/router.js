@@ -3,8 +3,8 @@
 
 import { HttpError } from '../http.js';
 import { spinSlots } from './slots.js';
-import { spinVip } from './vipSlots.js';
-import { vipPlayerStatus, vipUnlock } from '../vipLock.js';
+import { spinVip, vipUnlock } from './vipSlots.js';
+import { vipPlayerStatus } from '../vipLock.js';
 import { sendChat } from '../casinoChat.js';
 import { handleTableAction } from './tables.js';
 

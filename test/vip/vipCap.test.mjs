@@ -28,14 +28,14 @@ mock.module(url('shared/casino/vipSlots.js'), {
   },
 });
 const lock = await import(url('server/vipLock.js'));
-const { spinVip } = await import(url('server/casino/vipSlots.js'));
+const { spinVip, vipUnlock } = await import(url('server/casino/vipSlots.js'));
 
 test('the server caps a paid spin at 10,000 × B in all (line wins + bonus) and says so', async () => {
   fake.reset();
   fake.write('users/p1', { username: 'p1', balanceCents: 1_000_000, disabled: false });
   const caller = { uid: 'p1', token: {}, user: null };
   await lock.setVipPassword({ password: 'test-only-cap-1', repeat: 'test-only-cap-1' }, caller, { now: new Date(1e12) });
-  const { pass } = await lock.vipUnlock(caller, { password: 'test-only-cap-1' }, { now: new Date(1e12) });
+  const { pass } = await vipUnlock(caller, { password: 'test-only-cap-1' }, { now: new Date(1e12) });
   const r = await spinVip(caller, { amount: 2, requestId: 'cap-req-000001', pass }, { now: new Date(1e12 + 10) });
   assert.equal(r.spin.baseCents, 8000);
   assert.equal(r.spin.bonus.cents, 10000 * 200 - 8000);

@@ -22,7 +22,7 @@ mock.module(url('server/firebaseAdmin.js'), {
 });
 
 const lock = await import(url('server/vipLock.js'));
-const { spinVip } = await import(url('server/casino/vipSlots.js'));
+const { spinVip, vipUnlock } = await import(url('server/casino/vipSlots.js'));
 const { handleCasinoAction } = await import(url('server/casino/router.js'));
 const adminHandler = (await import(url('api/admin.js'))).default;
 const V = await import(url('shared/casino/vipSlots.js'));
@@ -68,7 +68,7 @@ async function setPassword(password, now = at(0)) {
   return lock.setVipPassword({ password, repeat: password }, caller('admin'), { now });
 }
 async function unlock(uid, password, now = at(0)) {
-  return lock.vipUnlock(caller(uid), { password }, { now });
+  return vipUnlock(caller(uid), { password }, { now });
 }
 // scripted reel stops (then zeros)
 function scripted(values) {
