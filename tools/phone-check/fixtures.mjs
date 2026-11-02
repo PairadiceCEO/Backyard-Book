@@ -434,7 +434,7 @@ export function walletActivity(mode = 'ok', { cursor = null } = {}) {
   const entries = rows.reverse(); // newest first
   const wallet = mode === 'jump' ? entries[0].balanceAfterCents - 300 : entries[0].balanceAfterCents;
   const bucket = (count, w, won, adj = 0) => ({ count, wageredCents: w, wonCents: won, adjustedCents: adj, netCents: won - w + adj });
-  const games = { slots: bucket(1, 500, 0), blackjack: bucket(2, 10000, 25000), baccarat: bucket(0, 0, 0), craps: bucket(2, 2000, 3400), crapless: bucket(0, 0, 0) };
+  const games = { slots: bucket(1, 500, 0), blackjack: bucket(2, 10000, 25000), baccarat: bucket(0, 0, 0), craps: bucket(2, 2000, 3400), crapless: bucket(0, 0, 0), vip: bucket(1, 500, 1500) };
   const sum = (list) => list.reduce((a, b) => bucket(a.count + b.count, a.wageredCents + b.wageredCents, a.wonCents + b.wonCents, a.adjustedCents + b.adjustedCents), bucket(0, 0, 0));
   const casino = { ...sum(Object.values(games)), games };
   const sportsbook = bucket(4, 1500, 3109);
