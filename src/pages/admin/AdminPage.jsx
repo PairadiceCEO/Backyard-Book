@@ -1,7 +1,7 @@
 // Admin home: Players, Bets (regrades, needs review), Battles (disputes, result / payout / void),
 // Challenges (approve / reject / edit, settle / void), Custom games, Settlement (preview, settle now), Shop purchases,
 // Wallet activity (a player's last 24 h of wallet changes, read only), Agents (0.21.0: the AI agents' results next to the
-// admin's, Rebuild stats) and a server access check.
+// admin's, Rebuild stats), VIP (0.28.0: the VIP slot's password and numbers) and a server access check.
 
 import { useState } from 'react';
 import { adminAction } from '../../lib/api.js';
@@ -14,6 +14,7 @@ import AdminBattles from './AdminBattles.jsx';
 import AdminChallenges from './AdminChallenges.jsx';
 import AdminWalletActivity from './AdminWalletActivity.jsx';
 import AdminAgents from './AdminAgents.jsx';
+import AdminVip from './AdminVip.jsx';
 
 const SECTIONS = [
   { id: 'players', label: 'Players' },
@@ -25,6 +26,7 @@ const SECTIONS = [
   { id: 'shop', label: 'Shop purchases' },
   { id: 'activity', label: 'Wallet activity' },
   { id: 'agents', label: 'Agents' },
+  { id: 'vip', label: 'VIP' },
   { id: 'system', label: 'System' },
 ];
 
@@ -99,6 +101,7 @@ export default function AdminPage() {
       ) : null}
       {section === 'settlement' ? <AdminSettlement /> : null}
       {section === 'agents' ? <AdminAgents /> : null}
+      {section === 'vip' ? <AdminVip /> : null}
       {section === 'system' ? <SystemPanel /> : null}
     </section>
   );

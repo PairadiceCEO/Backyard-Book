@@ -5,6 +5,48 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.28.0 (Will, 2026-11-02 13:04 CT) — COMPLETE (2026-11-02), merged to main, ready for Will to test
+Spec: "Pairadice VIP slot: 3×3 reels, 3 paylines, about 200% RTP, frequent small and big wins, Golden Dice bonus spins, password-locked tile
+at the bottom of the casino lobby (password every visit, admin-changeable)". (The first attachment at 13:01 was cut off mid-sentence; the full
+one came at 13:04.) 7s Slots and the leaderboard are unchanged. Details: README 0.28.0, docs/CASINO_PROGRESS.md 0.28.0.
+Files: shared/casino/vipSlots.js (machine + exact proof + VIP_STATS), server/vipLock.js (hash, pass, admin actions, player status),
+server/casino/vipSlots.js (vipSpin, vipUnlock), server/casino/router.js, api/admin.js, shared/walletActivity.js (game 'vip', "VIP slot"),
+src/lib/casino.js, src/pages/casino/VipSlotsPage.jsx, src/components/casino/{VipSymbol,VipPaytableSheet}.jsx, src/components/casino/SlotWinFx.jsx
+(BigWin title), src/styles/vip.css, src/pages/casino/CasinoLobby.jsx (VIP tile last), src/App.jsx (route /casino/vip; Analytics untouched),
+src/pages/admin/{AdminPage,AdminVip}.jsx, test/vipSlots.test.js (8), test/vip/{vip,vipCap}.test.mjs (9; `npm run test:vip`, in test:all),
+tools/phone-check/{fixtures,shoot,interact,tapcheck}.mjs + README.
+Proven numbers (exact, all 64,000 stop combinations; bonus by DP): total RTP 209.80% = base 123.00% (78,717 / 64,000) + bonus 86.80%;
+something back on 81.39% of paid spins (lines alone 80.48%); 5× B or more on 10.62% (lines alone 7.55%); bonus on 27 / 800 = 3.375% of paid
+spins (once every 29.63); a bonus lasts 10.68 spins and is worth 25.72× B on average (a bonus spin, × 3 included, 2.409× B; retrigger 0.633%);
+max paid spin 7,700× B, so the 10,000× cap is unreachable (the server still applies it; tested with a stubbed machine). 1,000,000-spin
+simulation agrees.
+Checks: test:all 465 pass (12 suites), lint clean (scratch flat config), build ok, /api = 7, shoot 174 screens clean (incl. vip-* and
+admin-vip; site screens at 320 / 375 / 414 / 844 × 390 / 1280 × 800, craps at its eight sizes), interact 94/94 (incl. 6 VIP checks),
+dealcheck 8/8, tapcheck 16/16 (incl. VIP). Admin → Wallet activity now tolerates a game missing from a summary (found by the harness).
+No firestore.rules change (meta/vipSlots and vipRate/{uid} are server-only under the catch-all), no index, no new /api function.
+Setup for Will: Admin → VIP → set the password (until then VIP says "VIP isn't set up yet").
+Decisions (Will's numbers can't all hold as written; how they were reconciled):
+- "Any three mixed premiums" (1.5×) counts Diamonds, Gold Bars and Bells only. With all five premiums in it, any strip set with ≥ 10% of spins at
+  5×+ had a base RTP far over target, and bonus strips with more premiums than the base pushed the total over 240%.
+- Total = base + (bonus rate × bonus value), and 10 spins × 3 is worth at least 30 × a bonus spin's raw RTP. At 1 bonus in 30 that is
+  total ≥ base + raw bonus RTP, so the bonus strips can't also pay more per raw spin than the base (that would be ≥ 240%). The bonus strips
+  have more premiums and fewer blanks than the base on every reel (as asked) but almost no Cherries, so a raw bonus spin returns 0.80×;
+  with × 3 each bonus spin is worth 2.41× B, about twice a base spin.
+- "5× B or more" counts a paid spin's whole return: its line wins plus the bonus it triggers (exactly: the chance the bonus adds enough). Line
+  wins alone reach 5×+ on 7.55% of spins.
+- The bonus comes once every 29.63 spins: inside "20–30", at the rare end (40-stop strips with 5 / 4 / 4 Golden Dice; one more die made the
+  total too high).
+- Each Crown on the bonus strips has no other premium within two stops, which bounds a bonus spin at 153× B and keeps the cap unreachable.
+- Ledger ids include the uid like every other casino entry: cbet_vip_{uid}_{requestId}, cpay_vip_{uid}_{requestId}_base / _bonus.
+- Wrong passwords count toward the 5-per-15-minutes limit; right ones don't (players unlock on every visit). Password at least 6 characters.
+- The pass key is an HMAC of the stored hash (+ salt + version), so a new password invalidates every pass at once without any extra secret.
+- A paid spin tapped within 2 s of the last one waits out the rest on the phone (the server refuses faster ones with 429 VIP_TOO_FAST).
+- Wallet hold: the top bar shows the old balance minus the bet until the bonus (or the base spin's Big win) has played.
+- After a reload the page is locked (as required); the wallet already shows the final balance (the server resolved everything).
+- During a bonus, Spin becomes "Skip to total". Auto pauses while a bonus plays and carries on after it; the "Any win" rule stops after a
+  winning bonus like any win.
+- Line amounts show in a list under the window (with the line number), not inside the edge markers (too narrow at 320 px).
+
 ## Phase 0.27.0 (Will, 2026-10-28 20:42 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: "Pairadice Casino: rename from Backyard Book, new logo, and a black-and-gold 'liquid glass' design across the whole site". Only the look
 and the names changed: no server, money, rules, data or route changes; Vercel Analytics untouched (`<Analytics />` still rendered once in App.jsx). Details: README 0.27.0.

@@ -1,4 +1,5 @@
-// Casino lobby: the 7s slot and the four tables (live seats from each table doc, Sit / Watch).
+// Casino lobby: the 7s slot and the four tables (live seats from each table doc, Sit / Watch), then the VIP slot (0.28.0) last:
+// always shown locked; its page asks for the password on every visit.
 
 import SoundToggle from '../../components/casino/SoundToggle.jsx';
 import { useState } from 'react';
@@ -9,6 +10,8 @@ import { friendlyError } from '../../components/StatusViews.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useCasinoTable } from '../../hooks/useCasinoTable.js';
 import { tableAction } from '../../lib/casino.js';
+import { LockIcon } from './VipSlotsPage.jsx';
+import VipSymbol from '../../components/casino/VipSymbol.jsx';
 
 const ICONS = { blackjack: 'A♠', baccarat: '9♥', craps: '⚂⚄', crapless: '⚅⚀' };
 
@@ -116,6 +119,24 @@ export default function CasinoLobby() {
             </li>
           );
         })}
+        <li className="card lobby-card lobby-vip" data-game="vip">
+          <div className="lobby-icon vip-icon" aria-hidden="true">
+            <VipSymbol id="GD" small />
+          </div>
+          <div className="lobby-text">
+            <strong className="lobby-name">
+              VIP{' '}
+              <span className="vip-lock-badge" aria-label="Locked">
+                <LockIcon />
+              </span>
+            </strong>
+            <span className="muted small">3 × 3 reels · 3 lines · Golden Dice bonus</span>
+            <span className="muted small">Members only: password every visit</span>
+          </div>
+          <Link to="/casino/vip" className="btn btn-primary" aria-label="Enter VIP (password needed)">
+            Enter
+          </Link>
+        </li>
       </ul>
     </section>
   );

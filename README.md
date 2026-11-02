@@ -149,6 +149,32 @@ site's `/api` with their own login, so they can't do anything a player can't.
 - **Disabling an agent** (Admin → Players → Disable) removes it from the leaderboard and from Admin → Agents; its bets and history
   stay untouched. Enable puts it back.
 
+## 0.28.0
+
+**Pairadice VIP slot** (`/casino/vip`, the last tile in the casino lobby, always shown locked). A second slot machine for a few friends,
+generous on purpose.
+
+- **The password:** the admin sets it in **Admin → VIP** ("New password" + "Repeat"); the tab shows only when it was set, never the
+  password. It is stored only as a salted scrypt hash. Until one is set, VIP says "VIP isn't set up yet". Players enter it **every time**
+  they open VIP: the unlock lasts only while the page is open (at most 2 hours) and is never saved in the browser; leaving the page,
+  reloading or switching games locks it again. 5 wrong tries in 15 minutes: "Too many tries, wait a few minutes". Changing the password
+  locks everyone out of VIP at once.
+- **The machine:** 3 reels, 3 rows, 3 paylines (top, middle, bottom). One bet covers all three lines; each winning line pays its multiple
+  of the bet and they add up: Crown × 3 50×, Gold 7 × 3 25×, Diamond × 3 15×, Gold Bar × 3 10×, Bell × 3 6×, Cherry × 3 3×,
+  any 3 Diamonds / Gold Bars / Bells 1.5×, any 2 Cherries 1×, any 1 Cherry 0.5×. Same chips as 7s Slots, Max, Spin and Auto
+  (10 / 25 / 50; Auto waits while a bonus plays and carries on after it). At most one paid spin every 2 seconds.
+- **Golden Dice bonus:** 3 or more Golden Dice anywhere in the window → 10 free spins on richer reels, every win × 3; 3 more during the
+  bonus add 10 spins (up to 50). The server decides the whole bonus with the spin that wins it; the phone plays it spin by spin
+  ("Free spin 4 / 10 · ×3", running total, a big finish; **Skip to total** jumps to the end). The wallet in the top bar waits until the
+  bonus has played.
+- **Numbers (proven exactly, `shared/casino/vipSlots.js`):** returns 209.80% of what is bet (lines 123.00%, bonus 86.80%); something
+  back on 81.4% of spins; 5× or more on 10.6%; the bonus about once every 30 spins, worth about 26× the bet on average. One spin never
+  pays more than 10,000× the bet. VIP money shows on the leaderboard like any other winnings.
+- **Server:** `/api/casino` actions `vipStatus`, `vipUnlock`, `vipSpin`; `/api/admin` actions `vipSetPassword`, `vipStatus`. No new
+  function (still 7) and no `firestore.rules` change (`meta/vipSlots` and `vipRate/{uid}` are server-only under the catch-all rule).
+  Ledger: `cbet_vip_{uid}_{requestId}` (the bet, with the full spin), `cpay_vip_{uid}_{requestId}_base` (line wins) and
+  `…_bonus` (the bonus total).
+
 ## 0.27.0
 
 **Pairadice Casino.** The site is renamed from Backyard Book and redesigned in black and gold "liquid glass", every screen. Only the look and the names

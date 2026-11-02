@@ -3,11 +3,17 @@
 
 import { HttpError } from '../http.js';
 import { spinSlots } from './slots.js';
+import { spinVip, vipUnlock } from './vipSlots.js';
+import { vipPlayerStatus } from '../vipLock.js';
 import { sendChat } from '../casinoChat.js';
 import { handleTableAction } from './tables.js';
 
 const SLOT_ACTIONS = {
   spin: spinSlots,
+  // The VIP slot (0.28.0): unlock with the password (→ a pass kept in the page's memory), spin with the pass, and whether it is set up.
+  vipUnlock,
+  vipSpin: spinVip,
+  vipStatus: vipPlayerStatus,
 };
 
 // Chat (0.17.0): any signed-in, non-disabled player, seated or not; one room per game (body.game).

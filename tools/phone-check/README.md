@@ -43,3 +43,10 @@ and the server, with no error, and every tapped control (spot, chips, Undo, Clea
    on both screens within ~1 s of the results countdown reaching 0. Options reproduce field conditions: `--work=600`
    (server time per request), `--lag=2500` (listener delay), `--tickfail=12` (ticks failing), `--skew=3000`,
    `--watch=30000` (keep watching a late screen), `--verbose` (timeline), `--game=blackjack`.
+
+Since 0.28.0 (the VIP slot): `fixtures.mjs` has a fake VIP server (`vipRoute`, `vipSpinReply`, built on the real
+`shared/casino/vipSlots.js`; `HARNESS_VIP_PASSWORD` is a harness-only value). `shoot.mjs` has `vip-lock`, `vip-not-set-up`, `vip-wrong`,
+`vip-machine`, `vip-win`, `vip-bonus`, `vip-paytable` and `admin-vip`, and measures every site screen sideways (844 × 390) and on a computer
+(1280 × 800) too (since 0.27.0). `interact.mjs` (`ONLY='^vip'`) checks the lobby tile is last and locked, the password sheet on every visit and
+after a reload, nothing about the unlock stored in the browser, a wrong password, a base spin, a bonus with its counter and the held wallet,
+Skip to total, and Auto waiting through a bonus and stopping on VIP_LOCKED (spins ≥ 2 s apart). `tapcheck.mjs --game=vip` taps the VIP bet.

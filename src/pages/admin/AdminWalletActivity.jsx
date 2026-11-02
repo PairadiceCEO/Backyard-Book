@@ -68,7 +68,7 @@ function Summary({ summary }) {
           <tbody>
             <SummaryRow label="Sportsbook" bucket={summary.sportsbook} />
             <SummaryRow label="Casino" bucket={summary.casino} />
-            {CASINO_GAME_IDS.filter((g) => summary.casino.games[g].count > 0).map((g) => (
+            {CASINO_GAME_IDS.filter((g) => summary.casino.games[g]?.count > 0).map((g) => (
               <SummaryRow key={g} label={CASINO_GAME_NAMES[g]} bucket={summary.casino.games[g]} sub />
             ))}
             <SummaryRow label="Other" bucket={summary.other} />

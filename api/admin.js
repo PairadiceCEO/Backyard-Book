@@ -6,7 +6,8 @@
 //   battleSetResult, battleSetPayout, battleVoid (preview with confirm: false, apply with confirm: true + expectedVersion),
 //   challengeApprove, challengeReject, challengeEdit, challengeSettle / challengeVoid (preview / confirm),
 //   chatDelete (casino chat message), walletActivity (a player's ledger for the last 24 h, read only),
-//   rebuildStats (0.21.0: recompute every player's performance totals; dry run unless confirm: true).
+//   rebuildStats (0.21.0: recompute every player's performance totals; dry run unless confirm: true),
+//   vipSetPassword { password, repeat } and vipStatus (0.28.0: the VIP slot's password, stored only as a salted scrypt hash).
 
 import { HttpError, readJsonBody, withHandler } from '../server/http.js';
 import { requireAdmin } from '../server/auth.js';
@@ -25,6 +26,7 @@ import { approveChallenge, editChallenge, rejectChallenge, settleChallenge, void
 import { deleteChatMessage } from '../server/casinoChat.js';
 import { walletActivity } from '../server/admin/walletActivity.js';
 import { rebuildStats } from '../server/admin/rebuildStats.js';
+import { setVipPassword, vipAdminStatus } from '../server/vipLock.js';
 
 const ADMIN_ACTIONS = {
   ping: async (_body, caller) => ({ ok: true, admin: true, username: caller.user.username }),
@@ -51,6 +53,8 @@ const ADMIN_ACTIONS = {
   chatDelete: deleteChatMessage,
   walletActivity,
   rebuildStats,
+  vipSetPassword: setVipPassword,
+  vipStatus: vipAdminStatus,
 };
 
 export default withHandler(['POST'], async (req) => {

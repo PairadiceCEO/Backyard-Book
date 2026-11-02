@@ -20,6 +20,7 @@ import ShopPage from './pages/ShopPage.jsx';
 import AdminPage from './pages/admin/AdminPage.jsx';
 import CasinoLobby from './pages/casino/CasinoLobby.jsx';
 import SlotsPage from './pages/casino/SlotsPage.jsx';
+import VipSlotsPage from './pages/casino/VipSlotsPage.jsx';
 import CasinoTablePage from './pages/casino/CasinoTablePage.jsx';
 
 export default function App() {
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="/sportsbook/:league/:gameId/props" element={<PropsRedirect />} />
           <Route path="/casino" element={<CasinoLobby />} />
           <Route path="/casino/slots" element={<SlotsPage />} />
+          <Route path="/casino/vip" element={<VipSlotsPage />} />
           <Route path="/casino/:game" element={<CasinoTablePage />} />
           <Route path="/my-bets" element={<MyBetsPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />

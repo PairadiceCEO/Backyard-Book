@@ -14,6 +14,7 @@ come from Will's live testing.
 | Baccarat scoreboard (Bead Plate, Big Road, derived roads) | done, tested live | 0d407aa |
 | Phase 3: Blackjack | done, tested live | 7d20181 |
 | Phase 4: Craps + Crapless | done, on main — waiting for Will's live test | (see git log) |
+| 0.28.0: Pairadice VIP slot (3 × 3, 3 lines, Golden Dice bonus, password lock) | done, on main — waiting for Will's live test | (see git log) |
 
 ### Phase 4 checklist
 
@@ -22,6 +23,19 @@ come from Will's live testing.
 - [x] `server/casino/crapsTable.js` (one engine, two variants) wired in `server/casino/tables.js`; `test/casino/casino4.test.mjs`
 - [x] Phone UI `src/pages/casino/CrapsPage.jsx`, lobby labels, CSS; phone check at 320/375/414
 - [x] Full regression, README section, merge to `main`, push, report to Will
+
+## 0.28.0: the Pairadice VIP slot
+
+- Machine: `shared/casino/vipSlots.js` (40-stop strips, base and bonus; paytable in tenths of the bet so cents stay whole; `playVipSpin`
+  resolves a paid spin and its whole bonus from one random source; `computeVipStats` is the exact proof). Proof: total RTP 209.80% =
+  lines 123.00% (78,717 / 64,000) + bonus 86.80%; something back 81.39%; 5× or more 10.62%; bonus 27 / 800 (once every 29.63 spins),
+  10.68 spins and 25.72× the bet on average; at most 7,700× per paid spin (the 10,000× cap is unreachable, so the bonus EV needs no cap
+  term). How the spec's targets were reconciled: PROGRESS.md 0.28.0 Decisions.
+- Server: `server/vipLock.js` (scrypt hash in `meta/vipSlots`, HMAC pass, unlock limit in `vipRate/{uid}`), `server/casino/vipSlots.js`
+  (one transaction: pass, profile, replay, 2 s gap, wallet, debit, spin + bonus, credits). Tests: `test/vipSlots.test.js`,
+  `test/vip/*.test.mjs` (`npm run test:vip`).
+- Phone: `src/pages/casino/VipSlotsPage.jsx`, `src/components/casino/{VipSymbol,VipPaytableSheet}.jsx`, `src/styles/vip.css`, the lobby tile,
+  `src/pages/admin/AdminVip.jsx`. Harness: `shoot.mjs` (vip-*, admin-vip), `interact.mjs` (vip: …), `tapcheck.mjs` (vip).
 
 ## Phase 4 rules being built (from the approved plan)
 
