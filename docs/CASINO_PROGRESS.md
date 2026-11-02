@@ -15,6 +15,7 @@ come from Will's live testing.
 | Phase 3: Blackjack | done, tested live | 7d20181 |
 | Phase 4: Craps + Crapless | done, on main — waiting for Will's live test | (see git log) |
 | 0.28.0: Pairadice VIP slot (3 × 3, 3 lines, Golden Dice bonus, password lock) | done, on main — waiting for Will's live test | (see git log) |
+| 0.28.1: VIP fixes (Stop on every tap, trigger spin stays as landed, Spin above the bet) | done, on main — waiting for Will's live test | (see git log) |
 
 ### Phase 4 checklist
 
@@ -23,6 +24,11 @@ come from Will's live testing.
 - [x] `server/casino/crapsTable.js` (one engine, two variants) wired in `server/casino/tables.js`; `test/casino/casino4.test.mjs`
 - [x] Phone UI `src/pages/casino/CrapsPage.jsx`, lobby labels, CSS; phone check at 320/375/414
 - [x] Full regression, README section, merge to `main`, push, report to Will
+
+## 0.28.1: VIP slot fixes
+
+Page only (`VipSlotsPage.jsx`, `vip.css`, phone-check tests): Stop works on every tap (`stopRequestedRef`), the trigger spin stays exactly as landed
+(stops + strips are one state value `{ stops, onBonus }`; Golden Dice glow and banner), Spin sits above the bet spot. Details: PROGRESS.md 0.28.1, README 0.28.1.
 
 ## 0.28.0: the Pairadice VIP slot
 

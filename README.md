@@ -149,6 +149,21 @@ site's `/api` with their own login, so they can't do anything a player can't.
 - **Disabling an agent** (Admin → Players → Disable) removes it from the leaderboard and from Admin → Agents; its bets and history
   stay untouched. Enable puts it back.
 
+## 0.28.1
+
+**VIP slot fixes** (only `src/pages/casino/VipSlotsPage.jsx`, its CSS and the phone-check tests changed: no server, payout, strip or paytable change).
+
+- **Stop works on every tap.** A tap on Stop while the spin was still waiting out the 2 s gap, or while the request was in flight, was lost
+  (there was nothing to finish yet), so Stop worked only some of the time. Any tap while a spin is busy is now remembered; when the reply
+  arrives the three reels land at once (no minimum spin time, no gaps between reels). It never starts a second spin. A tap during a bonus still
+  skips to the total.
+- **The trigger spin stays as it landed.** The bonus reels used to replace the paid spin's window the moment the bonus began, so the Golden
+  Dice (often the third) vanished and other symbols changed for about 1.3 s. Now the paid spin stays exactly as it landed: its Golden Dice
+  glow and pulse, its line wins show, and a "3 Golden Dice! 10 free spins" banner shows for that whole time. The bonus strips appear only
+  together with the first free spin's stops, and the base strips come back only with the next paid spin's result. A Stop tap during the trigger
+  spin lands it first; a tap after that skips the bonus to its total. Skipping also lights the last free spin's own winning lines now.
+- **Layout:** machine, win / bonus info, **Spin** (Stop / Skip to total), the bet spot, the chip rack with **Max**, then **Auto**.
+
 ## 0.28.0
 
 **Pairadice VIP slot** (`/casino/vip`, the last tile in the casino lobby, always shown locked). A second slot machine for a few friends,

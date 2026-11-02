@@ -50,3 +50,14 @@ Since 0.28.0 (the VIP slot): `fixtures.mjs` has a fake VIP server (`vipRoute`, `
 (1280 × 800) too (since 0.27.0). `interact.mjs` (`ONLY='^vip'`) checks the lobby tile is last and locked, the password sheet on every visit and
 after a reload, nothing about the unlock stored in the browser, a wrong password, a base spin, a bonus with its counter and the held wallet,
 Skip to total, and Auto waiting through a bonus and stopping on VIP_LOCKED (spins ≥ 2 s apart). `tapcheck.mjs --game=vip` taps the VIP bet.
+
+Since 0.28.1 (VIP slot fixes): `interact.mjs` (`ONLY='vip 0.28.1'`) has six real-timer checks on the mocked VIP server (`openVip` takes
+`viewport` and `replyDelayMs`; `vip.state.replies` has the time each reply left the server). `vipRecorder` logs what is DRAWN on every
+change of the page (reels spinning, the 3 × 3 symbols from `data-sym`, lit Golden Dice cells, the bonus bar and its text, the symbols in a
+spinning blur). The checks: Stop on every tap (20 of 20 spins, also inside the 2 s wait, never a second spin; a reply held 1.5 s with taps
+at +0 / 300 / 900 / 1400 ms and three quick taps); the trigger spin stays as landed for BONUS_START_MS (window = `vipWindow(paid stops,
+VIP_REELS)`, 3 Golden Dice lit, banner) and every free spin is `vipWindow(stops, VIP_BONUS_REELS)`, spinning blurs use the strips of the spin
+that runs, the next paid spin is on the base strips; a Stop tap during the trigger spin; reduced motion; the layout order and 44 px targets
+at 320 / 375 / 414 and 844 × 390. The three bonus checks also read `window.__vipDrawMismatch`, the counter of the dev-only draw assertion in
+`VipSlotsPage.jsx` (compiled out of the production build). Each check was also run against a deliberately broken copy of the page (the old
+Stop, the old bonus strips, the wrong strips drawn) and fails there.

@@ -8,6 +8,12 @@
 // wallet is held at "balance − bet" until all of it has played. Bet chips, Max, Spin and Auto (10 / 25 / 50, the 7s Slots stop
 // rules; Auto waits while a bonus plays and carries on after it, and stops if the pass is refused). At most one paid spin every 2 s
 // (the server refuses faster ones), so a spin tapped sooner waits for the rest of the 2 s.
+//
+// 0.28.1: layout top to bottom is machine, win / bonus info, Spin (Stop / Skip to total), the bet spot, the chip rack with Max, then
+// Auto. Any tap on Stop while a spin is busy is remembered (stopRequestedRef), so it also works during the 2 s wait and while the
+// request is in flight: the reply lands at once, all three reels together. What the reels show is ONE value { stops, onBonus }: the
+// stops and the strips they belong to change together, so the trigger spin stays exactly as it landed (its Golden Dice lit, a banner)
+// until the first free spin brings the bonus strips along with its own stops.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -29,9 +35,10 @@ import { autoStopReason } from './SlotsPage.jsx';
 import '../../styles/slots.css';
 import '../../styles/vip.css';
 import { BET_CEILING_CENTS, BET_CEILING_MESSAGE, BET_HELP_TEXT, CASINO_MIN_BET_DOLLARS } from '../../../shared/casino/constants.js';
-import { VIP_BONUS_MULT, VIP_BONUS_REELS, VIP_LINES, VIP_PAYTABLE, VIP_REELS, vipCents, vipWindow } from '../../../shared/casino/vipSlots.js';
+import { VIP_BONUS_MULT, VIP_BONUS_REELS, VIP_LINES, VIP_PAYTABLE, VIP_REELS, goldenDiceCount, vipCents, vipWindow } from '../../../shared/casino/vipSlots.js';
 
 const START_STOPS = [6, 14, 23];
+const START_VIEW = { stops: START_STOPS, onBonus: false };
 const MIN_SPIN_MS = 1000; // the reels spin at least this long
 const REEL_GAP_MS = 320; // then stop one after another
 const SPIN_GAP_MS = 2050; // the server allows one paid spin every 2 s
@@ -60,15 +67,37 @@ function dollarsLabel(dollars) {
   return `$${dollars.toLocaleString('en-US')}`;
 }
 
-// One reel: three cells (top, middle, bottom row), or a blurred column scrolling past while it spins.
-function VipReel({ reel, stop, spinning, strips, litRows }) {
-  const strip = strips[reel];
+// Dev only (stripped from the production build): after every render with all three reels stopped, the symbols actually drawn
+// must equal the window of the result being shown (its stops on the strips the server used: base for a paid spin, bonus for a
+// free spin). A mismatch logs an error and counts in window.__vipDrawMismatch (the phone harness asserts it stays 0).
+const useDrawCheck = import.meta.env.DEV
+  ? function useDrawCheck(expectedRef, view, stoppedReels) {
+      useEffect(() => {
+        const expected = expectedRef.current;
+        if (!expected || stoppedReels !== 3) return;
+        const want = vipWindow(expected.stops, expected.onBonus ? VIP_BONUS_REELS : VIP_REELS);
+        const reels = document.querySelectorAll('.vip-reels .vip-reel');
+        if (reels.length !== 3) return;
+        const drawn = [...reels].map((el) => [...el.querySelectorAll('.vip-cell')].map((cell) => cell.getAttribute('data-sym')));
+        const bad = drawn.some((column, reel) => column.length !== 3 || column.some((id, row) => id !== want[row][reel]));
+        if (bad) {
+          window.__vipDrawMismatch = (window.__vipDrawMismatch || 0) + 1;
+          console.error('[vip-dev] what is drawn is not the result window', { drawn, want, expected, view });
+        }
+      }, [expectedRef, view, stoppedReels]);
+    }
+  : () => {};
+
+// One reel: three cells (top, middle, bottom row), or a blurred column scrolling past while it spins. The blur uses the strip of the
+// spin it belongs to (spinStrips); the stopped window uses the strips the stops were drawn on (windowStrips).
+function VipReel({ reel, stop, spinning, spinStrips, windowStrips, litRows, diceGlow }) {
   if (spinning) {
+    const strip = spinStrips[reel];
     return (
       <div className="reel vip-reel spinning" aria-label={`Reel ${reel + 1} spinning`}>
         <div className={`reel-track reel-speed-${reel}`}>
           {[...strip.slice(0, 10), ...strip.slice(0, 10)].map((id, i) => (
-            <div key={i} className="reel-cell">
+            <div key={i} className="reel-cell" data-sym={id}>
               <VipSymbol id={id} />
             </div>
           ))}
@@ -76,14 +105,19 @@ function VipReel({ reel, stop, spinning, strips, litRows }) {
       </div>
     );
   }
-  const window = vipWindow([stop, stop, stop], strips).map((row) => row[reel]);
+  const window = vipWindow([stop, stop, stop], windowStrips).map((row) => row[reel]);
   return (
     <div className="reel vip-reel" aria-label={`Reel ${reel + 1}: ${window.join(', ')}`}>
-      {window.map((id, row) => (
-        <div key={row} className={litRows.includes(row) ? 'reel-cell vip-cell lit' : 'reel-cell vip-cell'} data-row={row}>
-          <VipSymbol id={id} />
-        </div>
-      ))}
+      {window.map((id, row) => {
+        const classes = ['reel-cell', 'vip-cell'];
+        if (litRows.includes(row)) classes.push('lit');
+        if (diceGlow && id === 'GD') classes.push('dice');
+        return (
+          <div key={row} className={classes.join(' ')} data-row={row} data-sym={id}>
+            <VipSymbol id={id} />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -184,8 +218,11 @@ export default function VipSlotsPage() {
 
   const [chipList, setChipList] = useState(() => chipsFor(CASINO_MIN_BET_DOLLARS * 100));
   const [chip, setChip] = useState(1);
-  const [stops, setStops] = useState(START_STOPS);
-  const [onBonusReels, setOnBonusReels] = useState(false);
+  // The stops on screen and the strips they were drawn on, ONE value: they always change together, so a window can never be
+  // drawn with another spin's strips (the bonus strips arrive with the first free spin's stops, the base strips with the next
+  // paid spin's result).
+  const [view, setView] = useState(START_VIEW);
+  const [trigger, setTrigger] = useState(null); // { key } while the trigger spin stays on screen with its Golden Dice lit
   const [stoppedReels, setStoppedReels] = useState(3);
   const [busy, setBusy] = useState(false);
   const [shown, setShown] = useState(null); // { key, lines, mult, cents, betCents } on screen now
@@ -209,8 +246,12 @@ export default function VipSlotsPage() {
   const lastSentRef = useRef(0);
   const spinSoundRef = useRef(() => {});
   const finishRef = useRef(null); // ends the current spin (and bonus) at once: Skip / quick stop
+  const stopRequestedRef = useRef(false); // a tap on Stop while the reply isn't here yet: land the moment it arrives
+  const expectedRef = useRef(null); // dev check: the result window being shown ({ stops, onBonus }), from the server's reply
   const keyRef = useRef(0);
   const bet = chipList.reduce((sum, d) => sum + d, 0);
+
+  useDrawCheck(expectedRef, view, stoppedReels);
 
   useEffect(() => {
     balanceRef.current = balanceCents;
@@ -297,6 +338,7 @@ export default function VipSlotsPage() {
     (outcome) => {
       clearTimers();
       finishRef.current = null;
+      stopRequestedRef.current = false;
       spinSoundRef.current();
       spinSoundRef.current = () => {};
       setHeldCents(null);
@@ -312,11 +354,11 @@ export default function VipSlotsPage() {
     [clearTimers, setHeldCents, stopAuto],
   );
 
-  const showLines = useCallback((lines, mult, betCents) => {
+  const showLines = useCallback((lines, mult, betCents, silent = false) => {
     keyRef.current += 1;
     const cents = lines.reduce((s, l) => s + vipCents(betCents, l.tenths, mult), 0);
     setShown({ key: keyRef.current, lines, mult, cents, betCents });
-    if (cents > 0) playSound(cents >= 10 * betCents ? 'bigWin' : 'win');
+    if (cents > 0 && !silent) playSound(cents >= 10 * betCents ? 'bigWin' : 'win');
   }, []);
 
   // The bonus, one free spin at a time, then the big finish.
@@ -329,34 +371,42 @@ export default function VipSlotsPage() {
       const showMs = reduced ? 500 : BONUS_SHOW_MS;
       let awarded = 10;
       let total = 0;
+      const last = spins[spins.length - 1];
       const end = () => {
         finishRef.current = null; // once
         clearTimers();
+        setTrigger(null);
         setBonus({ index: spins.length - 1, played: spins.length, awarded: spin.bonus.awarded, total: spin.bonus.cents, mult: VIP_BONUS_MULT, finished: true });
-        setStops(spins[spins.length - 1].stops);
+        // the last free spin as the server drew it, its winning lines lit with it (never the lines of an earlier spin)
+        expectedRef.current = { stops: last.stops, onBonus: true };
+        setView({ stops: last.stops, onBonus: true });
         setStoppedReels(3);
+        showLines(last.lines, VIP_BONUS_MULT, betCents, true);
         playSound('bigWin');
         keyRef.current += 1;
         setBigWin({ key: keyRef.current, cents: spin.bonus.cents, title: 'Bonus win!', after: () => finish(outcome) });
       };
       finishRef.current = end;
-      setOnBonusReels(true);
-      setBonus({ index: -1, played: 0, awarded, total: 0, mult: VIP_BONUS_MULT, finished: false });
+      // The trigger spin stays exactly as it landed (its stops on the base strips, its Golden Dice lit, its line wins) for
+      // BONUS_START_MS: nothing here touches `view`. The bonus strips come only with the first free spin's stops below.
+      setBonus({ index: -1, played: 0, awarded, total: 0, mult: VIP_BONUS_MULT, finished: false, dice: outcome.dice });
       let t = BONUS_START_MS;
       spins.forEach((s, i) => {
         at(t, () => {
+          if (reduced) return; // no spinning: the result below replaces the window in one step
           setShown(null);
-          setStoppedReels(reduced ? 3 : 0);
-          if (!reduced) {
-            spinSoundRef.current();
-            spinSoundRef.current = startLoop('reelSpin');
-          }
+          setTrigger(null);
+          setStoppedReels(0);
+          spinSoundRef.current();
+          spinSoundRef.current = startLoop('reelSpin');
         });
         t += spinMs;
         at(t, () => {
           spinSoundRef.current();
           spinSoundRef.current = () => {};
-          setStops(s.stops);
+          setTrigger(null);
+          expectedRef.current = { stops: s.stops, onBonus: true };
+          setView({ stops: s.stops, onBonus: true });
           setStoppedReels(3);
           playSound('reelStop');
           awarded += s.added;
@@ -375,16 +425,19 @@ export default function VipSlotsPage() {
   const land = useCallback(
     (outcome) => {
       clearTimers();
+      stopRequestedRef.current = false; // landing is what a Stop tap asks for: it is answered
       spinSoundRef.current();
       spinSoundRef.current = () => {};
-      setOnBonusReels(false);
-      setStops(outcome.spin.stops);
+      // the paid spin as the server drew it: its stops on the base strips, in one step
+      expectedRef.current = { stops: outcome.spin.stops, onBonus: false };
+      setView({ stops: outcome.spin.stops, onBonus: false });
       setStoppedReels(3);
       showLines(outcome.spin.lines, 1, outcome.betCents);
       if (outcome.spin.bonus) {
         playSound('bigWin');
-        playBonus(outcome); // Auto waits while it plays (busy) and carries on after it
-
+        keyRef.current += 1;
+        setTrigger({ key: keyRef.current }); // light the Golden Dice until the first free spin starts
+        playBonus({ ...outcome, dice: goldenDiceCount(vipWindow(outcome.spin.stops, VIP_REELS)) }); // Auto waits while it plays and carries on after it
         return;
       }
       if (outcome.spin.baseCents >= 10 * outcome.betCents) {
@@ -403,12 +456,13 @@ export default function VipSlotsPage() {
       if (busyRef.current || !passRef.current) return false;
       const betCents = betDollars * 100;
       busyRef.current = true;
+      stopRequestedRef.current = false;
       setBusy(true);
       setError('');
       setShown(null);
       setBonus(null);
       setBigWin(null);
-      setOnBonusReels(false);
+      setTrigger(null);
       setHeldCents(balanceRef.current - betCents);
       // the server allows one paid spin every 2 s: wait out the rest
       const wait = lastSentRef.current + SPIN_GAP_MS - Date.now();
@@ -427,6 +481,7 @@ export default function VipSlotsPage() {
         if (!mountedRef.current) return false;
         spinSoundRef.current();
         spinSoundRef.current = () => {};
+        stopRequestedRef.current = false;
         setHeldCents(null);
         setStoppedReels(3);
         busyRef.current = false;
@@ -440,6 +495,12 @@ export default function VipSlotsPage() {
         return false;
       }
       if (!mountedRef.current) return false;
+      // A Stop tap came in while the request or the 2 s wait was still going (finishRef didn't exist yet): land at once, all three
+      // reels together, with none of the minimum spin time or the gaps between reels. land() answers the tap.
+      if (stopRequestedRef.current) {
+        land(outcome);
+        return true;
+      }
       const reduced = prefersReducedMotion();
       const delay = reduced ? 0 : Math.max(0, MIN_SPIN_MS - (Date.now() - startedAt));
       finishRef.current = () => {
@@ -447,7 +508,8 @@ export default function VipSlotsPage() {
         land(outcome);
       };
       at(delay, () => {
-        setStops(outcome.spin.stops);
+        expectedRef.current = { stops: outcome.spin.stops, onBonus: false };
+        setView({ stops: outcome.spin.stops, onBonus: false });
         setStoppedReels(1);
         playSound('reelStop');
       });
@@ -495,8 +557,11 @@ export default function VipSlotsPage() {
   }
 
   function spin() {
-    if (busy) {
-      // A second tap: land now (and skip a bonus to its total). Never a new spin.
+    if (busyRef.current) {
+      // A second tap, never a new spin. Remember it first: during the 2 s wait or while the request is in flight there is nothing to
+      // finish yet (finishRef is set only once the reply is here), so the reply lands at once when it arrives. When there is
+      // something to finish, do it now: land the reels, or skip a bonus to its total.
+      stopRequestedRef.current = true;
       finishRef.current?.();
       return;
     }
@@ -546,10 +611,14 @@ export default function VipSlotsPage() {
     });
   }, []);
 
-  const strips = onBonusReels ? VIP_BONUS_REELS : VIP_REELS;
+  const inBonus = Boolean(bonus);
+  // A stopped window is drawn on the strips its stops belong to (view.onBonus); a spinning blur on the strips of the spin that is
+  // running: the bonus strips while a bonus plays, the base strips for a paid spin.
+  const windowStrips = view.onBonus ? VIP_BONUS_REELS : VIP_REELS;
+  const spinStrips = inBonus ? VIP_BONUS_REELS : VIP_REELS;
   const litRows = stoppedReels === 3 && shown ? shown.lines.map((l) => l.row) : [];
   const locked = busy || Boolean(auto);
-  const inBonus = Boolean(bonus);
+  const triggerShown = Boolean(trigger) && stoppedReels === 3;
 
   return (
     <section className="page slots-page vip-page">
@@ -574,9 +643,14 @@ export default function VipSlotsPage() {
       ) : (
         <div className={inBonus ? 'card slot-machine vip-machine in-bonus' : 'card slot-machine vip-machine'}>
           {inBonus ? (
-            <div className="vip-bonus-bar" role="status" aria-live="polite">
+            <div className={triggerShown && bonus.played === 0 ? 'vip-bonus-bar trigger' : 'vip-bonus-bar'} role="status" aria-live="polite">
               <span className="vip-bonus-count">
-                {bonus.played > 0 ? `Free spin ${bonus.played} / ${bonus.awarded}` : `${bonus.awarded} free spins`} · ×{bonus.mult}
+                {bonus.played > 0
+                  ? `Free spin ${bonus.played} / ${bonus.awarded}`
+                  : bonus.dice
+                    ? `${bonus.dice} Golden Dice! ${bonus.awarded} free spins`
+                    : `${bonus.awarded} free spins`}{' '}
+                · ×{bonus.mult}
               </span>
               <span className="vip-bonus-total">{formatMoney(bonus.total)}</span>
               {bonus.added ? <span className="vip-bonus-added">+{bonus.added} spins!</span> : null}
@@ -592,7 +666,16 @@ export default function VipSlotsPage() {
             </div>
             <div className={shown && shown.cents > 0 ? 'reels vip-reels has-win' : 'reels vip-reels'} aria-live="polite">
               {[0, 1, 2].map((reel) => (
-                <VipReel key={reel} reel={reel} stop={stops[reel]} spinning={reel >= stoppedReels} strips={strips} litRows={litRows} />
+                <VipReel
+                  key={reel}
+                  reel={reel}
+                  stop={view.stops[reel]}
+                  spinning={reel >= stoppedReels}
+                  spinStrips={spinStrips}
+                  windowStrips={windowStrips}
+                  litRows={litRows}
+                  diceGlow={triggerShown}
+                />
               ))}
               {litRows.map((row) => (
                 <div key={`${shown.key}-${row}`} className={`vip-win-line row-${row}`} aria-hidden="true" />
@@ -644,6 +727,24 @@ export default function VipSlotsPage() {
             )}
           </div>
 
+          {auto ? (
+            <div className="auto-bar">
+              <span className="auto-count" aria-live="polite">
+                Auto {auto.done}/{auto.total}
+                {inBonus ? ' · bonus playing' : ''}
+              </span>
+              <button type="button" className="btn btn-danger auto-stop" onClick={() => stopAuto('stopped')}>
+                Stop
+              </button>
+            </div>
+          ) : (
+            <div className="spin-row">
+              <button type="button" className={busy ? 'btn btn-primary spin-btn spinning' : 'btn btn-primary spin-btn'} onClick={spin} disabled={!busy && bet < CASINO_MIN_BET_DOLLARS}>
+                {busy ? (inBonus ? 'Skip to total' : 'Stop') : bet ? `Spin · ${dollarsLabel(bet)}` : 'Add a chip to spin'}
+              </button>
+            </div>
+          )}
+
           <button type="button" className={bet ? 'slot-bet has-bet' : 'slot-bet'} onClick={() => addChip(chip)} disabled={locked} aria-label={`Bet ${dollarsLabel(bet)} on all three lines. Tap to add a $${chip} chip.`}>
             <span className="slot-bet-label">{auto ? 'Bet locked while Auto runs' : `Bet · 3 lines · tap to add $${chip}`}</span>
             <span className="spot-chips">
@@ -680,26 +781,13 @@ export default function VipSlotsPage() {
             }
           />
 
-          {auto ? (
-            <div className="auto-bar">
-              <span className="auto-count" aria-live="polite">
-                Auto {auto.done}/{auto.total}
-                {inBonus ? ' · bonus playing' : ''}
-              </span>
-              <button type="button" className="btn btn-danger auto-stop" onClick={() => stopAuto('stopped')}>
-                Stop
-              </button>
-            </div>
-          ) : (
-            <div className="spin-row">
-              <button type="button" className={busy ? 'btn btn-primary spin-btn spinning' : 'btn btn-primary spin-btn'} onClick={spin} disabled={!busy && bet < CASINO_MIN_BET_DOLLARS}>
-                {busy ? (inBonus ? 'Skip to total' : 'Stop') : bet ? `Spin · ${dollarsLabel(bet)}` : 'Add a chip to spin'}
-              </button>
+          {!auto ? (
+            <div className="vip-auto-row">
               <button type="button" className="btn auto-btn" onClick={() => setAutoOpen((v) => !v)} disabled={busy || bet < CASINO_MIN_BET_DOLLARS} aria-expanded={autoOpen}>
                 Auto
               </button>
             </div>
-          )}
+          ) : null}
 
           {autoOpen && !auto ? (
             <div className="auto-panel" role="group" aria-label="Autospin">

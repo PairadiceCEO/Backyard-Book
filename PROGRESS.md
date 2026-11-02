@@ -5,6 +5,32 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.28.1 (Will, 2026-11-02 16:34 CT) — COMPLETE (2026-11-02), merged to main, ready for Will to test
+Spec: "VIP slot fixes: Stop always works, the trigger spin stays on screen before the bonus, Spin button above the bet". Only
+src/pages/casino/VipSlotsPage.jsx, src/styles/vip.css and tests/harness changed: no server, payout, strip or paytable change. Details: README 0.28.1.
+Done (all on wip): the three fixes, the new phone-harness checks (tools/phone-check/interact.mjs, `ONLY='vip 0.28.1'`, 6 checks), the dev-only
+draw assertion (compiled out of production: 0 matches in dist), version 0.28.1 (package.json + lockfile), README / phone-check README.
+Checks: test:all 465 pass (12 suites, incl. test:vip), lint clean (scratch flat config with react-hooks rules, --max-warnings 0), build ok,
+/api = 7, interact 100/100 (6 new `vip 0.28.1` checks + the 6 earlier VIP ones), shoot 174 screens clean (incl. vip-* and admin-vip; 320 / 375 / 414 /
+844 × 390 / 1280 × 800, craps at its eight sizes), dealcheck 8/8, tapcheck 16/16 (incl. VIP). Each new check also fails on a deliberately broken copy
+of the page (old Stop, old bonus strips, wrong strips drawn), so they really test the fixes. The dev-only draw assertion is not in the production
+build (0 matches in dist). No firestore.rules change, no index, no new /api function.
+Test steps for Will: (1) Open VIP, unlock, tap Spin then Stop right away, 10 times: every one stops at once. (2) Play until a bonus: the trigger spin
+stays with all three Golden Dice glowing, with the "3 Golden Dice! 10 free spins" banner, before the free spins start. (3) The Spin button is above the bet.
+Fixes:
+- Stop: stopRequestedRef is set by any tap while a spin is busy. Before, finishRef was set only after spinVip() resolved, so a tap during the 2 s
+  gap wait or the request was ignored. When the reply arrives with it set the page lands at once (all three reels, no MIN_SPIN_MS / REEL_GAP_MS);
+  land() / finish() / an error clear it. Never starts a second spin (busyRef is checked, not the React state).
+- Trigger spin: stops and strips are ONE state value `view = { stops, onBonus }`. playBonus no longer switches strips; the bonus strips arrive
+  with the first free spin's stops, the base strips with the next paid spin's result. The paid spin stays as landed for BONUS_START_MS with its
+  Golden Dice cells lit (`.vip-cell.dice`), its line wins, and the "N Golden Dice! 10 free spins · ×3" banner (bonus bar, `.trigger`). A Stop tap
+  during the trigger spin lands it first; a tap after that skips the bonus. Skipping also lights the last free spin's own lines (before, the
+  lines of an earlier spin stayed lit over the last free spin's window). Spinning blurs use the strips of the spin that runs.
+- Layout: machine, win/bonus info, Spin (Stop / Skip to total), bet spot, chip rack with Max, Auto (own full-width row, 48 px). Auto running: its
+  count and Stop take Spin's place above the bet.
+Decisions: the banner uses the Golden Dice count of the landed window (3 or more), computed from the stops, not trusted from the reply; the
+spinning blur still shows the first 10 symbols of the right strip (the CSS loop depends on it).
+
 ## Phase 0.28.0 (Will, 2026-11-02 13:04 CT) — COMPLETE (2026-11-02), merged to main, ready for Will to test
 Spec: "Pairadice VIP slot: 3×3 reels, 3 paylines, about 200% RTP, frequent small and big wins, Golden Dice bonus spins, password-locked tile
 at the bottom of the casino lobby (password every visit, admin-changeable)". (The first attachment at 13:01 was cut off mid-sentence; the full
