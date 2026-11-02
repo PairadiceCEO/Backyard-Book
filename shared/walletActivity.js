@@ -14,8 +14,8 @@ export const ADMIN_TYPES = ['admin_adjust', 'admin_regrade'];
 export const DEBIT_TYPES = ['stake', 'casino_bet', 'battle_stake'];
 export const CREDIT_TYPES = ['payout', 'cashout', 'casino_payout', 'casino_refund', 'battle_payout', 'battle_refund', 'shop'];
 export const NON_CASINO_TYPES = [...SPORTSBOOK_TYPES, ...BATTLE_TYPES, ...SHOP_TYPES, ...ADMIN_TYPES];
-export const CASINO_GAME_IDS = ['slots', 'blackjack', 'baccarat', 'craps', 'crapless'];
-export const CASINO_GAME_NAMES = { slots: 'Slots', blackjack: 'Blackjack', baccarat: 'Baccarat', craps: 'Craps', crapless: 'Crapless' };
+export const CASINO_GAME_IDS = ['slots', 'blackjack', 'baccarat', 'craps', 'crapless', 'vip'];
+export const CASINO_GAME_NAMES = { slots: 'Slots', blackjack: 'Blackjack', baccarat: 'Baccarat', craps: 'Craps', crapless: 'Crapless', vip: 'VIP slot' };
 
 export const FILTERS = [
   { id: 'all', label: 'All' },
