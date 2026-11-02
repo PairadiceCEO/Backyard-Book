@@ -5,6 +5,26 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.28.0 (Will, 2026-11-02 13:04 CT) — IN PROGRESS on `wip` (not merged yet)
+Spec: "Pairadice VIP slot: 3×3 reels, 3 paylines, about 200% RTP, frequent small and big wins, Golden Dice bonus spins, password-locked tile
+at the bottom of the casino lobby (password every visit, admin-changeable)". (The first attachment at 13:01 was cut off; the full one came at 13:04.)
+Done so far: shared/casino/vipSlots.js (strips, paytable, playVipSpin, exact proof computeVipStats, VIP_STATS), test/vipSlots.test.js (8 tests incl.
+a 1,000,000-spin simulation), server/vipLock.js (scrypt hash in meta/vipSlots, HMAC pass, unlock with 5 wrong tries / 15 min).
+Proven numbers: total RTP 209.80% = base 123.00% (78,717 / 64,000) + bonus 86.80%; something back on 81.39% of paid spins; 5× B or more on
+10.62%; bonus on 27 / 800 = 3.375% of paid spins (once every 29.63); a bonus is worth 25.72× B on average over 10.68 spins; max paid spin 7,700× B
+(the 10,000× cap can't be reached, so the bonus EV is exact).
+Next: server/casino/vipSlots.js (vipSpin in one transaction), router + admin actions, UI (lobby tile, /casino/vip, Admin → VIP), server and
+harness tests, docs, checks, merge.
+Decisions so far (Will's numbers can't all hold as written; how they were reconciled):
+- "Any three mixed premiums" (1.5×) counts Diamonds, Gold Bars and Bells only. With all five premiums in it, any strip set with ≥ 10% of spins at
+  5×+ had a base RTP far over target, and bonus strips with more premiums than the base pushed the total over 240%.
+- Total = base + (bonus rate × bonus value), and 10 spins × 3 is worth at least 30 × a bonus spin's raw RTP. At 1 bonus in 30 that is
+  total ≥ base + raw bonus RTP, so the bonus strips can't also pay more per raw spin than the base (that would be ≥ 240%). The bonus strips
+  have more premiums and fewer blanks than the base on every reel (as asked) but almost no Cherries, so a raw bonus spin returns 0.80×;
+  with × 3 each bonus spin is worth 2.41× B, about twice a base spin.
+- "5× B or more" counts a paid spin's whole return: its line wins plus the bonus it triggers (exactly: the chance the bonus adds enough). Line
+  wins alone reach 5×+ on 7.55% of spins.
+
 ## Phase 0.27.0 (Will, 2026-10-28 20:42 CT) — COMPLETE (2026-10-28), merged to main, ready for Will to test
 Spec: "Pairadice Casino: rename from Backyard Book, new logo, and a black-and-gold 'liquid glass' design across the whole site". Only the look
 and the names changed: no server, money, rules, data or route changes; Vercel Analytics untouched (`<Analytics />` still rendered once in App.jsx). Details: README 0.27.0.
