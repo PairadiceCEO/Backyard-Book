@@ -20,8 +20,9 @@ something back on 81.39% of paid spins (lines alone 80.48%); 5× B or more on 10
 spins (once every 29.63); a bonus lasts 10.68 spins and is worth 25.72× B on average (a bonus spin, × 3 included, 2.409× B; retrigger 0.633%);
 max paid spin 7,700× B, so the 10,000× cap is unreachable (the server still applies it; tested with a stubbed machine). 1,000,000-spin
 simulation agrees.
-Checks: test:all 465 pass (12 suites), lint clean (scratch flat config), build ok, /api = 7, shoot (all screens incl. vip-* and admin-vip at
-320 / 375 / 414 / 844 × 390 / 1280 × 800) clean, interact all ok (incl. 6 VIP checks), dealcheck 8/8, tapcheck 16/16 (incl. VIP).
+Checks: test:all 465 pass (12 suites), lint clean (scratch flat config), build ok, /api = 7, shoot 174 screens clean (incl. vip-* and
+admin-vip; site screens at 320 / 375 / 414 / 844 × 390 / 1280 × 800, craps at its eight sizes), interact 94/94 (incl. 6 VIP checks),
+dealcheck 8/8, tapcheck 16/16 (incl. VIP). Admin → Wallet activity now tolerates a game missing from a summary (found by the harness).
 No firestore.rules change (meta/vipSlots and vipRate/{uid} are server-only under the catch-all), no index, no new /api function.
 Setup for Will: Admin → VIP → set the password (until then VIP says "VIP isn't set up yet").
 Decisions (Will's numbers can't all hold as written; how they were reconciled):
