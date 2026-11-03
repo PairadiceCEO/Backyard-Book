@@ -22,7 +22,7 @@ function amountError(problem) {
 }
 
 // Amount check for one bet in whole dollars (no maximum, 0.16.0): whole dollars, at least $1, a safe integer, and
-// at most the $1,000,000 sanity ceiling ("That bet is larger than the table allows."). The wallet is checked
+// at most the $10,000,000 sanity ceiling (BET_CEILING_MESSAGE, "That bet is over the limit of $10,000,000 per bet."). The wallet is checked
 // separately, inside the transaction that debits it.
 export function requireBetAmount(dollars) {
   const problem = betAmountProblem(dollars);
@@ -35,7 +35,7 @@ export function requireUnderCeiling(cents) {
   if (problem) throw amountError(problem);
 }
 
-// Chip check: the tapped chip is one of CHIP_VALUES ($1, $2, $5, $10, $25, $100). A total built from chips is an
+// Chip check: the tapped chip is one of CHIP_VALUES ($1, $5, $10, $25, $100, $1,000, $10,000, $100,000; 0.28.2). A total built from chips is an
 // amount (requireBetAmount), not a chip: $3 = $1 + $2 is fine as a bet, but not as one chip.
 export function requireChip(dollars) {
   if (!isChip(dollars)) throw new HttpError(400, 'BAD_CHIP', CHIP_MESSAGE);

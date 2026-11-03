@@ -154,15 +154,15 @@ test('the same request twice (double tap / retry) replays the first result and c
   assert.equal(ledger().filter((e) => e.id === 'cbet_u1_spin-dup-0002').length, 1, 'one bet entry');
 });
 
-test('amount and wallet checks: whole dollars ≥ $1, no maximum (only the $1,000,000 sanity ceiling); never below $0; concurrent spins can\'t overdraw', async () => {
+test('amount and wallet checks: whole dollars ≥ $1, no maximum (only the $10,000,000 sanity ceiling); never below $0; concurrent spins can\'t overdraw', async () => {
   seed(10000);
   for (const amount of [0, 2.5, '5', -1, null]) {
     await assert.rejects(spinSlots(caller, { amount, requestId: 'spin-bad-001' }), (e) => e.code === 'BAD_BET', `amount ${amount}`);
   }
-  for (const amount of [1_000_001, Number.MAX_SAFE_INTEGER + 1, 1e300]) {
+  for (const amount of [10_000_001, Number.MAX_SAFE_INTEGER + 1, 1e300]) {
     await assert.rejects(
       spinSlots(caller, { amount, requestId: 'spin-huge-01' }),
-      (e) => e.code === 'BET_TOO_LARGE' && e.message === 'That bet is larger than the table allows.',
+      (e) => e.code === 'BET_TOO_LARGE' && e.message === 'That bet is over the limit of $10,000,000 per bet.',
       `amount ${amount}`,
     );
   }
@@ -181,6 +181,18 @@ test('amount and wallet checks: whole dollars ≥ $1, no maximum (only the $1,00
   assert.equal(results.filter((x) => x.ok).length, 1);
   assert.equal(results.filter((x) => x.code === 'INSUFFICIENT_BALANCE').length, 1);
   assert.equal(store.get('users/u1').balanceCents, 50);
+});
+
+test('0.28.2: a $10,000,000 spin is accepted (exactly the ceiling) and its 300× jackpot pays a safe integer; $10,000,001 is refused', async () => {
+  seed(1_000_000_000); // $10,000,000
+  await assert.rejects(spinSlots(caller, { amount: 10_000_001, requestId: 'spin-10m-over' }), (e) => e.code === 'BET_TOO_LARGE');
+  assert.equal(store.get('users/u1').balanceCents, 1_000_000_000, 'nothing charged for the refused spin');
+  const jackpot = fixed([stopOf(0, 'R7'), stopOf(1, 'R7'), stopOf(2, 'R7')]);
+  const r = await spinSlots(caller, { amount: 10_000_000, requestId: 'spin-10m-0001' }, { randomInt: jackpot });
+  assert.equal(r.betCents, 1_000_000_000);
+  assert.equal(r.winCents, 300 * 1_000_000_000, '$3,000,000,000');
+  assert.ok(Number.isSafeInteger(r.winCents) && Number.isSafeInteger(r.balanceCents));
+  assert.equal(store.get('users/u1').balanceCents, 300 * 1_000_000_000);
 });
 
 test('money helper refuses unknown types and overdrafts without writing anything', () => {

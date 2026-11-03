@@ -15,6 +15,7 @@ import { checkProfile } from '../auth.js';
 import { randomInt as defaultRandomInt } from './rng.js';
 import { applyCasinoEntries, requireBetAmount } from './money.js';
 import { REQUEST_ID_PATTERN } from '../../shared/constants.js';
+import { BET_CEILING_MESSAGE } from '../../shared/casino/constants.js';
 import { playVipSpin, vipCapBonus } from '../../shared/casino/vipSlots.js';
 import {
   VIP_NOT_SET_UP_MESSAGE,
@@ -35,7 +36,7 @@ import {
 export const VIP_TOO_FAST_MESSAGE = 'Let the reels stop first.';
 
 function parseSpin(body) {
-  requireBetAmount(body.amount); // whole dollars ≥ $1 under the casino's $1,000,000 ceiling; the wallet is checked below
+  requireBetAmount(body.amount); // whole dollars ≥ $1 under the $10,000,000 per-bet ceiling; the wallet is checked below
   if (typeof body.requestId !== 'string' || !REQUEST_ID_PATTERN.test(body.requestId)) {
     throw new HttpError(400, 'BAD_REQUEST_ID', 'Missing or invalid requestId.');
   }
@@ -110,7 +111,7 @@ export async function spinVip(caller, body, { now = new Date(), randomInt = defa
 
     const play = playVipSpin(randomInt, betCents);
     const spin = recordOf(play, betCents);
-    if (!Number.isSafeInteger(spin.winCents)) throw new HttpError(400, 'BET_TOO_LARGE', 'That bet is larger than the table allows.');
+    if (!Number.isSafeInteger(spin.winCents)) throw new HttpError(400, 'BET_TOO_LARGE', BET_CEILING_MESSAGE);
 
     const entries = [
       {

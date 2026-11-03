@@ -6,7 +6,7 @@
 //   availableCents  the wallet left for this seat: the balance minus every chip not confirmed yet, on any seat
 //   onPlace(cents)  adds that many cents to the spot through the chip path; returns false if it was refused (the reason shows)
 //   onRefuse(text)  shows why Max can't put anything down
-// One bet is never more than the casino's $1,000,000 ceiling: past it Max stops at $1,000,000 and says so with the usual
+// One bet is never more than the $10,000,000 ceiling (BET_CEILING_CENTS, 0.28.2): past it Max stops at $10,000,000 and says so with the usual
 // message.
 
 import { useEffect, useState } from 'react';

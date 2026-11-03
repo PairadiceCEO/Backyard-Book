@@ -22,7 +22,7 @@ const C = await import(url('shared/casino/cards.js'));
 const { STOPS_PER_REEL, lineSymbols, lineWin } = await import(url('shared/casino/slotMachine.js'));
 
 const T0 = 1_800_000_000_000;
-const CEILING = 'That bet is larger than the table allows.';
+const CEILING = 'That bet is over the limit of $10,000,000 per bet.'; // 0.28.2
 function seed(balances) {
   fake.reset();
   for (const [uid, balanceCents] of Object.entries(balances)) {
@@ -67,17 +67,17 @@ function stackBlackjack(cards) {
 
 // ---------- shared rules: chip check vs amount check, the ceiling ----------
 
-test('rules: chips are $1, $2, $5, $10, $25, $100, $1,000, $10,000 (0.23.0); an amount is whole dollars ≥ $1 with no maximum except the $1,000,000 ceiling', () => {
-  assert.deepEqual(K.CHIP_VALUES, [1, 2, 5, 10, 25, 100, 1000, 10000]);
-  for (const d of [25, 100, 1000, 10000]) assert.equal(K.isChip(d), true, `$${d} chip`);
-  for (const d of [3, 0, 50, 2.5, '5', 500, 100000]) assert.equal(K.isChip(d), false, `${d} is not a chip`);
-  for (const d of [3, 11, 500, 1_000_000]) assert.equal(K.betAmountProblem(d), '', `$${d} is a valid amount`);
+test('rules: chips are $1, $5, $10, $25, $100, $1,000, $10,000, $100,000 (0.28.2); an amount is whole dollars ≥ $1 with no maximum except the $10,000,000 ceiling', () => {
+  assert.deepEqual(K.CHIP_VALUES, [1, 5, 10, 25, 100, 1000, 10000, 100000]);
+  for (const d of [1, 25, 100, 1000, 10000, 100000]) assert.equal(K.isChip(d), true, `$${d} chip`);
+  for (const d of [2, 3, 0, 50, 2.5, '5', 500, 1_000_000]) assert.equal(K.isChip(d), false, `${d} is not a chip`);
+  for (const d of [2, 3, 11, 500, 1_000_000, 10_000_000]) assert.equal(K.betAmountProblem(d), '', `$${d} is a valid amount`);
   assert.equal(K.isValidBetAmount(Number.MAX_SAFE_INTEGER + 1), false, 'safe integers only');
   for (const d of [0, -1, 2.5, '5', null, NaN]) assert.equal(K.betAmountProblem(d), K.BET_AMOUNT_MESSAGE, `${d}`);
-  for (const d of [1_000_001, Number.MAX_SAFE_INTEGER, 1e300]) assert.equal(K.betAmountProblem(d), CEILING, `${d}`);
-  assert.equal(K.betCeilingProblem(100_000_000), '', 'exactly $1,000,000');
-  assert.equal(K.betCeilingProblem(100_000_100), CEILING);
-  assert.equal(K.BET_CEILING_CENTS, 100_000_000);
+  for (const d of [10_000_001, Number.MAX_SAFE_INTEGER, 1e300]) assert.equal(K.betAmountProblem(d), CEILING, `${d}`);
+  assert.equal(K.betCeilingProblem(1_000_000_000), '', 'exactly $10,000,000');
+  assert.equal(K.betCeilingProblem(1_000_000_001), CEILING, 'one cent over');
+  assert.equal(K.BET_CEILING_CENTS, 1_000_000_000);
   assert.equal('CASINO_MAX_BET_DOLLARS' in K, false, 'the $10 maximum is gone');
   assert.equal('isValidCasinoBet' in K, false, 'split into isChip + isValidBetAmount');
 });
@@ -97,10 +97,10 @@ test('Blackjack: a $500 bet is accepted when the wallet covers it; refused with 
   await refusedWithoutChange('blackjack', 'poor', act('blackjack', 'poor', 'bet', { amount: 500, requestId: rid() }), 'INSUFFICIENT_BALANCE');
   await act('blackjack', 'poor', 'bet', { amount: 499, requestId: rid() });
   assert.equal(wallet('poor'), 99);
-  // $3 is a fine total (built from $1 + $2 chips); the ceiling still applies.
+  // $3 is a fine total (built from $1 + $1 + $1 chips since 0.28.2); the ceiling still applies.
   await act('blackjack', 'poor', 'bet', { amount: 3, requestId: rid() });
   assert.equal(table('blackjack').seats[1].betCents, 300);
-  await refusedWithoutChange('blackjack', 'rich', act('blackjack', 'rich', 'bet', { amount: 1_000_001, requestId: rid() }), 'BET_TOO_LARGE', CEILING);
+  await refusedWithoutChange('blackjack', 'rich', act('blackjack', 'rich', 'bet', { amount: 10_000_001, requestId: rid() }), 'BET_TOO_LARGE', CEILING);
 });
 
 test('Blackjack: double and split are refused when the wallet cannot cover the extra stake, and work when it can', async () => {
@@ -143,7 +143,7 @@ test('Baccarat: $500 on Banker is accepted when the wallet covers it; refused wi
   assert.deepEqual(table('baccarat').seats[0].bets, { player: 0, banker: 50_000, tie: 0 });
   assert.equal(wallet('rich'), 0, 'the whole wallet on Banker');
   await refusedWithoutChange('baccarat', 'poor', act('baccarat', 'poor', 'bet', { seat: 1, player: 0, banker: 500, tie: 0, requestId: rid() }), 'INSUFFICIENT_BALANCE');
-  await refusedWithoutChange('baccarat', 'poor', act('baccarat', 'poor', 'bet', { seat: 1, player: 0, banker: 1_000_001, tie: 0, requestId: rid() }), 'BET_TOO_LARGE', CEILING);
+  await refusedWithoutChange('baccarat', 'poor', act('baccarat', 'poor', 'bet', { seat: 1, player: 0, banker: 10_000_001, tie: 0, requestId: rid() }), 'BET_TOO_LARGE', CEILING);
   await act('baccarat', 'poor', 'bet', { seat: 1, player: 3, banker: 25, tie: 100, requestId: rid() });
   assert.deepEqual(table('baccarat').seats[1].bets, { player: 300, banker: 2500, tie: 10_000 });
 });
@@ -174,24 +174,26 @@ for (const game of ['craps', 'crapless']) {
   });
 }
 
-test('craps: $25 and $100 chips accepted; a "$3 chip" is refused as a chip, but $3 built from $1 + $2 is fine; the ceiling', async () => {
-  seed({ p1: 1_000_000 });
+test('craps: $25, $100 and $100,000 chips accepted; a "$2" or "$3 chip" is refused as a chip, but $3 built from $1 + $1 + $1 is fine; the ceiling', async () => {
+  seed({ p1: 20_000_000 });
   await act('craps', 'p1', 'sit', { seat: 0 });
   await act('craps', 'p1', 'bet', { kind: 'field', amount: 25, requestId: rid() });
   await act('craps', 'p1', 'bet', { kind: 'field', amount: 100, requestId: rid() });
   assert.equal(table('craps').seats[0].bets.field, 12_500);
-  await refusedWithoutChange('craps', 'p1', act('craps', 'p1', 'bet', { kind: 'pass', amount: 3, requestId: rid() }), 'BAD_CHIP', 'A chip is $1, $2, $5, $10, $25, $100, $1,000 or $10,000.');
-  await act('craps', 'p1', 'bet', { kind: 'pass', amount: 1, requestId: rid() });
-  await act('craps', 'p1', 'bet', { kind: 'pass', amount: 2, requestId: rid() });
-  assert.equal(table('craps').seats[0].bets.pass, 300, '$1 + $2 chips = $3 Pass');
+  await refusedWithoutChange('craps', 'p1', act('craps', 'p1', 'bet', { kind: 'pass', amount: 3, requestId: rid() }), 'BAD_CHIP', 'A chip is $1, $5, $10, $25, $100, $1,000, $10,000 or $100,000.');
+  await refusedWithoutChange('craps', 'p1', act('craps', 'p1', 'bet', { kind: 'pass', amount: 2, requestId: rid() }), 'BAD_CHIP', 'A chip is $1, $5, $10, $25, $100, $1,000, $10,000 or $100,000.');
+  for (let i = 0; i < 3; i += 1) await act('craps', 'p1', 'bet', { kind: 'pass', amount: 1, requestId: rid() });
+  assert.equal(table('craps').seats[0].bets.pass, 300, '$1 + $1 + $1 chips = $3 Pass');
   await act('craps', 'p1', 'bets', { changes: [{ kind: 'dontPass', cents: 300 }], requestId: rid() });
-  assert.equal(table('craps').seats[0].bets.dontPass, 300, 'a $3 batch (the phone merges $1 + $2 taps)');
-  // The ceiling: one change above it, or a spot pushed above it.
-  fake.write('users/p1', { ...fake.get('users/p1'), balanceCents: 300_000_000 });
-  await refusedWithoutChange('craps', 'p1', act('craps', 'p1', 'bets', { changes: [{ kind: 'field', cents: 100_000_100 }], requestId: rid() }), 'BET_TOO_LARGE', CEILING);
-  await refusedWithoutChange('craps', 'p1', act('craps', 'p1', 'bets', { changes: [{ kind: 'field', cents: 99_990_000 }], requestId: rid() }), 'BET_TOO_LARGE', CEILING);
-  await act('craps', 'p1', 'bets', { changes: [{ kind: 'field', cents: 99_987_500 }], requestId: rid() }); // exactly $1,000,000 on Field
-  assert.equal(table('craps').seats[0].bets.field, 100_000_000);
+  assert.equal(table('craps').seats[0].bets.dontPass, 300, 'a $3 batch (the phone merges the taps)');
+  await act('craps', 'p1', 'bet', { kind: 'field', amount: 100000, requestId: rid() });
+  assert.equal(table('craps').seats[0].bets.field, 12_500 + 10_000_000, 'the $100,000 chip');
+  // The ceiling ($10,000,000 since 0.28.2): one change above it, or a spot pushed above it.
+  fake.write('users/p1', { ...fake.get('users/p1'), balanceCents: 3_000_000_000 });
+  await refusedWithoutChange('craps', 'p1', act('craps', 'p1', 'bets', { changes: [{ kind: 'field', cents: 1_000_000_100 }], requestId: rid() }), 'BET_TOO_LARGE', CEILING);
+  await refusedWithoutChange('craps', 'p1', act('craps', 'p1', 'bets', { changes: [{ kind: 'field', cents: 999_990_000 }], requestId: rid() }), 'BET_TOO_LARGE', CEILING);
+  await act('craps', 'p1', 'bets', { changes: [{ kind: 'field', cents: 989_987_500 }], requestId: rid() }); // exactly $10,000,000 on Field
+  assert.equal(table('craps').seats[0].bets.field, 1_000_000_000);
 });
 
 test('$25 and $100 chips at Blackjack and Baccarat build any total (no per-seat or per-spot maximum)', async () => {
@@ -229,7 +231,7 @@ test('Slots: a $250 spin is accepted when the wallet covers it; refused with INS
   assert.deepEqual([res.ok, res.betCents, res.winCents, res.balanceCents], [true, 25_000, 0, 0]);
   assert.equal(wallet('u1'), 0);
   await refusedWithoutChange(null, 'u2', spinSlots(callerOf('u2'), { amount: 250, requestId: 'spin-big-0002' }), 'INSUFFICIENT_BALANCE');
-  await refusedWithoutChange(null, 'u2', spinSlots(callerOf('u2'), { amount: 1_000_001, requestId: 'spin-big-0003' }), 'BET_TOO_LARGE', CEILING);
+  await refusedWithoutChange(null, 'u2', spinSlots(callerOf('u2'), { amount: 10_000_001, requestId: 'spin-big-0003' }), 'BET_TOO_LARGE', CEILING);
   // A Slots bet is a total built from chips: $3 is fine.
   const three = await spinSlots(callerOf('u2'), { amount: 3, requestId: 'spin-big-0004' }, { randomInt: () => blankStops[0] });
   assert.equal(three.betCents, 300);

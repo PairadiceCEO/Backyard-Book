@@ -15,7 +15,10 @@ test('house chips: every denomination has the mockup colours and the ring prints
   assert.deepEqual(HOUSE_CHIP_COLORS[1], { base: '#e9e5da', hi: '#ffffff', ins: '#2b5fc9', ring: '#6b4e14' });
   assert.deepEqual(HOUSE_CHIP_COLORS[100], { base: '#0b0b0d', hi: '#2c2c31', ins: '#d8b45a', ring: '#f1d283' });
   assert.deepEqual(HOUSE_CHIP_COLORS[10000], { base: '#4f1f80', hi: '#7a3fb6', ins: '#d8b45a', ring: '#f8e3a3' });
-  assert.deepEqual(CHIP_VALUES.map(chipRingValue), ['$1', '$2', '$5', '$10', '$25', '$100', '$1,000', '$10,000']);
+  assert.deepEqual(CHIP_VALUES.map(chipRingValue), ['$1', '$5', '$10', '$25', '$100', '$1,000', '$10,000', '$100,000']);
+  // 0.28.2: the $100,000 chip in the house-chip style, gold with black inserts
+  assert.deepEqual(HOUSE_CHIP_COLORS[100000], { base: '#c9ad62', hi: '#f6e7b5', ins: '#0b0b0d', ring: '#1d1404' });
+  assert.equal(HOUSE_CHIP_COLORS[2], undefined, 'no $2 chip');
 });
 
 test('card tilt: −4° to +5°, the same card always lies the same way', () => {

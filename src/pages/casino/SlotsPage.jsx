@@ -2,8 +2,8 @@
 // animation; the reels then stop one by one on the result. While they spin, the nav wallet is held at
 // "balance − bet" so the live balance can't give the result away early.
 //
-// The bet is built from chips ($1, $2, $5, $10, $25, $100; Undo, Clear). Minimum $1, no maximum: the wallet is the only
-// cap (and the server's $1,000,000 sanity ceiling). Tap Spin again while the
+// The bet is built from chips ($1, $5, $10, $25, $100, $1,000, $10,000, $100,000; Undo, Clear). Minimum $1, no maximum: the wallet
+// is the only cap (and the server's $10,000,000 sanity ceiling, 0.28.2). Tap Spin again while the
 // reels spin to stop them at once on the result (as soon as it has arrived) — that tap never starts or
 // charges another spin.
 //
@@ -13,6 +13,11 @@
 // Big win, if any, is over), so it is never faster than tapping. It stops on the count, its stop rule, a wallet that can't
 // cover the next bet, a failed spin, Stop, leaving the page or the tab being hidden. The bet is locked while it runs.
 // Sounds: src/lib/casinoSound.js.
+//
+// 0.28.2, Auto pauses (the constants below): after an ordinary result Auto waits AUTO_GAP_MS before the next spin; after a Big
+// win it waits AUTO_BIG_WIN_PAUSE_MS, counted from the moment the Big win display ends (on its own or by a tap), so a big win
+// stays readable. A tap on the Big win only ends the display (then the pause runs); nothing but Spin, once Auto has stopped,
+// starts a spin by hand. Manual play has no extra pause.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -37,6 +42,7 @@ const MIN_SPIN_MS = 900; // reels spin at least this long, even if the server an
 const REEL_GAP_MS = 350; // then stop one after another
 const START_STOPS = [5, 13, 22];
 export const AUTO_GAP_MS = 900; // autospin: the pause after a result is on screen before the next spin is sent
+export const AUTO_BIG_WIN_PAUSE_MS = 3500; // autospin: the pause after a Big win display ends (10× the bet or more), 0.28.2
 const AUTO_COUNTS = [10, 25, 50];
 const AUTO_RULES = [
   { id: 'any', label: 'Any win' },
@@ -117,6 +123,7 @@ export default function SlotsPage() {
   const balanceRef = useRef(balanceCents);
   const spinSoundRef = useRef(() => {});
   const spinCount = useRef(0);
+  const autoGapRef = useRef(AUTO_GAP_MS); // Auto's wait before the next spin: set when a result lands (a Big win → the long pause)
   const bet = chipList.reduce((sum, d) => sum + d, 0);
 
   useEffect(() => {
@@ -197,10 +204,14 @@ export default function SlotsPage() {
       setBusy(false);
       quickStopRef.current = false;
       outcomeRef.current = null;
+      autoGapRef.current = AUTO_GAP_MS;
       if (outcome.winCents > 0) {
         const big = isBigWin(outcome);
         playSound(big ? 'bigWin' : 'win');
-        if (big) setBigWin({ key: spinCount.current, cents: outcome.winCents });
+        if (big) {
+          autoGapRef.current = AUTO_BIG_WIN_PAUSE_MS; // Auto's timer starts only once the display below has ended
+          setBigWin({ key: spinCount.current, cents: outcome.winCents });
+        }
       }
       const run = autoRef.current;
       if (run) {
@@ -307,7 +318,9 @@ export default function SlotsPage() {
     startSpin(bet);
   }
 
-  // Autospin: the next spin goes once the last one has landed (and its Big win, if any, is over), after a short pause.
+  // Autospin: the next spin goes once the last one has landed (and its Big win, if any, is over), after AUTO_GAP_MS, or
+  // AUTO_BIG_WIN_PAUSE_MS when that result was a Big win (this effect runs again when the display ends, so the pause counts from
+  // then).
   useEffect(() => {
     if (!auto || busy || bigWin) return undefined;
     const timer = setTimeout(() => {
@@ -319,7 +332,7 @@ export default function SlotsPage() {
       }
       setRun({ ...run, done: run.done + 1 });
       startSpin(run.bet);
-    }, AUTO_GAP_MS);
+    }, autoGapRef.current);
     return () => clearTimeout(timer);
   }, [auto, busy, bigWin, startSpin, setRun, stopAuto]);
 

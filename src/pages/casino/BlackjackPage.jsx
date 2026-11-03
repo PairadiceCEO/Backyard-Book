@@ -147,7 +147,7 @@ function SeatPanel({
   const serverSpots = useMemo(() => ({ bet: seat.betCents || 0, side: seat.sideCents || 0 }), [seat.betCents, seat.sideCents]);
   const validate = useCallback(
     (spot, cents, after) => {
-      const tooBig = betCeilingProblem(cents); // only the $1,000,000 sanity ceiling: no maximum bet
+      const tooBig = betCeilingProblem(cents); // only the $10,000,000 sanity ceiling: no maximum bet
       if (tooBig) return tooBig;
       if (spot === 'side' && !((after.bet ?? 0) > 0)) return SIDE_BET_NEEDS_MAIN;
       const extra = (after.bet ?? 0) + (after.side ?? 0) - (seat.betCents || 0) - (seat.sideCents || 0);

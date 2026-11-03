@@ -1,7 +1,7 @@
 /* ===================== Casino chips (0.19.0), the Pairadice house chip since 0.26.0 =====================
    One chip look for every casino game (src/components/casino/FeltChip.jsx draws an SVG, HouseChip.jsx): the craps felt, the chip
-   rack and every bet spot in Blackjack, Baccarat and Slots. $1 white with blue inserts, $2 yellow, $5 red, $10 blue, $25 green,
-   $100 black with gold, $1,000 orange, $10,000 purple. The face prints no amount: the amount (or a Come bet's "C") sits on a
+   rack and every bet spot in Blackjack, Baccarat and Slots. $1 white with blue inserts, $5 red, $10 blue, $25 green,
+   $100 black with gold, $1,000 orange, $10,000 purple, $100,000 gold with black inserts (0.28.2; $2 is gone). The face prints no amount: the amount (or a Come bet's "C") sits on a
    small label over the chip's lower edge (.fchip-face). Size: set --chip-size on the chip or a parent. */
 
 .house-chip {
@@ -51,6 +51,11 @@
 
 .chip-pick.active .fchip {
   transform: translateY(-4px);
+}
+
+/* 0.28.2: "$100k", the first five-character rack label, a touch smaller so it stays inside the chip */
+.chip-pick .fchip[data-len='5'] .fchip-face {
+  font-size: 11px;
 }
 
 .chip-pick.active .fchip::before {

@@ -1,5 +1,5 @@
-// Casino chips: $1 white, $2 yellow, $5 red, $10 blue, $25 green, $100 black, $1,000 orange, $10,000 purple (0.19.0: FeltChip on
-// every game; 0.23.0: the last two; 0.26.0: the Pairadice house chip, HouseChip.jsx). Chips are denominations, not limits
+// Casino chips: $1 white, $5 red, $10 blue, $25 green, $100 black, $1,000 orange, $10,000 purple, $100,000 gold (0.19.0: FeltChip
+// on every game; 0.23.0: $1,000 and $10,000; 0.26.0: the Pairadice house chip, HouseChip.jsx; 0.28.2: $2 out, $100,000 in). Chips are denominations, not limits
 // (0.16.0): a spot holds any whole-dollar amount the wallet covers. The rack is two rows of four on phones, one row of eight on
 // wide screens, in a glass panel with Rebet / Max / Undo / Clear in one row under it and the game's main button below that.
 //   ChipRack   pick a chip, plus Undo and Clear (and whatever the game adds)
@@ -13,9 +13,9 @@ import HouseChip from './HouseChip.jsx';
 export { CHIP_VALUES };
 const LARGEST_FIRST = [...CHIP_VALUES].sort((a, b) => b - a);
 
-// $8 → [5, 2, 1]; $137 → [100, 25, 10, 2]; $12,130 → [10000, 1000, 1000, 100, 25, 5]. A whole-dollar amount as the fewest
-// chips (largest first).
-// `limit` stops early (a $1,000,000 spot would otherwise list 10,000 chips just to draw a few).
+// $3 → [1, 1, 1]; $7 → [5, 1, 1]; $137 → [100, 25, 10, 1, 1]; $112,130 → [100000, 10000, 1000, 1000, 100, 25, 5]. A whole-dollar
+// amount as the fewest chips (largest first); the $1 chip makes every amount possible.
+// `limit` stops early (a $10,000,000 spot would otherwise list 100 chips just to draw a few).
 export function chipsFor(cents, limit = Infinity) {
   let left = Math.floor(Math.max(0, cents) / 100);
   const out = [];

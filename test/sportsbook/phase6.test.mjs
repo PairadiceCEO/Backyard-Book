@@ -277,6 +277,21 @@ test('placement: LINE_CHANGED and MARKET_CLOSED place nothing and charge nothing
   assert.equal(store.get('users/u1').balanceCents, 5000);
 });
 
+test('0.28.2 placement: a $10,000,000 single is accepted (exactly the ceiling); $10,000,000.01 is refused with nothing charged', async () => {
+  resetWallet(2_000_000_000);
+  const leg = (stakeCents) => ({ league: 'nfl', gameId: 'g2', marketType: 'moneyline', selection: 'away', line: null, quotedAmerican: -200, stakeCents });
+  await assert.rejects(
+    placeBets(caller, body({ clientRequestId: 'req-10m-over1', legs: [leg(1_000_000_001)] }), { ctx: ctxFor(), now: new Date('2026-10-16T20:00:00Z') }),
+    (err) => err.status === 400 && /over the sportsbook limit of \$10,000,000 per bet/.test(err.message),
+  );
+  assert.equal(store.get('users/u1').balanceCents, 2_000_000_000, 'nothing charged');
+  const res = await placeBets(caller, body({ clientRequestId: 'req-10m-0001', legs: [leg(1_000_000_000)] }), { ctx: ctxFor(), now: new Date('2026-10-16T20:00:00Z') });
+  assert.equal(res.bets.length, 1);
+  assert.equal(res.bets[0].stakeCents, 1_000_000_000);
+  assert.equal(res.bets[0].potentialPayoutCents, 1_500_000_000, '-200 pays $15,000,000 in all');
+  assert.equal(store.get('users/u1').balanceCents, 1_000_000_000);
+});
+
 test('placement: insufficient balance, bad slips, source errors', async () => {
   resetWallet(500);
   await assert.rejects(

@@ -5,6 +5,11 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.28.2 (Will, 2026-11-02 23:58 CT) — IN PROGRESS on wip (not merged to main yet)
+Spec: "chips $1–$100,000 (no $2), $10,000,000 bet ceiling everywhere, $100,000,000 admin wallet maximum, longer pauses after big wins and before
+free spins". Done so far (on wip): chips, ceiling, admin maximum and pauses in code; test:all 477 pass. In progress: phone-harness checks
+(tools/phone-check/interact.mjs: $2 references, rack $100k, Max at $10M, Auto pauses with Playwright's fake clock), docs, version 0.28.2.
+
 ## Phase 0.28.1 (Will, 2026-11-02 16:34 CT) — COMPLETE (2026-11-02), merged to main, ready for Will to test
 Spec: "VIP slot fixes: Stop always works, the trigger spin stays on screen before the bonus, Spin button above the bet". Only
 src/pages/casino/VipSlotsPage.jsx, src/styles/vip.css and tests/harness changed: no server, payout, strip or paytable change. Details: README 0.28.1.

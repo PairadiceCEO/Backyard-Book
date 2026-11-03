@@ -2,7 +2,7 @@
 // to either game: every rule it applies comes from here, so a rule can only differ between the two
 // games by changing this file. Odds and payouts are [winnings, stake] (e.g. [7, 6] = 7:6).
 
-// No table limits (0.16.0): any spot holds any whole-dollar amount the wallet covers (one bet at most the $1,000,000
+// No table limits (0.16.0): any spot holds any whole-dollar amount the wallet covers (one bet at most the $10,000,000
 // sanity ceiling, shared/casino/constants.js). The one cap that stays is a game rule: Odds (behind Pass, Don't Pass or
 // a Come bet) up to oddsMultiple × that line bet.
 

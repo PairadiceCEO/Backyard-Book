@@ -14,6 +14,13 @@
 // request is in flight: the reply lands at once, all three reels together. What the reels show is ONE value { stops, onBonus }: the
 // stops and the strips they belong to change together, so the trigger spin stays exactly as it landed (its Golden Dice lit, a banner)
 // until the first free spin brings the bonus strips along with its own stops.
+//
+// 0.28.2, pauses (the constants below; manual play and Auto alike unless it says Auto): the trigger spin, its Golden Dice glowing
+// and the "3 Golden Dice! 10 free spins" banner, stays BONUS_START_MS (2.5 s) before the first free spin. Auto then waits
+// AUTO_GAP_MS after an ordinary result, AUTO_BIG_WIN_PAUSE_MS after a Big win (10× the bet or more) and AUTO_BONUS_PAUSE_MS after a
+// bonus, each counted from the moment that display (Big win / Bonus win) ends, on its own or by a tap. A tap still skips as before
+// (Stop lands the reels, Skip to total ends a bonus, a tap on the display ends it); a tap during a pause never starts a spin: only
+// Spin does, once nothing is playing.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -42,10 +49,12 @@ const START_VIEW = { stops: START_STOPS, onBonus: false };
 const MIN_SPIN_MS = 1000; // the reels spin at least this long
 const REEL_GAP_MS = 320; // then stop one after another
 const SPIN_GAP_MS = 2050; // the server allows one paid spin every 2 s
-const BONUS_START_MS = 1300; // after the trigger lands, before the first free spin
+export const BONUS_START_MS = 2500; // the trigger spin (Golden Dice glowing, banner) stays this long before the first free spin (0.28.2: was 1.3 s)
 const BONUS_SPIN_MS = 600; // a free spin's reels spin this long
 const BONUS_SHOW_MS = 750; // then its result shows this long
-const AUTO_GAP_MS = 900;
+export const AUTO_GAP_MS = 900; // Auto: the pause after an ordinary result before the next spin
+export const AUTO_BIG_WIN_PAUSE_MS = 3500; // Auto: the pause after a Big win display ends (10× the bet or more), 0.28.2
+export const AUTO_BONUS_PAUSE_MS = 4000; // Auto: the pause after a bonus's total display ends, 0.28.2
 const AUTO_COUNTS = [10, 25, 50];
 const AUTO_RULES = [
   { id: 'any', label: 'Any win' },
@@ -247,6 +256,7 @@ export default function VipSlotsPage() {
   const spinSoundRef = useRef(() => {});
   const finishRef = useRef(null); // ends the current spin (and bonus) at once: Skip / quick stop
   const stopRequestedRef = useRef(false); // a tap on Stop while the reply isn't here yet: land the moment it arrives
+  const autoGapRef = useRef(AUTO_GAP_MS); // Auto's wait before the next spin, set when a spin lands / a bonus ends
   const expectedRef = useRef(null); // dev check: the result window being shown ({ stops, onBonus }), from the server's reply
   const keyRef = useRef(0);
   const bet = chipList.reduce((sum, d) => sum + d, 0);
@@ -384,6 +394,7 @@ export default function VipSlotsPage() {
         showLines(last.lines, VIP_BONUS_MULT, betCents, true);
         playSound('bigWin');
         keyRef.current += 1;
+        autoGapRef.current = AUTO_BONUS_PAUSE_MS; // Auto's timer starts only once the Bonus win display has ended
         setBigWin({ key: keyRef.current, cents: spin.bonus.cents, title: 'Bonus win!', after: () => finish(outcome) });
       };
       finishRef.current = end;
@@ -433,6 +444,7 @@ export default function VipSlotsPage() {
       setView({ stops: outcome.spin.stops, onBonus: false });
       setStoppedReels(3);
       showLines(outcome.spin.lines, 1, outcome.betCents);
+      autoGapRef.current = AUTO_GAP_MS;
       if (outcome.spin.bonus) {
         playSound('bigWin');
         keyRef.current += 1;
@@ -442,6 +454,7 @@ export default function VipSlotsPage() {
       }
       if (outcome.spin.baseCents >= 10 * outcome.betCents) {
         keyRef.current += 1;
+        autoGapRef.current = AUTO_BIG_WIN_PAUSE_MS; // Auto's timer starts only once the Big win display has ended
         setBigWin({ key: keyRef.current, cents: outcome.spin.baseCents, title: 'Big win!', after: () => finish(outcome) });
         finishRef.current = null;
         return;
@@ -578,7 +591,9 @@ export default function VipSlotsPage() {
     startSpin(bet);
   }
 
-  // Auto: the next spin once the last one (and its bonus and big win) is over.
+  // Auto: the next spin once the last one (and its bonus and big win) is over, after autoGapRef: AUTO_GAP_MS, or
+  // AUTO_BIG_WIN_PAUSE_MS / AUTO_BONUS_PAUSE_MS when that spin ended on a Big win / a bonus (this runs again when the display ends
+  // and the spin is finished, so the pause counts from then).
   useEffect(() => {
     if (!auto || busy || bigWin || !pass) return undefined;
     const timer = setTimeout(() => {
@@ -590,7 +605,7 @@ export default function VipSlotsPage() {
       }
       setRun({ ...run, done: run.done + 1 });
       startSpin(run.bet);
-    }, AUTO_GAP_MS);
+    }, autoGapRef.current);
     return () => clearTimeout(timer);
   }, [auto, busy, bigWin, pass, startSpin, setRun, stopAuto]);
 
@@ -604,11 +619,17 @@ export default function VipSlotsPage() {
   }, [auto, stopAuto]);
 
   const closePaytable = useCallback(() => setPaytableOpen(false), []);
+  // The display ends (its own timer or a tap): run its `after` once. Kept out of a state updater, which React's StrictMode runs
+  // twice in development (that finished the spin twice there before 0.28.2).
+  const bigWinRef = useRef(null);
+  useEffect(() => {
+    bigWinRef.current = bigWin;
+  }, [bigWin]);
   const endBigWin = useCallback(() => {
-    setBigWin((b) => {
-      if (b?.after) setTimeout(b.after, 0);
-      return null;
-    });
+    const b = bigWinRef.current;
+    bigWinRef.current = null;
+    setBigWin(null);
+    if (b?.after) setTimeout(b.after, 0);
   }, []);
 
   const inBonus = Boolean(bonus);

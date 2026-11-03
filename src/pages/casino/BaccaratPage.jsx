@@ -101,7 +101,7 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, slot, sidesS
   const canBet = phase === 'betting' && !seat.ready && !seat.leaving;
   const validate = useCallback(
     (spot, cents, after) => {
-      const tooBig = betCeilingProblem(cents); // only the $1,000,000 sanity ceiling: no maximum bet
+      const tooBig = betCeilingProblem(cents); // only the $10,000,000 sanity ceiling: no maximum bet
       if (tooBig) return tooBig;
       if (SIDE_ORDER.includes(spot) && mainBetCents(after) === 0) return SIDE_BET_NEEDS_MAIN;
       const extra = totalBetCents(after) - totalBetCents(serverBets);
@@ -158,7 +158,7 @@ function SeatPanel({ index, seat, hidden, phase, winner, revealing, slot, sidesS
       if (!lastBets[spot]) continue;
       if (chips.place(spot, lastBets[spot] * times)) placed += 1;
       else {
-        if (placed) chips.clear(); // a spot was refused (the $1,000,000 ceiling): all or nothing
+        if (placed) chips.clear(); // a spot was refused (the $10,000,000 ceiling): all or nothing
         rebetBusy.current = false;
         return;
       }

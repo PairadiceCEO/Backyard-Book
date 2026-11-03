@@ -20,6 +20,7 @@ mock.module(url('server/firebaseAdmin.js'), {
 const { handleTableAction } = await import(url('server/casino/tables.js'));
 const { DICE_ANIMATION_MS } = await import(url('server/casino/crapsTable.js'));
 const { groupShopPurchases } = await import(url('src/lib/shopHistory.js'));
+const { CHIP_VALUES } = await import(url('shared/casino/constants.js'));
 const handler = (await import(url('api/casino.js'))).default;
 
 const UIDS = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'];
@@ -41,7 +42,8 @@ const act = (uid, action, fields = {}, now = T0) => handleTableAction(callerOf(u
 let reqNo = 0;
 // Puts `amount` dollars on one spot. A chip amount goes through `bet` (one chip, 0.16.0 chip check); any other whole
 // amount (e.g. $6 on Place 6, built from $5 + $1 chips) goes through `bets` as one change, the way the phone sends it.
-const CHIPS = [1, 2, 5, 10, 25, 100];
+// 0.28.2: the real chips ($2 is gone, so a $2 bet is a $1 + $1 total sent through `bets`, as a phone sends it).
+const CHIPS = CHIP_VALUES;
 const bet = (uid, kind, amount, extra = {}, now = T0) => {
   const requestId = `cr-req-${String(++reqNo).padStart(6, '0')}`;
   if (CHIPS.includes(amount) || !Number.isInteger(amount) || amount <= 0) return act(uid, 'bet', { kind, amount, requestId, ...extra }, now);
@@ -443,7 +445,7 @@ test('chips tapped together arrive as one request: all applied with one charge, 
   // One bad chip refuses the whole batch and changes nothing.
   const before = table();
   await err(chipsDown('p1', [{ kind: 'field', cents: 100 }, { kind: 'odds', cents: 100 }]), 'BET_NOT_ALLOWED', 'Odds before a point');
-  await err(chipsDown('p1', [{ kind: 'field', cents: 100 }, { kind: 'pass', cents: 100_000_100 }]), 'BET_TOO_LARGE');
+  await err(chipsDown('p1', [{ kind: 'field', cents: 100 }, { kind: 'pass', cents: 1_000_000_100 }]), 'BET_TOO_LARGE'); // over the $10,000,000 ceiling (0.28.2)
   await err(chipsDown('p1', [{ kind: 'place', number: 3, cents: 100 }]), 'BET_NOT_ALLOWED', 'no Place 3 in Craps');
   await err(chipsDown('p1', [{ kind: 'field', cents: 150 }]), 'BAD_BET');
   await err(chipsDown('p1', [{ kind: 'field', cents: -300 }]), 'NO_BET');

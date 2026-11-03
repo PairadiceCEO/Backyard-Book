@@ -128,7 +128,7 @@ test('21+3 losing hand: no payout entry; K-A-2 is not a straight; two seats sett
 });
 
 test('21+3 needs a main bet; it can be lowered or cleared; the ceiling applies to it; a retry is applied once', async () => {
-  seed(300_000_000);
+  seed(3_000_000_000);
   await act('blackjack', 'p1', 'sit', { seat: 0 });
   await err(act('blackjack', 'p1', 'bet', { seat: 0, amount: 0, side: 5, requestId: rid() }), 'SIDE_NEEDS_MAIN', S.SIDE_BET_NEEDS_MAIN);
   await act('blackjack', 'p1', 'bet', { seat: 0, amount: 10, side: 5, requestId: rid() });
@@ -142,10 +142,10 @@ test('21+3 needs a main bet; it can be lowered or cleared; the ceiling applies t
   await act('blackjack', 'p1', 'bet', { seat: 0, amount: 20, side: 0, requestId: rid() });
   assert.equal(table('blackjack').seats[0].sideCents, 0);
   assert.ok(ledger().some((e) => e.type === 'casino_refund' && e.amountCents === 700), 'clearing 21+3 refunded it');
-  await err(act('blackjack', 'p1', 'bet', { seat: 0, amount: 20, side: 1_000_001, requestId: rid() }), 'BET_TOO_LARGE');
-  await act('blackjack', 'p1', 'bet', { seat: 0, amount: 1_000_000, side: 1_000_000, requestId: rid() });
-  assert.equal(table('blackjack').seats[0].sideCents, 100_000_000, 'the ceiling is per bet: $1M main + $1M side');
-  moneyAddsUp(300_000_000);
+  await err(act('blackjack', 'p1', 'bet', { seat: 0, amount: 20, side: 10_000_001, requestId: rid() }), 'BET_TOO_LARGE');
+  await act('blackjack', 'p1', 'bet', { seat: 0, amount: 10_000_000, side: 10_000_000, requestId: rid() });
+  assert.equal(table('blackjack').seats[0].sideCents, 1_000_000_000, 'the ceiling is per bet: $10M main + $10M side (0.28.2)');
+  moneyAddsUp(3_000_000_000);
 });
 
 // ================= Baccarat side bets =================
@@ -195,13 +195,13 @@ test('Baccarat: Fortune 7 doesn\'t change the Banker bet; Blazing 7s two-card ti
 });
 
 test('Baccarat side bets need a main bet; a zero side spot is not stored; the ceiling applies per spot', async () => {
-  seed(300_000_000);
+  seed(3_000_000_000);
   await act('baccarat', 'p1', 'sit', { seat: 0 });
   await err(act('baccarat', 'p1', 'bet', { seat: 0, player: 0, banker: 0, tie: 0, golden8: 5, requestId: rid() }), 'SIDE_NEEDS_MAIN', S.SIDE_BET_NEEDS_MAIN);
   await act('baccarat', 'p1', 'bet', { seat: 0, player: 5, banker: 0, tie: 0, golden8: 5, requestId: rid() });
   await err(act('baccarat', 'p1', 'bet', { seat: 0, player: 0, banker: 0, tie: 0, golden8: 5, requestId: rid() }), 'SIDE_NEEDS_MAIN', S.SIDE_BET_KEEPS_MAIN);
   await act('baccarat', 'p1', 'bet', { seat: 0, player: 5, banker: 0, tie: 0, golden8: 0, requestId: rid() });
   assert.deepEqual(table('baccarat').seats[0].bets, { player: 500, banker: 0, tie: 0 });
-  await err(act('baccarat', 'p1', 'bet', { seat: 0, player: 5, banker: 0, tie: 0, blazing7: 1_000_001, requestId: rid() }), 'BET_TOO_LARGE', K.BET_CEILING_MESSAGE);
-  moneyAddsUp(300_000_000);
+  await err(act('baccarat', 'p1', 'bet', { seat: 0, player: 5, banker: 0, tie: 0, blazing7: 10_000_001, requestId: rid() }), 'BET_TOO_LARGE', K.BET_CEILING_MESSAGE);
+  moneyAddsUp(3_000_000_000);
 });

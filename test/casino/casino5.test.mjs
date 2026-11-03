@@ -368,7 +368,7 @@ test("Odds pay true odds to the cent; Don't Pass Odds pay the inverse", () => {
   assert.equal(roll(CL, 11, { pass: 100, odds: 500 }, 5, 6).returnCents, 200 + 500 + 1500, '11 at 3:1');
 });
 
-test('the only craps caps left: Odds 2× their line bet (named in the message) and the $1,000,000 sanity ceiling', () => {
+test('the only craps caps left: Odds 2× their line bet (named in the message) and the $10,000,000 sanity ceiling', () => {
   // No line limit, no spot limit, no table total (0.16.0).
   assert.equal(D.limitProblem(CR, bets({ pass: 50_000 }), { kind: 'pass' }), '', '$500 Pass');
   assert.equal(D.limitProblem(CR, bets({ come: 2100 }), { kind: 'come' }), '');
@@ -383,9 +383,11 @@ test('the only craps caps left: Odds 2× their line bet (named in the message) a
   assert.equal(D.limitProblem(CR, bets({ pass: 50_000, odds: 100_000 }), { kind: 'odds' }), '', '$1,000 Odds behind $500 Pass');
   assert.match(D.limitProblem(CL, bets({ pass: 50_000, odds: 100_100 }), { kind: 'odds' }), /2× your Pass bet/, 'Crapless the same');
   // The sanity ceiling, on any spot.
-  assert.equal(D.limitProblem(CR, bets({ field: 100_000_000 }), { kind: 'field' }), '', 'exactly $1,000,000');
-  assert.equal(D.limitProblem(CR, bets({ field: 100_000_100 }), { kind: 'field' }), 'That bet is larger than the table allows.');
-  assert.equal(D.limitProblem(CR, bets({ place: { 8: 100_000_100 } }), {}), 'That bet is larger than the table allows.', 'found without a hint');
+  const CEILING = 'That bet is over the limit of $10,000,000 per bet.';
+  assert.equal(D.limitProblem(CR, bets({ field: 1_000_000_000 }), { kind: 'field' }), '', 'exactly $10,000,000');
+  assert.equal(D.limitProblem(CR, bets({ field: 1_000_000_100 }), { kind: 'field' }), CEILING);
+  assert.equal(D.limitProblem(CR, bets({ place: { 8: 1_000_000_100 } }), {}), CEILING, 'found without a hint');
+  assert.equal(D.limitProblem(CL, bets({ hard: { 6: 1_000_000_000 } }), { kind: 'hard', number: 6 }), '', 'Crapless: exactly $10,000,000');
 });
 
 // ================= Craps at the table =================

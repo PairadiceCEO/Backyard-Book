@@ -171,7 +171,7 @@ export function spotLimitCents(variant, bets, kind, number) {
 const dollars = dollarsText;
 
 // Why `bets` (after a change) break a rule, or '' if they don't: each Odds at most oddsMultiple × its line bet, and
-// no single spot above the $1,000,000 sanity ceiling. Used by the server (refusals) and the phone (refusing a chip
+// no single spot above the $10,000,000 sanity ceiling. Used by the server (refusals) and the phone (refusing a chip
 // at once).
 export function limitProblem(variant, bets, { kind, number } = {}) {
   const b = cloneBets(bets);

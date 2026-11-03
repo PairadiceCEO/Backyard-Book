@@ -2683,7 +2683,7 @@ await check('vip 0.28.1: the trigger spin stays as landed for the whole BONUS_ST
   const Fs = log.findIndex((e, i) => i > L && e.spinning > 0);
   assert.ok(L >= 0 && Fs > L, 'the trigger spin landed and then the first free spin started');
   const held = log[Fs].t - log[L].t;
-  if (held < 1200) problems.push(`the trigger spin stayed on screen only ${held} ms (BONUS_START_MS is 1300)`);
+  if (held < 2400) problems.push(`the trigger spin stayed on screen only ${held} ms (BONUS_START_MS is 2500 since 0.28.2)`);
   for (let i = L; i < Fs; i += 1) {
     const e = log[i];
     if (!sameWin(e.window, paid)) problems.push(`trigger window was ${showWin(e.window)}, not the paid spin's ${showWin(paid)} (entry ${i - L}, +${e.t - log[L].t} ms)`);
@@ -2761,7 +2761,7 @@ await check('vip 0.28.1: with reduced motion the trigger spin still stays as lan
   const L = log.findIndex((e) => e.bar && e.spinning === 0 && e.window);
   const nextChange = log.findIndex((e, i) => i > L && /^Free spin 1 /.test(e.count ?? ''));
   assert.ok(L >= 0 && nextChange > L);
-  if (log[nextChange].t - log[L].t < 1200) problems.push(`the trigger spin stayed only ${log[nextChange].t - log[L].t} ms`);
+  if (log[nextChange].t - log[L].t < 2400) problems.push(`the trigger spin stayed only ${log[nextChange].t - log[L].t} ms`);
   for (let i = L; i < nextChange; i += 1) if (!sameWin(log[i].window, paid)) problems.push(`trigger window ${showWin(log[i].window)}`);
   for (const e of log.slice(nextChange)) {
     const m = /^Free spin (\d+) /.exec(e.count ?? '');
