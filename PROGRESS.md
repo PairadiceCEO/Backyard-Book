@@ -5,6 +5,46 @@ Read CLAUDE.md first (standing rules), then this file. `git fetch`; check out `w
 Earlier phases (all merged): cash out (0.7.0), card dealing speed (0.7.1), casino batch A (0.8.0),
 Battles (0.9.0), Challenges (0.10.0).
 
+## Phase 0.28.2 (Will, 2026-11-02 23:58 CT) — COMPLETE (2026-11-03), merged to main, ready for Will to test
+Spec: "chips $1–$100,000 (no $2), $10,000,000 bet ceiling everywhere, $100,000,000 admin wallet maximum, longer pauses after big wins and before
+free spins". Details: README 0.28.2, docs/CASINO_PROGRESS.md 0.28.2, CLAUDE.md "Deliberate decisions" (updated).
+Files: shared/constants.js (BET_CEILING_CENTS $10M, SPORTSBOOK_BET_CEILING_CENTS = it, MAX_WALLET_CHANGE_CENTS $100M, wholeDollarsText),
+shared/casino/constants.js (CHIP_VALUES, BET_CEILING_MESSAGE from the constant), shared/betRules.js, shared/battles.js, server/admin/users.js
+(friendly limit messages), server/casino/vipSlots.js (its overflow message is BET_CEILING_MESSAGE), src/lib/houseChipColors.js ($100,000 chip),
+src/styles/{chips,craps}.css ("$100k" label size), src/pages/admin/AdminUsers.jsx (limit shown + checked before Review), src/pages/casino/
+{SlotsPage,VipSlotsPage}.jsx (pauses), comments in money.js / crapsTable.js / dice.js / diceVariants.js / maxBet.js / vipSlots.js / Chips.jsx /
+FeltChip.jsx / MaxBet.jsx / casinoRules.js / NewBattlePage.jsx / BlackjackPage.jsx / BaccaratPage.jsx. Tests: test/ceiling.test.js (new),
+test/chips.test.js, test/feltLook.test.js, test/casino/casino{1,2,3,4,5,6,7,8,9}.test.mjs, test/battles/battles.test.mjs,
+test/sportsbook/{phase3,phase6}.test.mjs, test/vip/vipCap.test.mjs, tools/phone-check/{interact,shoot,fixtures}.mjs + README.
+Checks: test:all 477 pass (12 suites, incl. test:vip), lint clean (scratch flat config with react-hooks rules, --max-warnings 0), build ok,
+/api = 7, the dev-only VIP draw assertion not in dist; interact 103/103 (3 new: the rack, 7s Slots Auto pauses and VIP pauses on Playwright's fake
+clock; the pause checks passed 4 runs in a row and fail on copies with the old values), shoot 174 screens clean (320 / 375 / 414 / 844 × 390 /
+1280 × 800, craps at its eight sizes; the racks were also looked at), dealcheck 8/8, tapcheck 16/16 (incl. Slots and VIP with the new rack).
+No firestore.rules change, no index, no new /api function.
+Test steps for Will: (1) Every rack (Blackjack, Baccarat, Craps, Slots, VIP) shows $1, $5, $10, $25, $100, $1k, $10k, $100k: no $2, the last
+chip gold. (2) Admin → Players → a test player → Adjust wallet → 100000000 → Review → Confirm: the wallet goes up $100,000,000 (100000000.01
+is refused before Review). (3) As that player, bet $10,000,000 on Blackjack (Max: it stops at $10,000,000) and
+spin $10,000,000 in the VIP slot (Max): both go through; one more $1 chip on top ($10,000,001) says "That bet is over the limit of
+$10,000,000 per bet." (4) Run Auto on the VIP slot (Don't stop): after a Big win the next spin waits about 3.5 s after the Big win banner goes;
+before free spins the Golden Dice glow for 2.5 s; after a bonus it waits about 4 s after the total.
+Decisions:
+- One constant for the ceiling: BET_CEILING_CENTS ($10,000,000) in shared/constants.js; SPORTSBOOK_BET_CEILING_CENTS stays as a name for it (the
+  sportsbook keeps its own message "That bet is over the sportsbook limit of $10,000,000 per bet."). The casino / Battles message is now "That bet
+  is over the limit of $10,000,000 per bet." (was "That bet is larger than the table allows.", which named no amount and read oddly for Battles).
+- Safe integers at the ceiling: the largest payout is the VIP 10,000× cap = 1e13 cents (safe integers go to 9e15); test/ceiling.test.js runs
+  every game's top multiplier from its real paytable at $10,000,000 and a craps felt with the ceiling on every spot through settleRoll for every
+  point and roll; the sportsbook's payoutTooLarge guard still refuses a ten-leg longshot parlay. No code change was needed for that.
+- $2 bets still work as amounts (two $1 chips): only craps' one-chip `bet` action checks chips, and it now refuses $2 with BAD_CHIP.
+- Pauses: an autoGapRef per page, set when a result lands (Big win → 3.5 s; VIP bonus end → 4 s; else 0.9 s); the Auto effect already re-runs
+  when the display ends, so the pause counts from then (also when the display is ended by a tap). Manual play gets only the 2.5 s trigger hold.
+- The "$100k" rack label is 11 px in the shared rack and 10.5 px with 2 px padding in the craps rack (the sideways craps rack's chips are 39 px;
+  12 px overflowed there; the new interact check found it).
+- Fixed on the way (dev only): VipSlotsPage's endBigWin scheduled `after` inside a state updater, which StrictMode runs twice in development, so a
+  Big win / bonus was finished twice there (double "This visit" counts). Production runs updaters once, so the live site wasn't affected.
+- Admin → Players shows "At most $100,000,000." under Starting balance and "At most $100,000,000 at a time." under the adjustment amount, and
+  refuses a bigger amount before Review; the server says "The starting balance can be at most $100,000,000." / "One wallet change can be at
+  most $100,000,000." (was `"deltaCents" can be at most $1,000,000.`).
+
 ## Phase 0.28.1 (Will, 2026-11-02 16:34 CT) — COMPLETE (2026-11-02), merged to main, ready for Will to test
 Spec: "VIP slot fixes: Stop always works, the trigger spin stays on screen before the bonus, Spin button above the bet". Only
 src/pages/casino/VipSlotsPage.jsx, src/styles/vip.css and tests/harness changed: no server, payout, strip or paytable change. Details: README 0.28.1.

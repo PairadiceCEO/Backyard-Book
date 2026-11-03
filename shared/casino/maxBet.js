@@ -3,7 +3,7 @@
 //   currentCents    what the spot holds now on the screen (confirmed + not yet confirmed)
 //   availableCents  the wallet left for that seat (the balance minus every chip not confirmed yet, on any seat)
 // Returns { addCents, totalCents, capped } (addCents whole dollars, at least $1), or { refuse: 'ceiling' | 'wallet' }.
-// One bet never passes the casino's $1,000,000 ceiling: past it the total stops at $1,000,000 (capped: true).
+// One bet never passes the $10,000,000 ceiling (BET_CEILING_CENTS, 0.28.2): past it the total stops at $10,000,000 (capped: true).
 
 import { BET_CEILING_CENTS } from './constants.js';
 

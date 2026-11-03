@@ -19,7 +19,7 @@ const D = await import(url('shared/casino/dice.js'));
 const { DICE_VARIANTS } = await import(url('shared/casino/diceVariants.js'));
 
 const T0 = 1_800_000_000_000;
-const UIDS = ['p1', 'p2'];
+const UIDS = ['p1', 'p2', 'p3'];
 function seed(balanceCents = 100_000) {
   fake.reset();
   for (const uid of UIDS) fake.write(`users/${uid}`, { username: uid, displayName: uid.toUpperCase(), balanceCents, stats: { won: 0, lost: 0 }, disabled: false });
@@ -177,47 +177,90 @@ test('a retried tap (same requestId) is applied once; a different requestId with
   moneyAddsUp(100_000);
 });
 
-// ================= 3. $1,000 and $10,000 chips =================
-test('$1,000 and $10,000 chips: real chips on every game; a spot breaks into them; the message names them', async () => {
+// ================= 3. The chips: $1,000, $10,000 and (0.28.2) $100,000; no $2 =================
+test('$1,000, $10,000 and $100,000 chips: real chips on every game; $2 is not a chip any more; a spot breaks into them; the message names them', async () => {
   const K = await import(url('shared/casino/constants.js'));
-  assert.deepEqual(K.CHIP_VALUES, [1, 2, 5, 10, 25, 100, 1000, 10000]);
-  assert.equal(K.CHIP_MESSAGE, 'A chip is $1, $2, $5, $10, $25, $100, $1,000 or $10,000.');
-  assert.deepEqual([1, 1000, 10000].map(K.chipName), ['$1', '$1,000', '$10,000']);
-  seed(10_000_000); // $100,000
+  assert.deepEqual(K.CHIP_VALUES, [1, 5, 10, 25, 100, 1000, 10000, 100000]);
+  assert.equal(K.CHIP_MESSAGE, 'A chip is $1, $5, $10, $25, $100, $1,000, $10,000 or $100,000.');
+  assert.deepEqual([1, 1000, 10000, 100000].map(K.chipName), ['$1', '$1,000', '$10,000', '$100,000']);
+  assert.equal(K.isChip(2), false, '$2 is gone');
+  assert.equal(K.isChip(100000), true);
+  seed(30_000_000); // $300,000
   await act('craps', 'p1', 'sit', { seat: 0 });
+  await assert.rejects(act('craps', 'p1', 'bet', { kind: 'field', amount: 2, requestId: rid() }), (e) => e.code === 'BAD_CHIP' && e.message === K.CHIP_MESSAGE);
+  await act('craps', 'p1', 'bet', { kind: 'field', amount: 100000, requestId: rid() });
   await act('craps', 'p1', 'bet', { kind: 'field', amount: 10000, requestId: rid() });
   await act('craps', 'p1', 'bet', { kind: 'field', amount: 1000, requestId: rid() });
-  assert.equal(seatOf('craps', 'p1').bets.field, 1_100_000, '$11,000 on the Field from two chips');
+  assert.equal(seatOf('craps', 'p1').bets.field, 11_100_000, '$111,000 on the Field from three chips');
   await act('blackjack', 'p2', 'sit', { seat: 0 });
-  await act('blackjack', 'p2', 'bet', { seat: 0, amount: 11000, requestId: rid() });
-  assert.equal(seatOf('blackjack', 'p2').betCents, 1_100_000);
-  moneyAddsUp(10_000_000);
+  await act('blackjack', 'p2', 'bet', { seat: 0, amount: 111000, requestId: rid() });
+  assert.equal(seatOf('blackjack', 'p2').betCents, 11_100_000);
+  moneyAddsUp(30_000_000);
 });
 
-// ================= 5. Sportsbook ceiling $10,000,000; the casino keeps $1,000,000 =================
-test('the casino per-bet ceiling stays $1,000,000 while the sportsbook\'s is $10,000,000', async () => {
+// ================= 5. One ceiling, $10,000,000 per bet, for the casino and the sportsbook (0.28.2) =================
+test('0.28.2: the casino per-bet ceiling is the sportsbook\'s, $10,000,000 (one constant, no longer tied to the admin wallet maximum)', async () => {
   const K = await import(url('shared/casino/constants.js'));
   const R = await import(url('shared/betRules.js'));
-  assert.equal(K.BET_CEILING_CENTS, 100_000_000);
-  assert.equal(K.BET_CEILING_MESSAGE, 'That bet is larger than the table allows.');
+  const S = await import(url('shared/constants.js'));
+  assert.equal(S.BET_CEILING_CENTS, 1_000_000_000);
+  assert.equal(S.SPORTSBOOK_BET_CEILING_CENTS, S.BET_CEILING_CENTS);
+  assert.equal(S.MAX_WALLET_CHANGE_CENTS, 10_000_000_000, 'the admin maximum is its own number, $100,000,000');
+  assert.equal(K.BET_CEILING_CENTS, S.BET_CEILING_CENTS);
+  assert.equal(K.BET_CEILING_MESSAGE, 'That bet is over the limit of $10,000,000 per bet.');
   assert.equal(R.MAX_STAKE_CENTS, 1_000_000_000);
   assert.equal(R.stakeCeilingProblem(1_000_000_000), '');
   assert.equal(R.stakeCeilingProblem(1_000_000_001), 'That bet is over the sportsbook limit of $10,000,000 per bet.');
-  seed(500_000_000);
+  seed(5_000_000_000);
   await act('blackjack', 'p1', 'sit', { seat: 0 });
-  await assert.rejects(act('blackjack', 'p1', 'bet', { seat: 0, amount: 1_000_001, requestId: rid() }), (e) => e.message === K.BET_CEILING_MESSAGE);
-  await act('blackjack', 'p1', 'bet', { seat: 0, amount: 1_000_000, requestId: rid() });
-  assert.equal(seatOf('blackjack', 'p1').betCents, 100_000_000);
+  await assert.rejects(act('blackjack', 'p1', 'bet', { seat: 0, amount: 10_000_001, requestId: rid() }), (e) => e.code === 'BET_TOO_LARGE' && e.message === K.BET_CEILING_MESSAGE);
+  await act('blackjack', 'p1', 'bet', { seat: 0, amount: 10_000_000, requestId: rid() });
+  assert.equal(seatOf('blackjack', 'p1').betCents, 1_000_000_000);
+});
+
+test('0.28.2: exactly $10,000,000 is accepted and $10,000,001 refused on every table (Blackjack + 21+3, Baccarat + its side bets, Craps, Crapless)', async () => {
+  const K = await import(url('shared/casino/constants.js'));
+  const tooBig = (e) => e.code === 'BET_TOO_LARGE' && e.message === K.BET_CEILING_MESSAGE;
+  seed(10_000_000_000); // $100,000,000 each
+  // Blackjack: the main bet, then 21+3 (a side bet needs the main bet; the ceiling is per bet)
+  await act('blackjack', 'p1', 'sit', { seat: 0 });
+  await assert.rejects(act('blackjack', 'p1', 'bet', { seat: 0, amount: 10_000_001, requestId: rid() }), tooBig);
+  await act('blackjack', 'p1', 'bet', { seat: 0, amount: 10_000_000, requestId: rid() });
+  await assert.rejects(act('blackjack', 'p1', 'bet', { seat: 0, amount: 10_000_000, side: 10_000_001, requestId: rid() }), tooBig);
+  await act('blackjack', 'p1', 'bet', { seat: 0, amount: 10_000_000, side: 10_000_000, requestId: rid() });
+  assert.deepEqual([seatOf('blackjack', 'p1').betCents, seatOf('blackjack', 'p1').sideCents], [1_000_000_000, 1_000_000_000]);
+  // Baccarat: every main spot and every side bet
+  await act('baccarat', 'p2', 'sit', { seat: 0 });
+  for (const spot of ['player', 'banker', 'tie']) {
+    const base = { player: 0, banker: 0, tie: 0 };
+    await assert.rejects(act('baccarat', 'p2', 'bet', { seat: 0, ...base, [spot]: 10_000_001, requestId: rid() }), tooBig, spot);
+  }
+  await act('baccarat', 'p2', 'bet', { seat: 0, player: 10_000_000, banker: 0, tie: 0, requestId: rid() });
+  for (const side of ['dragonPlayer', 'dragonBanker', 'fortune7', 'heavenly9', 'golden8', 'blazing7']) {
+    await assert.rejects(act('baccarat', 'p2', 'bet', { seat: 0, player: 10_000_000, banker: 0, tie: 0, [side]: 10_000_001, requestId: rid() }), tooBig, side);
+  }
+  await act('baccarat', 'p2', 'bet', { seat: 0, player: 10_000_000, banker: 0, tie: 0, blazing7: 10_000_000, requestId: rid() });
+  assert.equal(seatOf('baccarat', 'p2').bets.player, 1_000_000_000);
+  assert.equal(seatOf('baccarat', 'p2').bets.blazing7, 1_000_000_000);
+  // Craps and Crapless: one spot at exactly the ceiling; one dollar more is refused
+  for (const game of ['craps', 'crapless']) {
+    await act(game, 'p3', 'sit', { seat: 0 });
+    await assert.rejects(act(game, 'p3', 'bets', { changes: [{ kind: 'field', cents: 1_000_000_100 }], requestId: rid() }), tooBig, game);
+    await act(game, 'p3', 'bets', { changes: [{ kind: 'field', cents: 1_000_000_000 }], requestId: rid() });
+    assert.equal(seatOf(game, 'p3').bets.field, 1_000_000_000, game);
+  }
 });
 
 // ================= 4. Max bet (the plan; the button is checked in tools/phone-check/interact.mjs) =================
-test('Max bet: the whole wallet left (whole dollars) on the spot; capped at the $1,000,000 ceiling; nothing when the wallet is empty', async () => {
+test('Max bet: the whole wallet left (whole dollars) on the spot; capped at the $10,000,000 ceiling; nothing when the wallet is empty', async () => {
   const { maxBetPlan } = await import(url('shared/casino/maxBet.js'));
   assert.deepEqual(maxBetPlan(0, 12_345), { addCents: 12_300, totalCents: 12_300, capped: false }, '$123.45 → $123');
   assert.deepEqual(maxBetPlan(500, 9_500), { addCents: 9_500, totalCents: 10_000, capped: false }, '$5 already on it + $95');
-  assert.deepEqual(maxBetPlan(0, 250_000_000), { addCents: 100_000_000, totalCents: 100_000_000, capped: true }, '$2.5M wallet → $1M');
-  assert.deepEqual(maxBetPlan(40_000_000, 250_000_000), { addCents: 60_000_000, totalCents: 100_000_000, capped: true });
-  assert.deepEqual(maxBetPlan(100_000_000, 5_000), { refuse: 'ceiling' });
+  assert.deepEqual(maxBetPlan(0, 250_000_000), { addCents: 250_000_000, totalCents: 250_000_000, capped: false }, '$2.5M wallet → all of it (under the ceiling now)');
+  assert.deepEqual(maxBetPlan(0, 2_500_000_000), { addCents: 1_000_000_000, totalCents: 1_000_000_000, capped: true }, '$25M wallet → $10M');
+  assert.deepEqual(maxBetPlan(0, 1_000_000_000), { addCents: 1_000_000_000, totalCents: 1_000_000_000, capped: false }, 'a $10M wallet: exactly the ceiling');
+  assert.deepEqual(maxBetPlan(400_000_000, 2_500_000_000), { addCents: 600_000_000, totalCents: 1_000_000_000, capped: true });
+  assert.deepEqual(maxBetPlan(1_000_000_000, 5_000), { refuse: 'ceiling' });
   assert.deepEqual(maxBetPlan(0, 99), { refuse: 'wallet' });
   assert.deepEqual(maxBetPlan(0, -500), { refuse: 'wallet' }, 'pending chips past the balance');
   // Through the chip path at the table: the Max amount is an ordinary bet; the server takes exactly the wallet.

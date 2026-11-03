@@ -16,12 +16,38 @@ function chipsFor(cents, limit = Infinity) {
   return out;
 }
 
-test('chipsFor uses the $1,000 and $10,000 chips (fewest chips, largest first)', () => {
+test('0.28.2 chips: $1, $5, $10, $25, $100, $1,000, $10,000, $100,000 (no $2; still eight)', () => {
+  assert.deepEqual(CHIP_VALUES, [1, 5, 10, 25, 100, 1000, 10000, 100000]);
+  assert.equal(CHIP_VALUES.length, 8, 'racks keep their layouts');
+  assert.ok(!CHIP_VALUES.includes(2));
+});
+
+test('chipsFor uses the $1,000, $10,000 and $100,000 chips (fewest chips, largest first)', () => {
   assert.deepEqual(chipsFor(1_213_000), [10000, 1000, 1000, 100, 25, 5]);
   assert.deepEqual(chipsFor(100_000), [1000]);
-  assert.deepEqual(chipsFor(99_900), [100, 100, 100, 100, 100, 100, 100, 100, 100, 25, 25, 25, 10, 10, 2, 2]);
+  assert.deepEqual(chipsFor(99_900), [100, 100, 100, 100, 100, 100, 100, 100, 100, 25, 25, 25, 10, 10, 1, 1, 1, 1]);
   assert.deepEqual(chipsFor(2_000_000, 1), [10000], 'the colour of a $20,000 spot: the $10,000 chip');
   assert.deepEqual(chipsFor(1_000_000), [10000]);
+  assert.deepEqual(chipsFor(10_000_000), [100000]);
+  assert.deepEqual(chipsFor(11_213_000), [100000, 10000, 1000, 1000, 100, 25, 5]);
+  assert.deepEqual(chipsFor(1_000_000_000, 1), [100000], 'a $10,000,000 spot is coloured by the $100,000 chip');
+  assert.equal(chipsFor(1_000_000_000).length, 100, '$10,000,000 = 100 × $100,000');
+});
+
+test('chipsFor still splits ANY whole-dollar amount without a $2 chip ($3 = $1+$1+$1, $7 = $5+$1+$1), and every split adds up', () => {
+  assert.deepEqual(chipsFor(300), [1, 1, 1]);
+  assert.deepEqual(chipsFor(700), [5, 1, 1]);
+  assert.deepEqual(chipsFor(200), [1, 1]);
+  assert.deepEqual(chipsFor(800), [5, 1, 1, 1]);
+  assert.deepEqual(chipsFor(13_700), [100, 25, 10, 1, 1]);
+  for (let dollars = 1; dollars <= 3000; dollars += 1) {
+    const list = chipsFor(dollars * 100);
+    assert.equal(list.reduce((s, d) => s + d, 0), dollars, `$${dollars} adds up`);
+    assert.ok(list.every((d) => CHIP_VALUES.includes(d)), `$${dollars} uses only real chips`);
+  }
+  for (const dollars of [99_999, 123_456, 9_999_999, 10_000_000]) {
+    assert.equal(chipsFor(dollars * 100).reduce((s, d) => s + d, 0), dollars, `$${dollars} adds up`);
+  }
 });
 
 test('Chips.jsx still builds chipsFor from CHIP_VALUES (no list of its own)', async () => {

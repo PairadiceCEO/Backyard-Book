@@ -45,3 +45,26 @@ test('the server caps a paid spin at 10,000 × B in all (line wins + bonus) and 
   assert.ok(Number.isSafeInteger(r.winCents));
   assert.match(fake.get('ledger/cpay_vip_p1_cap-req-000001_bonus').note, /capped/);
 });
+
+test('0.28.2: at the $10,000,000 ceiling the 10,000× cap pays $100,000,000,000 exactly (a safe integer); $10,000,001 is refused with nothing charged', async () => {
+  fake.reset();
+  const TEN_M = 1_000_000_000;
+  fake.write('users/p1', { username: 'p1', balanceCents: TEN_M, disabled: false });
+  const caller = { uid: 'p1', token: {}, user: null };
+  await lock.setVipPassword({ password: 'test-only-cap-2', repeat: 'test-only-cap-2' }, caller, { now: new Date(2e12) });
+  const { pass } = await vipUnlock(caller, { password: 'test-only-cap-2' }, { now: new Date(2e12) });
+  await assert.rejects(
+    spinVip(caller, { amount: 10_000_001, requestId: 'cap-req-10m-over', pass }, { now: new Date(2e12 + 10) }),
+    (e) => e.code === 'BET_TOO_LARGE' && e.message === 'That bet is over the limit of $10,000,000 per bet.',
+  );
+  assert.equal(fake.get('users/p1').balanceCents, TEN_M, 'nothing charged');
+  const r = await spinVip(caller, { amount: 10_000_000, requestId: 'cap-req-10m-0001', pass }, { now: new Date(2e12 + 20) });
+  assert.equal(r.betCents, TEN_M);
+  assert.equal(r.winCents, 10000 * TEN_M, '$100,000,000,000');
+  assert.equal(r.spin.bonus.capped, true);
+  assert.ok(Number.isSafeInteger(r.winCents) && Number.isSafeInteger(r.balanceCents));
+  assert.equal(fake.get('users/p1').balanceCents, 10000 * TEN_M);
+  const base = fake.get('ledger/cpay_vip_p1_cap-req-10m-0001_base').amountCents;
+  const bonus = fake.get('ledger/cpay_vip_p1_cap-req-10m-0001_bonus').amountCents;
+  assert.equal(base + bonus, 10000 * TEN_M, 'the ledger agrees');
+});

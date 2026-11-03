@@ -225,7 +225,7 @@ test('adjustWallet: add, remove, block going below zero, reject bad amounts', as
   assert.equal(r.body.error.code, 'BAD_AMOUNT');
   r = await admin({ action: 'adjustWallet', uid, deltaCents: 1.5 });
   assert.equal(r.body.error.code, 'BAD_AMOUNT');
-  r = await admin({ action: 'adjustWallet', uid, deltaCents: 200_000_000 });
+  r = await admin({ action: 'adjustWallet', uid, deltaCents: 10_000_000_001 }); // one cent over $100,000,000 (0.28.2)
   assert.equal(r.body.error.code, 'BAD_AMOUNT');
   r = await admin({ action: 'adjustWallet', uid: 'ghost', deltaCents: 100 });
   assert.equal(r.statusCode, 404);
@@ -242,6 +242,37 @@ test('adjustWallet: add, remove, block going below zero, reject bad amounts', as
   const adjust = ledgerFor(uid).filter((e) => e.type === 'admin_adjust' && e.note !== 'Starting balance');
   assert.equal(adjust.length, 2);
   assert.equal(adjust.find((e) => e.amountCents === -start).note, 'reset');
+});
+
+test('0.28.2: one admin wallet change or starting balance is at most $100,000,000: exactly that is accepted, one cent more is refused', async () => {
+  asAdmin();
+  const uid = store.get('usernames/mike').uid;
+  const start = balance(uid);
+  let r = await admin({ action: 'adjustWallet', uid, deltaCents: 10_000_000_001 });
+  assert.equal(r.statusCode, 400);
+  assert.equal(r.body.error.code, 'BAD_AMOUNT');
+  assert.equal(r.body.error.message, 'One wallet change can be at most $100,000,000.');
+  r = await admin({ action: 'adjustWallet', uid, deltaCents: -10_000_000_001 });
+  assert.equal(r.body.error.code, 'BAD_AMOUNT', 'the same limit for removing');
+  assert.equal(balance(uid), start, 'nothing changed');
+
+  r = await admin({ action: 'adjustWallet', uid, deltaCents: 10_000_000_000, note: 'big test' });
+  assert.equal(r.statusCode, 200, JSON.stringify(r.body));
+  assert.equal(r.body.balanceCents, start + 10_000_000_000);
+  assert.equal(balance(uid), start + 10_000_000_000, '+$100,000,000');
+  r = await admin({ action: 'adjustWallet', uid, deltaCents: -10_000_000_000 });
+  assert.equal(r.statusCode, 200);
+  assert.equal(balance(uid), start, 'and $100,000,000 back out');
+
+  r = await admin({ action: 'createUser', username: 'whale', password: 'longenough', startingBalanceCents: 10_000_000_001 });
+  assert.equal(r.statusCode, 400);
+  assert.equal(r.body.error.code, 'BAD_AMOUNT');
+  assert.equal(r.body.error.message, 'The starting balance can be at most $100,000,000.');
+  assert.equal(store.get('usernames/whale'), undefined, 'no player made');
+  r = await admin({ action: 'createUser', username: 'whale', password: 'longenough', startingBalanceCents: 10_000_000_000 });
+  assert.equal(r.statusCode, 200, JSON.stringify(r.body));
+  assert.equal(store.get(`users/${r.body.uid}`).balanceCents, 10_000_000_000);
+  assert.equal(store.get(`ledger/start_${r.body.uid}`).amountCents, 10_000_000_000);
 });
 
 test('setDisabled, resetPassword, updateUser', async () => {

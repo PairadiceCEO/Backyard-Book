@@ -5,7 +5,7 @@
 //              (bet { kind, number?, amount } = one chip). Kinds: pass, dontPass, odds, dontOdds, come,
 //              comeOdds (number), place (number), hard (number), field. No maximum (0.16.0): the
 //              wallet is the cap, Odds stay at most 2× their line bet (a game rule), and no spot may pass
-//              the $1,000,000 sanity ceiling. removeBet { kind, number? } takes one down before the next roll (Pass / Don't Pass
+//              the $10,000,000 sanity ceiling. removeBet { kind, number? } takes one down before the next roll (Pass / Don't Pass
 //              only before a come-out; a Come bet that moved to its number can't come down) and
 //              refunds it.
 //   Roll       the shooter only, with a line bet, carrying rollSeq (rolls so far at the table). It's
@@ -319,7 +319,7 @@ export function makeDiceEngine(variantId) {
   async function bet(ctx, body) {
     const index = requireSeat(ctx, body);
     const { kind, number } = parseKind(body);
-    requireChip(body.amount); // one chip: $1, $2, $5, $10, $25, $100, $1,000 or $10,000
+    requireChip(body.amount); // one chip: $1, $5, $10, $25, $100, $1,000, $10,000 or $100,000 (0.28.2)
     const result = await placeChips(ctx, index, [{ kind, number, cents: body.amount * 100 }], body.requestId);
     return result.duplicate ? result : { spotCents: spotAmount(result.bets, kind, number) };
   }

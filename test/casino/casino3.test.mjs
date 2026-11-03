@@ -417,14 +417,14 @@ test('betting: chips stack into one bet, a change charges or refunds the differe
   rng = (m) => Math.floor(Math.random() * m);
   await chips('p1', 3, T0);
   assert.equal(table().deadline, T0 + 15_000, 'the first chip starts the clock');
-  await chips('p1', 8, T0 + 5); // $5 + $2 + $1 on top of nothing: one request with the total
+  await chips('p1', 8, T0 + 5); // $5 + $1 + $1 + $1 on top of nothing: one request with the total
   assert.equal(wallet('p1'), 10000 - 800);
-  await chips('p1', 6, T0 + 6); // Undo a $2 chip
+  await chips('p1', 6, T0 + 6); // Undo two $1 chips
   assert.equal(wallet('p1'), 10000 - 600);
   assert.ok(ledger().some((e) => e.type === 'casino_refund' && e.amountCents === 200 && e.uid === 'p1'));
   assert.equal((await chips('p1', 6, T0 + 7, 'bj-req-replay-001')).betCents, 600);
   assert.equal((await chips('p1', 9, T0 + 8, 'bj-req-replay-001')).duplicate, true, 'a retried request is applied once');
-  await err(chips('p1', 1_000_001, T0 + 10), 'BET_TOO_LARGE');
+  await err(chips('p1', 10_000_001, T0 + 10), 'BET_TOO_LARGE'); // 0.28.2: the $10,000,000 ceiling
   await err(chips('p2', 1.5, T0 + 10), 'BAD_BET');
   await err(act('p2', 'confirm', {}, T0 + 10), 'NO_BET');
   await act('p1', 'confirm', {}, T0 + 10);

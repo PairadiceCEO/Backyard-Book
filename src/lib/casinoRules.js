@@ -3,7 +3,7 @@
 import { BACCARAT_SIDE_PAYTABLES, TWENTY_ONE_3_PAYS } from '../../shared/casino/sideBets.js';
 import { BET_HELP_TEXT } from '../../shared/casino/constants.js';
 
-const NEEDS_MAIN = 'A side bet needs a main bet on the same seat. No maximum beyond the $1,000,000 per-bet ceiling.';
+const NEEDS_MAIN = 'A side bet needs a main bet on the same seat. No maximum beyond the $10,000,000 per-bet ceiling.';
 
 export function blackjackRuleSections() {
   return [

@@ -13,6 +13,7 @@ import {
   isValidUsername,
   normalizeUsername,
   usernameToEmail,
+  wholeDollarsText,
 } from '../../shared/constants.js';
 import { cleanAgentProfile } from '../../shared/agents.js';
 
@@ -38,7 +39,9 @@ function checkPassword(password) {
   return password;
 }
 
-function checkCents(value, { field, allowZero, allowNegative }) {
+// 0.28.2: one admin wallet change or starting balance is at most MAX_WALLET_CHANGE_CENTS ($100,000,000); `label` names the field in
+// that message ("The starting balance can be at most $100,000,000.").
+function checkCents(value, { field, label = `"${field}"`, allowZero, allowNegative }) {
   if (!Number.isInteger(value)) {
     throw new HttpError(400, 'BAD_AMOUNT', `"${field}" must be a whole number of cents.`);
   }
@@ -49,7 +52,7 @@ function checkCents(value, { field, allowZero, allowNegative }) {
     throw new HttpError(400, 'BAD_AMOUNT', `"${field}" can't be negative.`);
   }
   if (Math.abs(value) > MAX_WALLET_CHANGE_CENTS) {
-    throw new HttpError(400, 'BAD_AMOUNT', `"${field}" can be at most $${(MAX_WALLET_CHANGE_CENTS / 100).toLocaleString('en-US')}.`);
+    throw new HttpError(400, 'BAD_AMOUNT', `${label} can be at most ${wholeDollarsText(MAX_WALLET_CHANGE_CENTS)}.`);
   }
   return value;
 }
@@ -69,6 +72,7 @@ export async function createUser(body, caller) {
   const displayName = cleanDisplayName(body.displayName, username);
   const startingBalanceCents = checkCents(body.startingBalanceCents ?? 0, {
     field: 'startingBalanceCents',
+    label: 'The starting balance',
     allowZero: true,
     allowNegative: false,
   });
@@ -204,7 +208,7 @@ export async function resetPassword(body, caller) {
 
 export async function adjustWallet(body, caller) {
   const uid = requireString(body.uid, 'uid');
-  const deltaCents = checkCents(body.deltaCents, { field: 'deltaCents', allowZero: false, allowNegative: true });
+  const deltaCents = checkCents(body.deltaCents, { field: 'deltaCents', label: 'One wallet change', allowZero: false, allowNegative: true });
   const note = typeof body.note === 'string' ? body.note.trim() : '';
 
   const result = await applyWalletChange({

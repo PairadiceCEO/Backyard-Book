@@ -12,11 +12,16 @@ import { AgentBadge, AgentLabel } from '../../components/AgentBadge.jsx';
 import { AGENT_LABEL_MAX, AGENT_PROVIDERS, AGENT_PROVIDER_NAMES } from '../../../shared/agents.js';
 import {
   DISPLAY_NAME_MAX_LENGTH,
+  MAX_WALLET_CHANGE_CENTS,
   PASSWORD_MIN_LENGTH,
   USERNAME_RULES,
   isValidUsername,
   normalizeUsername,
+  wholeDollarsText,
 } from '../../../shared/constants.js';
+
+// 0.28.2: one wallet change or starting balance is at most $100,000,000 (the server checks it too).
+const WALLET_MAX_TEXT = wholeDollarsText(MAX_WALLET_CHANGE_CENTS);
 
 function CreatePlayerForm({ onDone }) {
   const [username, setUsername] = useState('');
@@ -38,6 +43,7 @@ function CreatePlayerForm({ onDone }) {
     }
     const startingBalanceCents = startingBalance.trim() === '' ? 0 : parseDollarsToCents(startingBalance);
     if (startingBalanceCents === null) return setError('Starting balance must be a dollar amount like 100 or 25.50.');
+    if (startingBalanceCents > MAX_WALLET_CHANGE_CENTS) return setError(`The starting balance can be at most ${WALLET_MAX_TEXT}.`);
     if (isAgent && !label.trim()) return setError('Give the AI agent a model label, e.g. "Claude Sonnet".');
 
     setSubmitting(true);
@@ -110,6 +116,7 @@ function CreatePlayerForm({ onDone }) {
           onChange={(e) => setStartingBalance(e.target.value)}
           disabled={submitting}
         />
+        <small className="muted">At most {WALLET_MAX_TEXT}.</small>
       </label>
       <label className="field checkbox-field">
         <input type="checkbox" checked={isAgent} onChange={(e) => setIsAgent(e.target.checked)} disabled={submitting} />
@@ -279,6 +286,10 @@ function AdjustWalletForm({ player, onDone, onCancel }) {
       setError('Enter an amount like 50 to add or -20 to remove.');
       return;
     }
+    if (Math.abs(deltaCents) > MAX_WALLET_CHANGE_CENTS) {
+      setError(`One wallet change can be at most ${WALLET_MAX_TEXT}.`);
+      return;
+    }
     setError('');
     setPendingCents(deltaCents);
   }
@@ -312,6 +323,7 @@ function AdjustWalletForm({ player, onDone, onCancel }) {
           onChange={(e) => setAmount(e.target.value)}
           disabled={saving}
         />
+        <small className="muted">At most {WALLET_MAX_TEXT} at a time.</small>
       </label>
       <label className="field">
         <span>Note (optional)</span>

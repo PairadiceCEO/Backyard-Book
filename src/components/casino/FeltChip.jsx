@@ -1,6 +1,6 @@
 // Casino chips for every game (0.19.0), the Pairadice house chip since 0.26.0 (HouseChip.jsx, an SVG; the colours per
-// denomination are in HOUSE_CHIP_COLORS: $1 white with blue inserts, $2 yellow, $5 red, $10 blue, $25 green, $100 black with
-// gold, $1,000 orange, $10,000 purple). A spot's chip is coloured by the largest chip in its amount. The chip face no longer
+// denomination are in HOUSE_CHIP_COLORS: $1 white with blue inserts, $5 red, $10 blue, $25 green, $100 black with gold,
+// $1,000 orange, $10,000 purple, $100,000 gold with black inserts; 0.28.2). A spot's chip is coloured by the largest chip in its amount. The chip face no longer
 // prints the amount, so the amount sits on a small label over the chip's lower edge ("$12", "$1.2k"); a rack chip labels its
 // value the same way. The styles are in src/styles/chips.css.
 
@@ -18,7 +18,7 @@ export function chipAmountLabel(cents) {
   return `$${Math.floor(dollars / (unit / 10)) / 10}${suffix}`;
 }
 
-// The denomination that colours a spot's chip: the largest chip that fits in the amount ($137 → $100, $3 → $2).
+// The denomination that colours a spot's chip: the largest chip that fits in the amount ($137 → $100, $3 → $1, $100,000 → $100,000).
 export function chipTier(cents) {
   return chipsFor(cents, 1)[0] ?? CHIP_VALUES[0];
 }

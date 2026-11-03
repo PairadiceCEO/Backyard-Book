@@ -16,6 +16,7 @@ mock.module(url('server/firebaseAdmin.js'), {
 const { handleTableAction } = await import(url('server/casino/tables.js'));
 const { DICE_ANIMATION_MS } = await import(url('server/casino/crapsTable.js'));
 const timing = await import(url('shared/casino/timing.js'));
+const { CHIP_VALUES } = await import(url('shared/casino/constants.js'));
 
 const UIDS = ['p1', 'p2', 'p3'];
 const T0 = 1_800_000_000_000;
@@ -33,7 +34,8 @@ const act = (uid, action, fields = {}, now = T0) => handleTableAction(callerOf(u
 let reqNo = 0;
 // Puts `amount` dollars on one spot. A chip amount goes through `bet` (one chip, 0.16.0 chip check); any other whole
 // amount (e.g. $6 on Place 6, built from $5 + $1 chips) goes through `bets` as one change, the way the phone sends it.
-const CHIPS = [1, 2, 5, 10, 25, 100];
+// 0.28.2: the real chips ($2 is gone, so a $2 bet is a $1 + $1 total sent through `bets`, as a phone sends it).
+const CHIPS = CHIP_VALUES;
 const bet = (uid, kind, amount, extra = {}, now = T0) => {
   const requestId = `c6-req-${String(++reqNo).padStart(6, '0')}`;
   if (CHIPS.includes(amount) || !Number.isInteger(amount) || amount <= 0) return act(uid, 'bet', { kind, amount, requestId, ...extra }, now);

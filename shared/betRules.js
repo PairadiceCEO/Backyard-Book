@@ -1,16 +1,16 @@
 // Bet slip rules shared by the browser (to guide the user) and /api/bets (to enforce them).
 
-import { REQUEST_ID_PATTERN, SPORTSBOOK_BET_CEILING_CENTS } from './constants.js';
+import { REQUEST_ID_PATTERN, SPORTSBOOK_BET_CEILING_CENTS, wholeDollarsText } from './constants.js';
 import { decimalToAmerican } from './oddsMath.js';
 import { cryptoPickLabel } from './crypto/coins.js';
 import { parsePropTicker, propConflictMessage, propPickLabel, propSeries } from './props.js';
 
 export const MIN_STAKE_CENTS = 100; // $1.00
-// No maximum stake (0.16.0): the wallet is the cap, plus a per-bet ceiling ($10,000,000 since 0.23.0, sportsbook bets and
-// parlays only; the casino stays at $1,000,000) and a payout that must stay a safe integer (a $10,000,000 ten-leg longshot
+// No maximum stake (0.16.0): the wallet is the cap, plus a per-bet ceiling ($10,000,000 since 0.23.0; since 0.28.2 the same
+// ceiling as everything else, BET_CEILING_CENTS) and a payout that must stay a safe integer (a $10,000,000 ten-leg longshot
 // parlay could otherwise overflow).
 export const MAX_STAKE_CENTS = SPORTSBOOK_BET_CEILING_CENTS;
-export const BET_CEILING_MESSAGE = 'That bet is over the sportsbook limit of $10,000,000 per bet.';
+export const BET_CEILING_MESSAGE = `That bet is over the sportsbook limit of ${wholeDollarsText(MAX_STAKE_CENTS)} per bet.`;
 export const PAYOUT_TOO_LARGE_MESSAGE = 'That bet would pay more than the sportsbook can hold. Lower the stake.';
 
 // '' if a stake (cents) is at most the sportsbook ceiling, else BET_CEILING_MESSAGE.

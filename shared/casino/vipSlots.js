@@ -1,7 +1,7 @@
 // The Pairadice VIP slot (0.28.0): 3 reels, 3 visible rows, 3 paylines (the top, middle and bottom rows), and the Golden Dice
 // bonus. Pure: the server calls playVipSpin with crypto.randomInt; the phone only draws the result; tests prove the numbers.
 //
-// One bet B (whole dollars, $1 minimum, the casino's $1,000,000 ceiling) covers all three lines. Each winning line pays its
+// One bet B (whole dollars, $1 minimum, the $10,000,000 per-bet ceiling) covers all three lines. Each winning line pays its
 // multiplier × B (the total returned for that line); wins on different lines add up. Golden Dice don't pay on lines: 3 or more
 // anywhere in the 3 × 3 window on a paid spin award 10 free spins on the bonus strips, every win × 3; 3 or more during the bonus
 // add 10 more, up to 50 bonus spins in all. The whole bonus is resolved on the server with the paid spin.

@@ -280,7 +280,7 @@ test('changing bets charges or refunds the difference; a retry is applied once; 
   assert.equal(wallet('p1'), 1300, 'lowered: $8 back');
   assert.equal((await bet('p1', { banker: 10 }, T0, 'req-change-03')).duplicate, true, 'a replayed refund request does nothing');
   assert.equal(wallet('p1'), 1300);
-  await err(bet('p1', { player: 1_000_001 }), 'BET_TOO_LARGE');
+  await err(bet('p1', { player: 10_000_001 }), 'BET_TOO_LARGE'); // 0.28.2: the $10,000,000 ceiling
   await err(bet('p1', { player: 2.5 }), 'BAD_BET');
   await err(bet('p1', { player: -1 }), 'BAD_BET');
   await err(act('p1', 'bet', { player: 1 }), 'BAD_REQUEST_ID');

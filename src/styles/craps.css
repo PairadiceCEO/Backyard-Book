@@ -838,6 +838,13 @@ body.craps-stage-on .craps-stage .offline-banner {
   font-size: 14px;
 }
 
+/* 0.28.2: "$100k", the first five-character rack label: small enough for the 39 px chips of the sideways rack */
+.rack-chip .fchip[data-len='5'] .fchip-face {
+  font-size: 10.5px;
+  padding: 0 2px;
+  letter-spacing: -0.02em;
+}
+
 .rack-chip.active .fchip {
   transform: translateY(-2px);
   box-shadow: 0 0 0 3px var(--gold), 0 3px 5px rgba(0, 0, 0, 0.55);

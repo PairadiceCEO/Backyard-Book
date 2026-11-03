@@ -191,7 +191,7 @@ const scenarios = [
   // 0.23.0: the Max confirm step, and a seat with the new $1,000 / $10,000 chips on it.
   S('bj-max-confirm', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting), act: async (p) => { await p.getByRole('button', { name: /^Max: bet your whole wallet/ }).click(); await p.waitForTimeout(100); } }),
   S('bac-max-confirm', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.betting), act: async (p) => { await p.getByRole('button', { name: /Banker, pays/ }).click(); await p.getByRole('button', { name: /^Max: bet your whole wallet/ }).click(); await p.waitForTimeout(100); } }),
-  S('bj-betting-chips', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting), act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.bj-bet-spot').click(); await p.getByRole('radio', { name: '$2 chip' }).click(); await p.locator('.bj-bet-spot').click(); await p.getByRole('radio', { name: '$1 chip' }).click(); await p.locator('.bj-bet-spot').click(); await p.waitForTimeout(100); } }),
+  S('bj-betting-chips', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.betting), act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.bj-bet-spot').click(); await p.getByRole('radio', { name: '$1 chip' }).click(); await p.locator('.bj-bet-spot').click(); await p.getByRole('radio', { name: '$1 chip' }).click(); await p.locator('.bj-bet-spot').click(); await p.waitForTimeout(100); } }),
   S('bj-sides', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.sides) }),
   S('bj-side-result', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.sideResult) }),
   S('bj-rules', '/casino/blackjack', { admin: false, user: 'u1', fs: withTable(bj.sides), act: async (p) => { await p.getByRole('button', { name: 'Rules & side bets' }).click(); await p.waitForTimeout(150); } }),
@@ -206,7 +206,7 @@ const scenarios = [
   S('cr-comeout', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.comeout) }),
   S('cr-point', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point) }),
   S('cr-takedown', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point), act: async (p) => { await p.getByRole('button', { name: 'Take down' }).click(); await p.waitForTimeout(100); } }),
-  S('cr-chips', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point), act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.craps-felt [data-spot="place:8"]').click(); await p.locator('.craps-felt [data-spot="place:8"]').click(); await p.getByRole('radio', { name: '$2 chip' }).click(); await p.locator('.craps-felt .a-odds').click(); await p.waitForTimeout(100); } }),
+  S('cr-chips', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.point), act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.craps-felt [data-spot="place:8"]').click(); await p.locator('.craps-felt [data-spot="place:8"]').click(); await p.getByRole('radio', { name: '$1 chip' }).click(); await p.locator('.craps-felt .a-odds').click(); await p.waitForTimeout(100); } }),
   S('cr-comeout-working', '/casino/craps', { admin: false, user: 'u1', fs: withTable(() => cr.comeoutWorking('craps')) }),
   S('cr-comeout-switch', '/casino/craps', { admin: false, user: 'u1', fs: withTable(() => cr.comeoutWorking('craps')), act: async (p) => { await p.locator('.work-switch:visible').first().click(); await p.waitForTimeout(100); } }),
   S('cx-comeout-working', '/casino/crapless', { admin: false, user: 'u1', fs: withTable(() => cr.comeoutWorking('crapless')) }),
@@ -222,7 +222,7 @@ const scenarios = [
   S('cr-watch', '/casino/craps', { admin: false, user: 'u1', fs: withTable(cr.watch) }),
   S('bac-full', '/casino/baccarat', { admin: false, user: 'u1', fs: withTable(tables.full) }),
   S('casino-slots', '/casino/slots', { admin: false, user: 'u1' }),
-  S('casino-slots-chips', '/casino/slots', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.slot-bet').click(); await p.getByRole('radio', { name: '$2 chip' }).click(); await p.locator('.slot-bet').click(); await p.waitForTimeout(100); } }),
+  S('casino-slots-chips', '/casino/slots', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('radio', { name: '$5 chip' }).click(); await p.locator('.slot-bet').click(); await p.getByRole('radio', { name: '$1 chip' }).click(); await p.locator('.slot-bet').click(); await p.waitForTimeout(100); } }),
   S('casino-slots-spinning', '/casino/slots', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('button', { name: /^Spin/ }).click(); await p.waitForTimeout(300); } }),
   S('casino-slots-win', '/casino/slots', { admin: false, user: 'u1', act: async (p) => { await p.getByRole('radio', { name: '$1 chip' }).click(); await p.locator('.slot-bet').click(); await p.getByRole('button', { name: /^Spin/ }).click(); await p.waitForTimeout(2200); } }),
   // 0.28.0: the VIP slot (password sheet every visit, the machine, a multi-line win, the bonus playing, the paytable, Admin → VIP)

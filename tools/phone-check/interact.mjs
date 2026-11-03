@@ -188,25 +188,25 @@ await check('three quick taps on Player: chips show at once, one request carries
     return json(route, 200, { ok: true, serverNow: now() });
   });
   const before = await wallet(page);
-  await page.getByRole('radio', { name: '$2 chip' }).click();
+  await page.getByRole('radio', { name: '$1 chip' }).click();
   const player = page.getByRole('button', { name: /Player, pays/ });
   await player.click();
   await player.click();
   await player.click();
   const shownAt = Date.now();
-  assert.match(await player.getAttribute('aria-label'), /your bet \$6\.00/, 'all three chips on the spot at once');
-  assert.match(await player.innerText(), /\$6/, 'and drawn on it');
+  assert.match(await player.getAttribute('aria-label'), /your bet \$3\.00/, 'all three chips on the spot at once');
+  assert.match(await player.innerText(), /\$3/, 'and drawn on it');
   assert.notEqual(await wallet(page), before);
   // The wallet re-renders a moment after the third tap (well before the 400 ms reply): give it up to 300 ms.
   let shown = await wallet(page);
-  for (let i = 0; i < 6 && !/\$90\.40/.test(shown); i += 1) { await page.waitForTimeout(50); shown = await wallet(page); }
-  assert.match(shown, /\$90\.40/, `wallet shows the $6 pending (shows ${shown})`);
+  for (let i = 0; i < 6 && !/\$93\.40/.test(shown); i += 1) { await page.waitForTimeout(50); shown = await wallet(page); }
+  assert.match(shown, /\$93\.40/, `wallet shows the $3 pending (shows ${shown})`);
   assert.ok(Date.now() - shownAt < 200);
   await page.waitForTimeout(1200);
   assert.equal(bets.length, 1, `taps within 300 ms → one request (got ${bets.length})`);
-  assert.equal(bets[0].player, 6);
-  assert.match(await player.getAttribute('aria-label'), /your bet \$6\.00/, 'still there after the reply');
-  assert.match(await wallet(page), /\$90\.40/, 'wallet from the reply');
+  assert.equal(bets[0].player, 3);
+  assert.match(await player.getAttribute('aria-label'), /your bet \$3\.00/, 'still there after the reply');
+  assert.match(await wallet(page), /\$93\.40/, 'wallet from the reply');
   await context.close();
 });
 
@@ -519,11 +519,11 @@ for (const game of ['craps', 'crapless']) {
     // A Point is on: Place numbers, Come, Odds (behind my Pass), Don't Odds (behind my Don't Pass).
     const point = crapless ? 11 : 6;
     ({ page, context, calls } = await openCraps(`/casino/${game}`, [crapsBlank(game, { point, bets: { pass: 1000, dontPass: crapless ? 0 : 1000 } })], { width: 844, height: 390 }));
-    await page.getByRole('radio', { name: '$2 chip' }).click();
+    await page.getByRole('radio', { name: '$1 chip' }).click();
     const nums = crapless ? [2, 3, 4, 5, 6, 8, 9, 10, 11, 12] : [4, 5, 6, 8, 9, 10];
     for (const key of [...nums.map((n) => `place:${n}`), 'come', 'odds', ...(crapless ? [] : ['dontOdds'])]) {
       await spot(page, key).click();
-      assert.equal(await chipText(spot(page, key)), '$2', `${key}: a $2 chip`);
+      assert.equal(await chipText(spot(page, key)), '$1', `${key}: a $1 chip`);
     }
     // The Pass strip and the Pass row are the same bet: a tap on either adds to it. (Pass is up: with a point it's blocked, so
     // check the shared amount instead: both show the $10.)
@@ -792,7 +792,7 @@ async function openRich(path, tables, onCasino) {
 const OLD_LIMIT_TEXT = /up to \$10\b|\$1[–-]\$10\b|\$1[–-]\$20|\$1[–-]\$30|\$60\b|of \$60|Room \$/;
 async function chipsAndText(page, where) {
   const labels = await page.getByRole('radio', { name: /chip$/ }).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
-  assert.deepEqual([...new Set(labels)], ['$1 chip', '$2 chip', '$5 chip', '$10 chip', '$25 chip', '$100 chip', '$1,000 chip', '$10,000 chip'], `${where}: eight chips`);
+  assert.deepEqual([...new Set(labels)], ['$1 chip', '$5 chip', '$10 chip', '$25 chip', '$100 chip', '$1,000 chip', '$10,000 chip', '$100,000 chip'], `${where}: eight chips (0.28.2: no $2, $100,000 added)`);
   const text = await page.evaluate(() => document.body.innerText);
   assert.ok(!OLD_LIMIT_TEXT.test(text), `${where}: old limit wording left: ${(text.match(OLD_LIMIT_TEXT) ?? [])[0]}`);
   assert.match(text, /Minimum \$1\. Bet as much as your wallet holds\./, `${where}: new help text`);
@@ -1910,14 +1910,14 @@ for (const game of ['blackjack', 'baccarat']) {
     await context.close();
   });
 
-  await check(`${game}: Max past $1,000,000 stops at $1,000,000 with the usual ceiling message`, async () => {
-    const { rig, page, context } = await openMax(250_000_000);
+  await check(`${game}: Max past $10,000,000 stops at $10,000,000 with the usual ceiling message (0.28.2)`, async () => {
+    const { rig, page, context } = await openMax(2_500_000_000);
     await maxBtn(page).click();
     const q = await page.locator('.max-question').innerText();
-    assert.match(q, /^That bet is larger than the table allows\. Bet the most one bet can be, \$1,000,000\.00 on /);
-    await page.getByRole('button', { name: /^Yes, bet \$1,000,000\.00/ }).click();
+    assert.match(q, /^That bet is over the limit of \$10,000,000 per bet\. Bet the most one bet can be, \$10,000,000\.00 on /);
+    await page.getByRole('button', { name: /^Yes, bet \$10,000,000\.00/ }).click();
     await page.waitForTimeout(BET_REPLY_MS + 700);
-    assert.equal(total(rig), 100_000_000);
+    assert.equal(total(rig), 1_000_000_000);
     await context.close();
   });
 }
@@ -2143,9 +2143,10 @@ const BIG = (bal = 39540) => ({ ok: true, duplicate: false, stops: [14, 5, 4], s
 
 // A Slots page whose spins answer from `script` (an outcome, or 'fail'). Every spin request checks that the last spin has
 // landed: its result is in the session history (history length = spins sent before this one) and nothing is in flight.
-async function openSlots(script, { reducedMotion = 'no-preference' } = {}) {
+async function openSlots(script, { reducedMotion = 'no-preference', clock = false } = {}) {
   const context = await browser.newContext({ viewport: { width: 375, height: 800 }, isMobile: true, hasTouch: true, reducedMotion });
   const page = await context.newPage();
+  if (clock) await installFakeClock(page); // 0.28.2: Playwright's fake timers (page.clock); the page's time moves only when the test pumps it
   const rig = { spins: [], violations: [], inFlight: 0, page, context };
   await page.addInitScript((h) => { window.__H = h; window.__soundLog = []; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: [] } });
   await page.route(/^https:\/\/(?!localhost)/, F.offlineRoute);
@@ -2167,6 +2168,7 @@ async function openSlots(script, { reducedMotion = 'no-preference' } = {}) {
   });
   await page.goto(BASE + '/casino/slots', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(600);
+  if (clock) await pump(page, 1500);
   return rig;
 }
 const startAuto = async (page, count, rule) => {
@@ -2404,9 +2406,10 @@ await check('admin agents: Sportsbook profit is the main number, rows sorted by 
 
 // ---------- 0.28.0: the VIP slot ----------
 // replyDelayMs: the mocked server holds every vipSpin reply this long (0.28.1); vip.state.replies has the time each reply left it.
-async function openVip(mode = {}, { path = '/casino/vip', reducedMotion = 'no-preference', viewport = { width: 375, height: 800 }, replyDelayMs = 0 } = {}) {
+async function openVip(mode = {}, { path = '/casino/vip', reducedMotion = 'no-preference', viewport = { width: 375, height: 800 }, replyDelayMs = 0, clock = false } = {}) {
   const context = await browser.newContext({ viewport, isMobile: true, hasTouch: true, reducedMotion });
   const page = await context.newPage();
+  if (clock) await installFakeClock(page);
   const vip = F.vipRoute(mode);
   vip.state.replies = [];
   await page.addInitScript((h) => { window.__H = h; }, { user: { uid: 'u1' }, admin: false, fs: { users: F.users, bets: F.bets, ledger: F.ledger, customGames: F.customGames, casinoTables: [] } });
@@ -2425,6 +2428,7 @@ async function openVip(mode = {}, { path = '/casino/vip', reducedMotion = 'no-pr
   });
   await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(600);
+  if (clock) await pump(page, 1500);
   return { page, context, vip };
 }
 const vipUnlockNow = async (page, password = F.HARNESS_VIP_PASSWORD) => {
@@ -2683,7 +2687,7 @@ await check('vip 0.28.1: the trigger spin stays as landed for the whole BONUS_ST
   const Fs = log.findIndex((e, i) => i > L && e.spinning > 0);
   assert.ok(L >= 0 && Fs > L, 'the trigger spin landed and then the first free spin started');
   const held = log[Fs].t - log[L].t;
-  if (held < 1200) problems.push(`the trigger spin stayed on screen only ${held} ms (BONUS_START_MS is 1300)`);
+  if (held < 2400) problems.push(`the trigger spin stayed on screen only ${held} ms (BONUS_START_MS is 2500 since 0.28.2)`);
   for (let i = L; i < Fs; i += 1) {
     const e = log[i];
     if (!sameWin(e.window, paid)) problems.push(`trigger window was ${showWin(e.window)}, not the paid spin's ${showWin(paid)} (entry ${i - L}, +${e.t - log[L].t} ms)`);
@@ -2761,7 +2765,7 @@ await check('vip 0.28.1: with reduced motion the trigger spin still stays as lan
   const L = log.findIndex((e) => e.bar && e.spinning === 0 && e.window);
   const nextChange = log.findIndex((e, i) => i > L && /^Free spin 1 /.test(e.count ?? ''));
   assert.ok(L >= 0 && nextChange > L);
-  if (log[nextChange].t - log[L].t < 1200) problems.push(`the trigger spin stayed only ${log[nextChange].t - log[L].t} ms`);
+  if (log[nextChange].t - log[L].t < 2400) problems.push(`the trigger spin stayed only ${log[nextChange].t - log[L].t} ms`);
   for (let i = L; i < nextChange; i += 1) if (!sameWin(log[i].window, paid)) problems.push(`trigger window ${showWin(log[i].window)}`);
   for (const e of log.slice(nextChange)) {
     const m = /^Free spin (\d+) /.exec(e.count ?? '');
@@ -2808,6 +2812,149 @@ await check('vip 0.28.1: layout top to bottom is machine, win info, Spin, bet sp
     for (const k of ['spin', 'bet', 'auto']) assert.ok(r[k].left >= 0 && r[k].right <= r.innerW, `${k} runs off the screen at ${at}`);
     await context.close();
   }
+});
+
+// ---------- 0.28.2: the chip rack ($1 … $100k, no $2) and the slot pauses on a fake clock ----------
+// Playwright's fake timers (page.clock.install): the page's setTimeout / Date / requestAnimationFrame move only when the test pumps
+// them, so a pause is measured in the page's own milliseconds, exactly. clockLog (in the page) records the page time of every spin
+// request and of every change of what is on screen: Big win shown, the trigger banner, reels spinning, results landed.
+const CLOCK_T0 = new Date('2026-11-03T18:00:00Z');
+async function installFakeClock(page) {
+  await page.clock.install({ time: CLOCK_T0 });
+  await page.addInitScript(clockLogScript);
+}
+function clockLogScript() {
+  const sent = (window.__sent = []);
+  const ev = (window.__ev = []);
+  const realFetch = window.fetch;
+  window.fetch = function patched(input, init) {
+    try {
+      const body = init && typeof init.body === 'string' ? JSON.parse(init.body) : null;
+      if (body && (body.action === 'spin' || body.action === 'vipSpin')) sent.push(Date.now());
+    } catch {
+      // not JSON: not a spin
+    }
+    return realFetch.apply(this, arguments);
+  };
+  let last = '';
+  const read = () => {
+    const sig = JSON.stringify({
+      big: Boolean(document.querySelector('.big-win')),
+      trigger: Boolean(document.querySelector('.vip-bonus-bar.trigger')),
+      spinning: document.querySelectorAll('.reel.spinning').length,
+      landed: document.querySelectorAll('.spin-history li').length,
+      count: document.querySelector('.vip-bonus-count')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+    });
+    if (sig !== last) {
+      last = sig;
+      ev.push({ t: Date.now(), ...JSON.parse(sig) });
+    }
+  };
+  // `document` itself: an init script runs before <html> exists, so documentElement can't be observed yet
+  new MutationObserver(read).observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+}
+// Move the page's clock forward in small steps, letting real time pass between them so network replies (real) can arrive.
+async function pump(page, ms, step = 50) {
+  for (let done = 0; done < ms; done += step) {
+    await page.clock.runFor(step);
+    await new Promise((r) => setTimeout(r, 4));
+  }
+}
+async function pumpUntil(page, fn, arg, maxMs, step = 50) {
+  for (let done = 0; done <= maxMs; done += step) {
+    if (await page.evaluate(fn, arg)) return true;
+    await page.clock.runFor(step);
+    await new Promise((r) => setTimeout(r, 4));
+  }
+  return false;
+}
+const clockState = (page) => page.evaluate(() => ({ sent: [...window.__sent], ev: [...window.__ev], now: Date.now() }));
+// The page times a display appeared / disappeared (true → false of `key`).
+const edges = (ev, key, to) => ev.filter((e, i) => i > 0 && Boolean(e[key]) === to && Boolean(ev[i - 1][key]) !== to).map((e) => e.t);
+const PAUSE_SLACK_MS = 60; // the fake clock fires timers on time; this only covers React's own scheduling after the timer
+const PAUSE_EARLY_MS = 5; // the observer can log a display ending a millisecond after the timer that follows it started
+const near = (got, want) => got >= want - PAUSE_EARLY_MS && got <= want + PAUSE_SLACK_MS;
+
+await check('0.28.2 chips: every rack shows $1, $5, $10, $25, $100, $1k, $10k, $100k (no $2), and the "$100k" label stays inside its chip at 320 px', async () => {
+  const readRack = (page, sel) => page.evaluate((s) => [...document.querySelectorAll(s)].map((b) => {
+    const chip = b.querySelector('.fchip').getBoundingClientRect();
+    const face = b.querySelector('.fchip-face').getBoundingClientRect();
+    return { name: b.getAttribute('aria-label'), label: b.querySelector('.fchip-face').textContent, inside: face.left >= chip.left - 3 && face.right <= chip.right + 3 };
+  }), sel);
+  const want = (where, r) => {
+    assert.deepEqual(r.map((c) => c.label), ['$1', '$5', '$10', '$25', '$100', '$1k', '$10k', '$100k'], `${where}: rack labels`);
+    assert.deepEqual(r.map((c) => c.name), ['$1 chip', '$5 chip', '$10 chip', '$25 chip', '$100 chip', '$1,000 chip', '$10,000 chip', '$100,000 chip'], `${where}: chip names`);
+    for (const c of r) assert.ok(c.inside, `${where}: the ${c.label} label runs outside its chip`);
+  };
+  // the shared rack (Slots, VIP, Blackjack, Baccarat): Slots
+  const rig = await openSlots([]);
+  await rig.page.setViewportSize({ width: 320, height: 640 });
+  await rig.page.waitForTimeout(250);
+  want('Slots rack', await readRack(rig.page, '.chip-pick'));
+  await rig.context.close();
+  // the craps rack (its own label sizes), upright and sideways
+  for (const [width, height] of [[320, 568], [844, 390]]) {
+    const { page, context } = await openCraps('/casino/craps', [crapsBlank('craps', { point: null })], { width, height });
+    want(`craps rack ${width}×${height}`, await readRack(page, '.rack-chip'));
+    await context.close();
+  }
+});
+
+await check('0.28.2 7s Slots Auto (fake clock): after a Big win it waits 3,500 ms from the end of the display (on its own, or a tap on it) before the next spin; 900 ms after an ordinary result; a tap during the pause starts nothing', async () => {
+  const rig = await openSlots([BIG(), LOSS(), BIG(), LOSS(), LOSS()], { clock: true });
+  const { page } = rig;
+  await startAuto(page, 10, "Don't stop");
+  // spin 1 is a Big win: let its display end on its own, then watch the pause
+  assert.ok(await pumpUntil(page, () => Boolean(document.querySelector('.big-win')), null, 8000), 'the Big win shows');
+  assert.ok(await pumpUntil(page, () => !document.querySelector('.big-win'), null, 4000), 'and ends on its own');
+  await pump(page, 1000);
+  await page.locator('.reels').dispatchEvent('click'); // a stray tap during the pause
+  await page.locator('.slot-result').dispatchEvent('click');
+  assert.ok(await pumpUntil(page, () => window.__sent.length >= 2, null, 4000), 'spin 2 is sent');
+  // spin 2 is a loss: 900 ms; spin 3 is a Big win, skipped by a tap 600 ms after it shows
+  assert.ok(await pumpUntil(page, () => window.__sent.length >= 3, null, 6000), 'spin 3 is sent');
+  assert.ok(await pumpUntil(page, () => Boolean(document.querySelector('.big-win')), null, 6000), 'the second Big win shows');
+  await pump(page, 600);
+  const tapAt = await page.evaluate(() => Date.now()); // the page's time of the tap
+  await page.locator('.big-win').dispatchEvent('click'); // tap to skip
+  assert.ok(await pumpUntil(page, () => window.__sent.length >= 4, null, 6000), 'spin 4 is sent');
+  const { sent, ev } = await clockState(page);
+  const bigEnds = edges(ev, 'big', false);
+  const lands = ev.filter((e, i) => i > 0 && e.landed > ev[i - 1].landed).map((e) => e.t);
+  assert.equal(sent.length, 4, `no extra spin from the stray taps (${sent.length} sent)`);
+  const gap1 = sent[1] - bigEnds[0];
+  const gap2 = sent[2] - lands[1];
+  const gap3 = sent[3] - bigEnds[1];
+  assert.ok(near(gap1, 3500), `after a Big win that ended on its own: ${gap1} ms (want 3,500)`);
+  assert.ok(near(gap2, 900), `after an ordinary result: ${gap2} ms (want 900)`);
+  assert.ok(near(gap3, 3500), `after a Big win skipped by a tap: ${gap3} ms from the tap (want 3,500)`);
+  assert.ok(bigEnds[1] - tapAt >= 0 && bigEnds[1] - tapAt <= 20, `the tap ended the second display at once (${bigEnds[1] - tapAt} ms after the tap)`);
+  assert.ok(bigEnds[1] - edges(ev, 'big', true)[1] < 2500, 'well before it would have ended on its own');
+  assert.deepEqual(rig.violations, []);
+  await rig.context.close();
+});
+
+await check('0.28.2 VIP (fake clock): the trigger spin stays 2,500 ms before the first free spin; Auto waits 3,500 ms after a Big win display and 4,000 ms after the bonus total display', async () => {
+  const { page, context, vip } = await openVip({ script: ['big', 'loss', 'bonus', 'loss', 'loss'] }, { clock: true });
+  await vipUnlockNow(page);
+  assert.ok(await pumpUntil(page, () => Boolean(document.querySelector('.vip-machine')), null, 3000), 'unlocked');
+  await startAuto(page, 10, "Don't stop");
+  assert.ok(await pumpUntil(page, () => window.__sent.length >= 4, null, 60000), `four spins sent (${vip.state.spins.length})`);
+  const { sent, ev } = await clockState(page);
+  const bigShows = edges(ev, 'big', true);
+  const bigEnds = edges(ev, 'big', false);
+  const triggerOn = edges(ev, 'trigger', true)[0];
+  const firstFree = ev.find((e) => e.t >= triggerOn && e.spinning > 0 && !e.trigger)?.t;
+  assert.equal(bigEnds.length >= 2, true, `two displays ended (${bigEnds.length})`);
+  const afterBig = sent[1] - bigEnds[0];
+  const hold = firstFree - triggerOn;
+  const afterBonus = sent[3] - bigEnds[1];
+  assert.ok(near(afterBig, 3500), `after the Big win display: ${afterBig} ms (want 3,500)`);
+  assert.ok(near(hold, 2500), `the trigger spin stayed ${hold} ms before the first free spin (want 2,500)`);
+  assert.ok(near(afterBonus, 4000), `after the bonus total display: ${afterBonus} ms (want 4,000)`);
+  assert.ok(bigShows[0] < bigEnds[0] && bigShows[1] < bigEnds[1]);
+  assert.equal(vip.state.spins.length, 4, 'nothing extra was sent');
+  await context.close();
 });
 
 await browser.close();

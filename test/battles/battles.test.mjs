@@ -133,7 +133,7 @@ test('validation: formats, team sizes, payout places and 100%', () => {
 
 // ---------- 0.16.0: no maximum stake ----------
 
-test('no maximum stake: a $50,000 Battle is accepted when everyone can cover it, paid out in full; $1,000,001 is refused by the sanity ceiling', async () => {
+test('no maximum stake: a $50,000 Battle is accepted when everyone can cover it, paid out in full; $10,000,001 is refused by the sanity ceiling (0.28.2)', async () => {
   const RICH = 6_000_000; // $60,000 each
   for (const uid of ['will', 'mike', 'dan']) fake.write(`users/${uid}`, { ...fake.get(`users/${uid}`), balanceCents: RICH });
   assert.deepEqual(R.battleProblems({ title: 'High rollers', description: '', format: 'ffa', stakeDollars: 50_000, payoutBps: [10000], players: [{ uid: 'will' }, { uid: 'mike' }] }, 'will'), [], 'was refused above $10,000');
@@ -155,18 +155,33 @@ test('no maximum stake: a $50,000 Battle is accepted when everyone can cover it,
   await err(B.acceptBattle(caller('ann'), { battleId: id2 }, { now: T0 }), 'INSUFFICIENT_BALANCE');
   assert.equal(wallet('ann'), 4_999_999, 'nothing taken');
 
-  // The sanity ceiling: one stake above $1,000,000 is refused before anything is read or written.
+  // The sanity ceiling ($10,000,000 since 0.28.2): one stake above it is refused before anything is read or written.
+  const CEILING = 'That bet is over the limit of $10,000,000 per bet.';
   const base = { title: 'Overflow', description: '', format: 'ffa', payoutBps: [10000], players: [{ uid: 'will' }, { uid: 'mike' }] };
-  assert.deepEqual(R.battleProblems({ ...base, stakeDollars: 1_000_000 }, 'will'), [], 'exactly $1,000,000 is allowed');
-  assert.deepEqual(R.battleProblems({ ...base, stakeDollars: 1_000_001 }, 'will'), ['That bet is larger than the table allows.']);
-  assert.deepEqual(R.battleProblems({ ...base, stakeDollars: Number.MAX_SAFE_INTEGER + 1 }, 'will'), ['That bet is larger than the table allows.']);
+  assert.deepEqual(R.battleProblems({ ...base, stakeDollars: 10_000_000 }, 'will'), [], 'exactly $10,000,000 is allowed');
+  assert.deepEqual(R.battleProblems({ ...base, stakeDollars: 10_000_001 }, 'will'), [CEILING]);
+  assert.deepEqual(R.battleProblems({ ...base, stakeDollars: Number.MAX_SAFE_INTEGER + 1 }, 'will'), [CEILING]);
   assert.deepEqual(R.battleProblems({ ...base, stakeDollars: 0 }, 'will'), ['The stake is whole dollars, at least $1.']);
   const before = wallet('will');
   await assert.rejects(
-    B.createBattle(caller('will'), { clientRequestId: rid(), ...base, stakeDollars: 1_000_001 }, { now: T0 }),
-    (e) => e.code === 'BAD_BATTLE' && e.message === 'That bet is larger than the table allows.',
+    B.createBattle(caller('will'), { clientRequestId: rid(), ...base, stakeDollars: 10_000_001 }, { now: T0 }),
+    (e) => e.code === 'BAD_BATTLE' && e.message === CEILING,
   );
   assert.equal(wallet('will'), before);
+});
+
+test('0.28.2: a $10,000,000 Battle (exactly the ceiling) is created, accepted and paid out in full', async () => {
+  const TEN_M = 1_000_000_000;
+  for (const uid of ['will', 'mike']) fake.write(`users/${uid}`, { ...fake.get(`users/${uid}`), balanceCents: TEN_M });
+  const id = await ffa(['will', 'mike'], { stake: 10_000_000, title: 'Ten million' });
+  await acceptAll(id, ['mike']);
+  const b = battle(id);
+  assert.deepEqual([b.status, b.stakeCents, b.potCents], ['live', TEN_M, 2 * TEN_M]);
+  assert.deepEqual([wallet('will'), wallet('mike')], [0, 0], 'both stakes taken');
+  await B.setBattleResult(caller('will'), { battleId: id, places: { will: 1, mike: 2 } }, { now: later(H) });
+  assert.equal(wallet('will'), 2 * TEN_M, 'the $20,000,000 pot to the winner');
+  assert.ok(Number.isSafeInteger(wallet('will')));
+  assert.equal(battleNet(id), 0);
 });
 
 // ---------- create, accept, go live ----------
