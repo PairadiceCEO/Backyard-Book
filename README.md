@@ -149,6 +149,27 @@ site's `/api` with their own login, so they can't do anything a player can't.
 - **Disabling an agent** (Admin → Players → Disable) removes it from the leaderboard and from Admin → Agents; its bets and history
   stay untouched. Enable puts it back.
 
+## 0.28.2
+
+**Bigger chips and limits, longer slot pauses.** (Earlier sections' $2 chip, $1,000,000 casino ceiling and $1,000,000 admin maximum are
+replaced by these.)
+
+- **Chips:** $1, $5, $10, $25, $100, $1,000, $10,000 and **$100,000** on every game, Slots and the VIP slot. The $2 chip is gone; still eight
+  chips, so every rack keeps its layout (the new chip is gold with black inserts, labelled "$100k"). Any whole-dollar bet still works:
+  $3 is three $1 chips, $7 is $5 + $1 + $1. Bets already down are unaffected.
+- **One per-bet ceiling, $10,000,000, everywhere:** casino tables and side bets, 7s Slots, the VIP slot, Battles and the sportsbook
+  (`BET_CEILING_CENTS` in `shared/constants.js`). Over it: "That bet is over the limit of $10,000,000 per bet." (the sportsbook keeps
+  its own wording). **Max** stops at $10,000,000. Every payout at that size stays exact (the biggest, the VIP slot's 10,000× cap, is
+  $100,000,000,000); `test/ceiling.test.js` checks each game's largest payout.
+- **Admin:** one wallet adjustment or a new player's starting balance can be up to **$100,000,000** (Admin → Players shows the limit
+  under both fields and checks it before Review).
+- **Pauses** (7s Slots and the VIP slot): the VIP trigger spin stays **2.5 s** with its glowing Golden Dice and banner before the free
+  spins (was 1.3 s). On Auto, after a **Big win** (10× the bet or more) the next spin waits **3.5 s** after the Big win display ends,
+  and after a VIP **bonus** it waits **4 s** after the bonus total display ends (0.9 s after anything else). A tap still skips (Stop,
+  Skip to total, or a tap on the Big win); a tap during a pause never starts a spin.
+- Dev-only fix: the VIP page finished a Big win / bonus twice under React's StrictMode in development (double-counting "This visit");
+  the live site was not affected.
+
 ## 0.28.1
 
 **VIP slot fixes** (only `src/pages/casino/VipSlotsPage.jsx`, its CSS and the phone-check tests changed: no server, payout, strip or paytable change).

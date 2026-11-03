@@ -467,11 +467,12 @@ const VIP_STOPS_FOR = {
   loss: vipStopsWhere(VIP_R, (r) => r.tenths === 0 && r.dice < 3),
   lines: vipStopsWhere(VIP_R, (r) => r.lines.length >= 2 && r.tenths >= 20 && r.dice < 3),
   bonus: vipStopsWhere(VIP_R, (r) => r.dice >= 3),
+  big: vipStopsWhere(VIP_R, (r) => r.tenths >= 100 && r.dice < 3), // 0.28.2: a Big win (10× the bet or more), no bonus
 };
 const VIP_BONUS_WIN = vipStopsWhere(VIP_BR, (r) => r.tenths >= 15 && r.dice < 3);
 const VIP_BONUS_LOSS = vipStopsWhere(VIP_BR, (r) => r.tenths === 0 && r.dice < 3);
 
-// One spin reply: kind 'loss' | 'lines' | 'bonus' (10 free spins, every other one a win).
+// One spin reply: kind 'loss' | 'lines' | 'big' (10× or more, no bonus) | 'bonus' (10 free spins, every other one a win).
 export function vipSpinReply(kind, betCents, balanceCents) {
   const values = [...VIP_STOPS_FOR[kind]];
   if (kind === 'bonus') for (let i = 0; i < 10; i += 1) values.push(...(i % 2 ? VIP_BONUS_LOSS : VIP_BONUS_WIN));

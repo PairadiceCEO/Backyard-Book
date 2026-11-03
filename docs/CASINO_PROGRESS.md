@@ -16,6 +16,7 @@ come from Will's live testing.
 | Phase 4: Craps + Crapless | done, on main — waiting for Will's live test | (see git log) |
 | 0.28.0: Pairadice VIP slot (3 × 3, 3 lines, Golden Dice bonus, password lock) | done, on main — waiting for Will's live test | (see git log) |
 | 0.28.1: VIP fixes (Stop on every tap, trigger spin stays as landed, Spin above the bet) | done, on main — waiting for Will's live test | (see git log) |
+| 0.28.2: chips $1–$100,000 (no $2), $10,000,000 per-bet ceiling everywhere, $100,000,000 admin maximum, slot pauses | done, on main — waiting for Will's live test | (see git log) |
 
 ### Phase 4 checklist
 
@@ -24,6 +25,18 @@ come from Will's live testing.
 - [x] `server/casino/crapsTable.js` (one engine, two variants) wired in `server/casino/tables.js`; `test/casino/casino4.test.mjs`
 - [x] Phone UI `src/pages/casino/CrapsPage.jsx`, lobby labels, CSS; phone check at 320/375/414
 - [x] Full regression, README section, merge to `main`, push, report to Will
+
+## 0.28.2: chips, ceiling, pauses
+
+- Chips (`CHIP_VALUES`, shared/casino/constants.js): $1, $5, $10, $25, $100, $1,000, $10,000, $100,000. The house chip colours are in
+  src/lib/houseChipColors.js ($100,000: base #c9ad62, highlight #f6e7b5, inserts #0b0b0d, ring #1d1404). Craps' one-chip `bet` action
+  refuses $2 (BAD_CHIP); totals ("bets", Blackjack, Baccarat, Slots, VIP) take any whole-dollar amount.
+- Ceiling: `BET_CEILING_CENTS` ($10,000,000) in shared/constants.js, re-exported by shared/casino/constants.js; Battles and the
+  sportsbook use it too. The admin maximum (`MAX_WALLET_CHANGE_CENTS`, $100,000,000) is separate. Safe-integer proof:
+  test/ceiling.test.js.
+- Pauses: SlotsPage.jsx `AUTO_BIG_WIN_PAUSE_MS`; VipSlotsPage.jsx `BONUS_START_MS`, `AUTO_BIG_WIN_PAUSE_MS`, `AUTO_BONUS_PAUSE_MS` (an
+  `autoGapRef` set when a result lands; the Auto effect runs again when the display ends). Measured on a fake clock in
+  tools/phone-check/interact.mjs (`ONLY='fake clock'`).
 
 ## 0.28.1: VIP slot fixes
 

@@ -65,10 +65,17 @@ Vercel deploys the live site from `main`.
 - Craps/Crapless: no shooter clock with 1 player at the table; 30 s clocks with 2 or more.
 - Crapless 2/12 Odds pay 5:1.
 - Payouts round down to the cent.
-- No maximum bets anywhere (sportsbook, casino, slots, Battles): minimum $1, the wallet balance is the only cap, plus a
-  per-bet sanity ceiling: $10,000,000 for sportsbook bets and parlays (SPORTSBOOK_BET_CEILING_CENTS, 0.23.0), $1,000,000 for
-  the casino, slots and Battles. Craps Odds stay capped at 2× the line bet (a game rule).
-- Chips: $1, $2, $5, $10, $25, $100, $1,000 and $10,000 on every game (CHIP_VALUES).
+- No maximum bets anywhere (sportsbook, casino tables and side bets, 7s Slots, the VIP slot, Battles): minimum $1, the wallet
+  balance is the only cap, plus one per-bet sanity ceiling of $10,000,000 everywhere (BET_CEILING_CENTS in shared/constants.js,
+  0.28.2; SPORTSBOOK_BET_CEILING_CENTS is the same value). Every payout at that ceiling stays a safe integer (test/ceiling.test.js;
+  the sportsbook's payoutTooLarge guard refuses a parlay that wouldn't). Craps Odds stay capped at 2× the line bet (a game rule).
+- Chips: $1, $5, $10, $25, $100, $1,000, $10,000 and $100,000 on every game (CHIP_VALUES; 0.28.2 took out $2). A chip is a
+  denomination, not an amount: any whole-dollar bet is possible ($3 = $1 + $1 + $1).
+- Admin wallet change / starting balance: at most $100,000,000 per change (MAX_WALLET_CHANGE_CENTS, 0.28.2; Admin → Players →
+  Adjust wallet and Create player). Not tied to any bet ceiling.
+- Slot pauses (0.28.2): the VIP trigger spin stays 2.5 s before the free spins (BONUS_START_MS); Auto waits 3.5 s after a Big win
+  display (both slots, AUTO_BIG_WIN_PAUSE_MS) and 4 s after a VIP bonus total display (AUTO_BONUS_PAUSE_MS), counted from when the
+  display ends; 0.9 s otherwise (AUTO_GAP_MS).
 - Craps/Crapless Place bets and Hard ways go up any time; on a come-out roll they are OFF unless the player switches them ON
   (per bet or all); the switch resets to OFF at every come-out (0.25.0, bets.working; settleRoll in shared/casino/dice.js).
 - Side bets (0.24.0, shared/casino/sideBets.js, sources cited there): Blackjack 21+3 (100/40/30/10/5, settled right after the

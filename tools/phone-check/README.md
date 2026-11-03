@@ -61,3 +61,11 @@ that runs, the next paid spin is on the base strips; a Stop tap during the trigg
 at 320 / 375 / 414 and 844 × 390. The three bonus checks also read `window.__vipDrawMismatch`, the counter of the dev-only draw assertion in
 `VipSlotsPage.jsx` (compiled out of the production build). Each check was also run against a deliberately broken copy of the page (the old
 Stop, the old bonus strips, the wrong strips drawn) and fails there.
+
+Since 0.28.2: `interact.mjs` (`ONLY='^0\.28\.2'`) checks every rack shows $1 … $100k with no $2 and that the "$100k" label stays inside its
+chip (Slots rack at 320 px, the craps rack upright and sideways), and measures the slot pauses on **Playwright's fake clock**: `openSlots` /
+`openVip` take `{ clock: true }`, which installs `page.clock` and a page-side log (`clockLogScript`: the page time of every spin request and of
+every change on screen); `pump` / `pumpUntil` move the page's time in 50 ms steps. 7s Slots Auto: 3,500 ms after a Big win display ends
+(on its own or tapped), 900 ms after an ordinary result, a stray tap during the pause sends nothing. VIP Auto: 2,500 ms trigger hold,
+3,500 ms after a Big win, 4,000 ms after the bonus total. Run against copies with the old values, these checks fail. `fixtures.mjs`
+`vipSpinReply('big', …)` is a ≥ 10× line win with no bonus. Max at Blackjack / Baccarat now stops at $10,000,000.
